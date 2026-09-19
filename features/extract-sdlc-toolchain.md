@@ -42,6 +42,8 @@
 - .claude/skills/plan-spec/fixtures/shapes-plan.md
 - .claude/skills/plan-spec/fixtures/tests-first-plan.md
 - .claude/skills/plan-spec/reference.md
+- .claude/tdd-mandate-snippet.md
+- .claude/tdd-mandate.json.example
 - .gitignore
 - CLAUDE.md
 - README.md
@@ -57,6 +59,8 @@
 - src/hooks/lib/diff-classifier.js
 - src/hooks/lib/feature-file.js
 - src/hooks/lib/git-read.js
+- src/hooks/lib/review-markers.js
+- src/hooks/lib/source-files.js
 - src/hooks/lib/tdd-order.js
 - src/hooks/pending-review-gate.js
 - src/hooks/post-commit-feature.js
@@ -71,14 +75,18 @@
 - src/hooks/test-claude-attribution-note.sh
 - src/hooks/test-commit-command.js
 - src/hooks/test-enforce-co-author.sh
+- src/hooks/test-fast-path-languages.js
 - src/hooks/test-post-commit-feature.sh
 - src/hooks/test-post-commit-hook.sh
 - src/hooks/test-pre-commit-feature.sh
 - src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-protect-user-dir.js
+- src/hooks/test-review-markers.js
 - src/hooks/test-session-start-feature.sh
+- src/hooks/test-source-files.js
 - src/hooks/test-stop-hook.sh
+- src/hooks/test-tdd-mandate.js
 - src/hooks/test-tdd-order.sh
 - src/hooks/test-timing-log.js
 - src/hooks/timing-log.js
@@ -98,4 +106,24 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-09-19 `f51edd7` — Make the review gate cover shell, and put the TDD mandate in force
+  - .claude/tdd-mandate-snippet.md
+  - .claude/tdd-mandate.json.example
+  - README.md
+  - install.sh
+  - src/hooks/lib/feature-file.js
+  - src/hooks/lib/review-markers.js
+  - src/hooks/lib/source-files.js
+  - src/hooks/lib/tdd-order.js
+  - src/hooks/pending-review-gate.js
+  - src/hooks/post-commit-review.js
+  - src/hooks/pre-commit-review.js
+  - src/hooks/stop-review-trigger.js
+  - src/hooks/test-fast-path-languages.js
+  - src/hooks/test-pre-commit-review.js
+  - src/hooks/test-review-markers.js
+  - src/hooks/test-source-files.js
+  - src/hooks/test-stop-hook.sh
+  - src/hooks/test-tdd-mandate.js
+  - src/test-install.sh
+  - uninstall.sh
