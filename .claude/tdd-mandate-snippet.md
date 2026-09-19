@@ -22,13 +22,12 @@ works, test commit first.
 inverted rather than a second list: if a path is not in `SOURCE_EXTENSIONS`
 (`src/hooks/lib/source-files.js`), no test is required. That covers docs, data,
 markup and config -- `.md`, `.rst`, `.txt`, `.csv`, `.css`, `.html`, `.json`,
-`.yaml`, `.toml`, lockfiles, dotfiles, extensionless files such as `LICENSE` -- plus
-extensionless files such as `LICENSE`. There is no exempt-directory list: `tmp/`
-and `.planning/` had one and lost it, because the rule above already covers the
-docs they held, and its only remaining effect was exempting code. Everything that
-IS code needs a
-test, shell scripts included: `install.sh` is the most destructive code in this
-project.
+`.yaml`, `.toml`, lockfiles, dotfiles, and extensionless files such as `LICENSE`.
+
+There is no exempt-directory list. `tmp/` and `.planning/` had one and lost it,
+because the rule above already covers the docs they held and its only remaining
+effect was exempting code. Everything that IS code needs a test, shell scripts
+included: `install.sh` is the most destructive code in this project.
 
 A `features/` directory is Cucumber's, and its step definitions count as tests. If
 this project's own feature records live there too, they are `.md` and therefore not
