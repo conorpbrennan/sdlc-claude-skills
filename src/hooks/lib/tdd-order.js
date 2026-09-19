@@ -7,23 +7,71 @@
 // Pure functions, no deps, CommonJS. Loaded by pre-commit-review.js.
 
 const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const sourceFiles = require('./source-files');
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
+// What counts as a test file. Breadth matters more than elegance here: a
+// convention this misses is a repository whose tested commits are all called
+// `no_tests` and blocked. The opt-in version matched `test_foo.py` but not
+// `test-foo.js`, which made every one of this project's own test files invisible.
+//
+// The counterweight is the separator requirement. `test` must begin a path
+// segment and be followed by `-` or `_`, or end one preceded by the same, or be
+// a capitalised `Test`/`Spec` suffix. That is what keeps `latest.js`,
+// `contest.py`, `protest/`, `attest.rb`, `testimony.ts` and `greatest.java` out,
+// and those cases are asserted in test-tdd-mandate.js.
 const TEST_PATH_RE = new RegExp(
     '(?:' +
-        '(?:^|/)tests/' +
+        // directories
+        '(?:^|/)tests?/' +
         '|(?:^|/)__tests__/' +
-        '|(?:^|/)spec/' +
-        '|(?:^|/)test_[^/]+$' +
+        '|(?:^|/)specs?/' +
+        // `test_foo.py`, `test-foo.js`
+        '|(?:^|/)test[-_][^/]+$' +
+        // `foo_test.go`, `foo_test.py` -- underscore only. The hyphen suffix is not
+        // a test convention anywhere (the hyphen PREFIX above is, and is this
+        // project's own), while `t-test.py` is a statistical t-test and
+        // `ab-test.js` is A/B testing -- both production code, and calling either a
+        // test is the fail-open direction.
         '|(?:^|/)[^/]+_test\\.[^/]+$' +
-        '|(?:^|/)[^/]+\\.test\\.[^/]+$' +
+        // `foo.test.js`, `foo.spec.ts`
+        '|(?:^|/)[^/]+\\.(?:test|spec)\\.[^/]+$' +
+        // `foo_spec.rb` -- Ruby's convention, and only Ruby's. Elsewhere
+        // `api_spec.py` / `tensor_spec.py` are ordinary modules.
+        '|(?:^|/)[^/]+[-_]spec\\.rb$' +
     ')'
 );
 
-const EXEMPT_GLOB_EXTS = new Set(['.md', '.json', '.toml', '.yaml', '.yml', '.lock']);
+// `FooTest.java`, `FooTests.cs`, `FooSpec.kt` are a test naming convention only
+// inside a test directory. On its own the suffix is far too weak: JavaPoet's entire
+// public API is `*Spec.java` (`TypeSpec`, `MethodSpec`, `FieldSpec`), KotlinPoet's
+// is `*Spec.kt`, and `ColumnSpec.java` / `tensor_spec.py` / `api-spec.ts` are all
+// production source. Calling one of those a test is the fail-OPEN direction: it
+// moves the file out of implPaths AND into testPaths, so a commit of two
+// production files with no test stops being `no_tests` and sails through the gate.
+// Verified: classifyFromEvents(['.../TypeSpec.java', '.../CodeWriter.java'], [])
+// returned not_applicable before this was narrowed.
+//
+// Maven and Gradle already put these under src/test/java/**, which the directory
+// rules above match on their own, so requiring the context costs nothing real.
+const TEST_DIR_RE = /(?:^|\/)(?:tests?|specs?|__tests__)\//;
+const TEST_SUFFIX_RE = /(?:^|\/)[^/]+(?:Test|Tests|Spec|Specs)\.[^/]+$/;
+
+// What needs no test. Inverted deliberately: rather than keeping a second list of
+// exempt extensions, ask lib/source-files.js whether the path is code at all. Under
+// the old opt-in gate (which never fired anywhere) a narrow allowlist of `.md`,
+// `.json`, `.toml`, `.yaml`, `.yml`, `.lock` was harmless; default-on made it govern
+// every commit on the machine, and it classified `styles.css`, `requirements.txt`,
+// `docs/guide.rst`, `index.html`, `main.tf`, `data.csv` and `en.po` as
+// implementation needing a paired test -- while the snippet merged into the user's
+// CLAUDE.md promised "a documentation-only commit is never gated".
+//
+// One definition of "code" now serves both gates: if the review gate would not
+// review it, the mandate does not demand a test for it.
 const EXEMPT_DIR_PREFIXES = ['.planning/', 'features/', 'tmp/'];
-const EXEMPT_BASENAMES = new Set(['marketplace.json', 'plugin.json', 'package.json']);
 
 function norm(p) {
     return String(p || '').replace(/\\/g, '/');
@@ -36,7 +84,10 @@ function basename(p) {
 }
 
 function isTestFile(p) {
-    return TEST_PATH_RE.test(norm(p));
+    const n = norm(p);
+    if (TEST_PATH_RE.test(n)) return true;
+    // The weak capitalised suffixes, only with a test directory in the path.
+    return TEST_SUFFIX_RE.test(n) && TEST_DIR_RE.test(n);
 }
 
 function isExemptPath(p) {
@@ -44,11 +95,11 @@ function isExemptPath(p) {
     for (const prefix of EXEMPT_DIR_PREFIXES) {
         if (n.startsWith(prefix) || n.includes('/' + prefix)) return true;
     }
-    const base = basename(n);
-    if (EXEMPT_BASENAMES.has(base)) return true;
-    const dot = base.lastIndexOf('.');
-    if (dot >= 0 && EXEMPT_GLOB_EXTS.has(base.slice(dot).toLowerCase())) return true;
-    return false;
+    // Not code -> no test required. Covers docs, data, markup, config, lockfiles,
+    // dotfiles and extensionless files in one rule, and cannot drift from what the
+    // review gate believes is code. The cost is that an extensionless executable
+    // script is exempt; give scripts a `.sh` extension if you want them gated.
+    return !sourceFiles.isSourcePath(n);
 }
 
 // True when `eventPath` (any form) refers to `commitPath` (repo-relative).
@@ -185,6 +236,60 @@ function classifyFromEvents(commitPaths, events) {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Is the mandate in force for this repository?
+// ---------------------------------------------------------------------------
+// On by default, everywhere. The previous shape was an allowlist in
+// ~/.claude/tdd-order-repos.json, which meant the gate had to be switched on per
+// repository -- and since that file was never created, and a read failure
+// yielded an empty list, it never ran anywhere at all.
+//
+// Two ways out, both deliberate and visible:
+//   - `<repo>/.claude/tdd-mandate.disabled`, matching the feature-tracking
+//     opt-out convention already in use;
+//   - `exempt_repos` in ~/.claude/tdd-mandate.json, for repositories you do not
+//     control the contents of.
+//
+// A config file that will not parse does NOT disable the mandate. A typo in a
+// global config should not silently switch off gating on every repository.
+const MANDATE_OPT_OUT = path.join('.claude', 'tdd-mandate.disabled');
+
+function defaultMandateConfigPath() {
+    return process.env.TDD_MANDATE_CONFIG ||
+        path.join(os.homedir(), '.claude', 'tdd-mandate.json');
+}
+
+function normRepo(p) {
+    return String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
+function mandateInForce(repoPath, opts) {
+    const configPath = (opts && opts.configPath) || defaultMandateConfigPath();
+
+    if (repoPath) {
+        try {
+            if (fs.existsSync(path.join(repoPath, MANDATE_OPT_OUT))) {
+                return { inForce: false, reason: 'repo-opted-out' };
+            }
+        } catch (e) { /* unreadable repo dir: fall through, stay in force */ }
+    }
+
+    let exempt = [];
+    try {
+        const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        if (Array.isArray(parsed?.exempt_repos)) exempt = parsed.exempt_repos;
+    } catch (e) { /* absent or malformed: the mandate stands */ }
+
+    // Only `exempt_repos` from tdd-mandate.json. The retired opt-IN allowlist at
+    // ~/.claude/tdd-order-repos.json is NOT read: under default-on an opt-in list has
+    // nothing left to say, and treating its entries as exemptions would invert their
+    // meaning -- a repo that had deliberately asked for the gate would lose it.
+    if (repoPath && exempt.some(r => normRepo(r) === normRepo(repoPath))) {
+        return { inForce: false, reason: 'globally-exempt' };
+    }
+    return { inForce: true, reason: 'default-on' };
+}
+
 // Convenience: read transcript + classify in one call.
 function classifyTddOrder({ stagedPaths, transcriptPath }) {
     const events = readEditEvents(transcriptPath);
@@ -194,6 +299,8 @@ function classifyTddOrder({ stagedPaths, transcriptPath }) {
 module.exports = {
     isTestFile,
     isExemptPath,
+    mandateInForce,
+    MANDATE_OPT_OUT,
     eventMatchesCommitPath,
     extractEventPath,
     readEditEvents,

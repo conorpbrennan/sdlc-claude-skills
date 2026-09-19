@@ -59,11 +59,13 @@ commit stays your command.
 | `src/hooks/lib/*.js` | `~/.claude/hooks/lib/` | shared hook helpers |
 | `tools/*.py` | `~/.claude/tools/` | timing analyser, resolved by `/review-timing` |
 | `.claude/hooks-config.json` | merged into `~/.claude/settings.json` | wires the hooks to events |
-| `.claude/*-snippet.md` | merged into `~/.claude/CLAUDE.md` | the instructions Claude follows on a block |
-| `.claude/*.json.example` | seeded to `~/.claude/*.json` **first install only** | your thresholds and repo opt-ins |
+| `.claude/*-snippet.md` | merged into `~/.claude/CLAUDE.md` | the instructions Claude follows on a block, including the TDD mandate |
+| `.claude/*.json.example` | seeded to `~/.claude/*.json` **first install only** | thresholds, repo opt-ins, TDD exemptions |
 
-The two `.json.example` files are seeded once and never overwritten: they
-hold per-repo thresholds and opt-ins you are expected to tune.
+The `.json.example` files are seeded once and never overwritten: they hold per-repo
+thresholds, opt-ins and exemptions you are expected to tune. `tdd-mandate.json`
+seeds empty, because the mandate is on by default and that file only lists the
+exceptions.
 
 ---
 
@@ -124,6 +126,87 @@ in order, cheapest rejection first.
 | `post-commit-notify.js`, `claude-attribution-note.js`, `post-commit-feature.js` | PostToolUse | Notification, attribution note, sha-stamped feature history |
 
 `stop-review-trigger.js` and `post-commit-review.js` ship but are not wired.
+
+### What counts as code
+
+Four lists in `src/hooks/lib/source-files.js` decide how far the gates reach, and
+they are not the same list.
+
+`SOURCE_EXTENSIONS` is what the gates *look at*. `.sh` and `.ps1` are in it. They
+were not — in any of the four copies — and the consequence was specific: a diff touching only `install.sh` and
+`uninstall.sh` — the two scripts that delete paths under `~/.claude` and rewrite
+your global `CLAUDE.md` and `settings.json` — yielded zero code files and was
+approved via `staged-no-code` with no review requested.
+
+`CLASSIFIER_LANGUAGES` is what `lib/diff-classifier.js` can actually *read*, and
+adding shell to the first list without this second one made things worse rather
+than better. The classifier recognises Python/JS-family keywords, assignments and
+calls; a shell command is a bare word list, so `rm -rf "$HOME/.claude"`,
+`curl … | sh` and `chmod 777 /etc/passwd` all score zero semantic lines. The
+silent approval simply moved from `staged-no-code` to the `trivial-diff` fast
+path — which writes a `PASS` marker, crediting a review that never ran. Any staged
+file outside `CLASSIFIER_LANGUAGES` now skips both fast paths and falls through to
+a real review.
+
+`COVERAGE_LANGUAGES` does the same job for the coverage gate. Without it a
+shell-only commit made `coverage.xml` look stale, and because the hygiene cov
+check is itself guarded on staged Python, nothing would ever refresh it: the hook
+waited out `COV_WAIT_TIMEOUT_MS` — two minutes by default — and then blocked with
+advice no one could act on.
+
+`EXCLUDE_PATTERNS` is never reviewed whatever the extension, and the full list is
+`.claude/`, `.vscode/`, `.idea/`, `node_modules/`, `__pycache__/`, `vendor/`,
+`third_party/`, `.venv/` and `venv/`. Exclusions win over the extension, which is
+load-bearing: installing this project copies its own hooks into `.claude/`, and
+gating those would make every install a reviewable change. `dist/` and `build/` are
+deliberately absent — they were there briefly and un-gated
+`build/scripts/release.sh`, and plenty of projects keep hand-written source in
+both. An exclusion list is the one place a wrong entry makes the gate quietly
+weaker.
+
+All four lists live in `src/hooks/lib/source-files.js` and nowhere else. They used
+to be copied into four hooks, and the copies drifted: `.sh` was added to the review
+gate alone, so `lib/feature-file.js` still read a shell-only commit as docs-only and
+let `install.sh` onto `main` with no branch and no feature file.
+`src/hooks/test-source-files.js` carries a drift guard that fails if any hook grows
+its own copy again, and `src/hooks/test-fast-path-languages.js` runs the real hook
+against throwaway repositories to assert a shell diff is neither approved nor
+marked.
+
+
+### The TDD mandate
+
+On by default, in every repository. `pre-commit-review.js` reads the session
+transcript to see which file you edited first and blocks two shapes: `code_first`
+(implementation edited before its test) and `no_tests` (implementation staged with
+no test in the diff). When order cannot be determined — no transcript, or files
+staged in an earlier session — the order check is skipped but a test must still be
+present, because that is decided from the index alone. An unverifiable order is not
+an excuse for a missing test.
+
+It was written long before it ran. The opt-in was an allowlist at
+`~/.claude/tdd-order-repos.json` that nobody had created, and `loadTddOrderRepos`
+returned `[]` on any read failure, so the gate was dormant everywhere. Switching it
+on first required fixing what it considered a test: the recogniser matched
+`test_foo.py` but not `test-foo.js`, so all 17 of this project's own test files
+classified as implementation and every commit here would have been blocked as
+`no_tests`.
+
+Exempt automatically: `.md`, `.json`, `.toml`, `.yaml`, `.yml`, `.lock`, dotfiles,
+extensionless files, and anything under `features/`, `tmp/` or `.planning/`. A
+docs-only commit is never gated. Everything else is implementation, shell included.
+
+To exempt a repository: `touch .claude/tdd-mandate.disabled`, or add its path to
+`exempt_repos` in `~/.claude/tdd-mandate.json`. A config file that will not parse
+does **not** disable the mandate — a typo must not silently switch off gating
+everywhere.
+
+What counts as a test is a path convention in `src/hooks/lib/tdd-order.js`. The
+capitalised `*Test.java` / `*Spec.kt` suffix counts only **inside** a test
+directory: a bare rule swept in whole public APIs — JavaPoet's `TypeSpec`,
+KotlinPoet's `FileSpec`, `tensor_spec.py` — and calling production code a test is
+the fail-open direction, because it moves the file out of the implementation set
+*and* into the test set, so a commit with no test stops being `no_tests`.
 
 ### Staging and committing are two commands
 
@@ -289,13 +372,18 @@ throwaway `CLAUDE_HOME` and a throwaway copy of the source tree. It never
 touches the real `~/.claude`, which matters because install also populates
 `.claude/hooks/` in the source tree and uninstall deletes it.
 
-All Node tests pass. Two shell suites fail, both inherited from
-`risk-claude-skills` at the same counts and neither caused by the split:
+Every suite passes except one, inherited from `risk-claude-skills` at the same count
+and not caused by the split. Run them from a clone with history, not from this repo
+before its first commit — see the note above.
 
 | Suite | State |
 |---|---|
 | `test-enforce-co-author.sh` | 6 passed, 1 failed |
-| `test-stop-hook.sh` | 11 passed, 3 failed — exercises `stop-review-trigger.js`, which is not wired |
+
+`test-stop-hook.sh` used to fail 3 of 14 and is now 14/14. The cause was the review
+markers living in `$HOME`: the suite backed up, deleted and restored the user's real
+review state on every run, and fought itself. Moving the markers into each
+repository's git dir fixed the hook and the tests together.
 
 A third, `test-pre-commit-feature.sh`, fails if run with `$PWD` inside a
 repository that has no commit yet — two pass-through cases inherit the

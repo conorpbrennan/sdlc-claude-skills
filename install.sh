@@ -186,12 +186,31 @@ seed_config() {
         echo "  - $label already present, left untouched"
     fi
 }
+# The review markers used to live in $HOME, shared by every repository on the
+# machine. They are per repository and per worktree now (lib/review-markers.js), so
+# the old global files are inert -- but a stale one would sit in the user's home
+# directory forever, unread, so sweep them on install.
+echo ""
+echo "Removing superseded global review markers..."
+for stale in "$HOME/.claude-pending-review" \
+             "$HOME/.claude-review-in-progress" \
+             "$HOME/.claude-last-review"; do
+    if [ -f "$stale" ]; then
+        echo "  - $stale (now kept per repository)"
+        run rm -f "$stale"
+    fi
+done
+
 echo ""
 echo "Seeding config (first install only)..."
 seed_config "$SCRIPT_DIR/.claude/hygiene-repos.json.example" \
             "$USER_CLAUDE_DIR/hygiene-repos.json" "hygiene-repos.json"
 seed_config "$SCRIPT_DIR/.claude/review-policy.json.example" \
             "$USER_CLAUDE_DIR/review-policy.json" "review-policy.json"
+# The TDD mandate is on by default; this file only lists exemptions, so seeding
+# it empty changes nothing. It exists so there is somewhere obvious to add one.
+seed_config "$SCRIPT_DIR/.claude/tdd-mandate.json.example" \
+            "$USER_CLAUDE_DIR/tdd-mandate.json" "tdd-mandate.json"
 
 # ------------------------------------------------------------- CLAUDE.md ---
 # Each snippet owns exactly one `## ` section; the merge replaces that section
@@ -200,6 +219,7 @@ echo ""
 echo "Merging CLAUDE.md sections..."
 USER_CLAUDE_MD="$USER_CLAUDE_DIR/CLAUDE.md"
 for snippet in "$SCRIPT_DIR/.claude/claude-md-snippet.md" \
+               "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md" \
                "$SCRIPT_DIR/.claude/hygiene-snippet.md" \
                "$SCRIPT_DIR/.claude/feature-workflow-snippet.md"; do
     if [ -f "$snippet" ]; then

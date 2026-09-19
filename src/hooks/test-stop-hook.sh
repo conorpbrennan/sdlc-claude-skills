@@ -7,22 +7,17 @@ set -e
 HOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/stop-review-trigger.js"
 PASS=0
 FAIL=0
-MARKER_FILE="$HOME/.claude-last-review"
-LOCK_FILE="$HOME/.claude-review-in-progress"
+# The markers are per repository and per worktree (lib/review-markers.js), so the
+# fixtures live in the temp repo this suite creates -- set below, once TEMP_REPO
+# exists. They used to be $HOME/.claude-last-review and
+# $HOME/.claude-review-in-progress, which meant this suite backed up, deleted and
+# restored the user's real review state on every run, and that state was shared
+# with every other repository on the machine.
+MARKER_FILE=""
+LOCK_FILE=""
 
-# Save and clean state
-save_state() {
-    if [ -f "$MARKER_FILE" ]; then cp "$MARKER_FILE" "$MARKER_FILE.bak"; fi
-    if [ -f "$LOCK_FILE" ]; then cp "$LOCK_FILE" "$LOCK_FILE.bak"; fi
-    return 0
-}
-
-restore_state() {
-    rm -f "$MARKER_FILE" "$LOCK_FILE"
-    if [ -f "$MARKER_FILE.bak" ]; then mv "$MARKER_FILE.bak" "$MARKER_FILE"; fi
-    if [ -f "$LOCK_FILE.bak" ]; then mv "$LOCK_FILE.bak" "$LOCK_FILE"; fi
-    return 0
-}
+save_state() { return 0; }
+restore_state() { return 0; }
 
 assert_approve() {
     local test_name="$1"
@@ -85,15 +80,26 @@ assert_not_contains() {
 echo "=== Stop Hook Tests ==="
 echo ""
 
-save_state
-trap restore_state EXIT
+# One fixture repo for the whole suite, created before the first assertion because
+# the marker fixtures now live inside it -- see the note at the top of this file.
+TEMP_REPO=$(mktemp -d)
+git init "$TEMP_REPO" > /dev/null 2>&1
+echo "readme" > "$TEMP_REPO/README.md"
+git -C "$TEMP_REPO" add README.md > /dev/null 2>&1
+git -C "$TEMP_REPO" -c core.hooksPath=/dev/null commit -m init > /dev/null 2>&1
+# The session gate's own names, distinct from the commit gate's marker and lock.
+# Sharing them would mean a BLOCK record written by the commit gate approves a
+# session end, since this gate approved on freshness alone.
+MARKER_FILE="$TEMP_REPO/.git/.claude-last-session-review"
+LOCK_FILE="$TEMP_REPO/.git/.claude-post-review-in-progress"
+trap 'rm -rf "$TEMP_REPO"' EXIT
 
 # --- Gate 1: Lock file circuit breaker ---
 echo "Gate 1: Lock file circuit breaker"
 
 rm -f "$MARKER_FILE" "$LOCK_FILE"
 touch "$LOCK_FILE"
-output=$(node "$HOOK" 2>/dev/null)
+output=$(cd "$TEMP_REPO" && node "$HOOK" 2>/dev/null)
 assert_approve "Fresh lock file -> approve (circuit breaker)" "$output"
 
 rm -f "$LOCK_FILE"
@@ -113,14 +119,6 @@ assert_approve "Non-git directory -> approve" "$output"
 # --- Gate 3: No code changes ---
 echo ""
 echo "Gate 3: Code file detection"
-
-# Create a temp git repo with no code changes
-TEMP_REPO=$(mktemp -d)
-git init "$TEMP_REPO" > /dev/null 2>&1
-# Create and commit a non-code file so there's a valid HEAD
-echo "readme" > "$TEMP_REPO/README.md"
-git -C "$TEMP_REPO" add README.md > /dev/null 2>&1
-git -C "$TEMP_REPO" commit -m "init" > /dev/null 2>&1
 
 rm -f "$MARKER_FILE" "$LOCK_FILE"
 output=$(cd "$TEMP_REPO" && node "$HOOK" 2>/dev/null)
@@ -157,6 +155,18 @@ touch "$MARKER_FILE"
 rm -f "$LOCK_FILE"
 output=$(cd "$TEMP_REPO" && node "$HOOK" 2>/dev/null)
 assert_approve "Fresh marker file -> approve" "$output"
+
+# Freshness alone is not evidence of a pass. A marker also records failures, and
+# approving on presence let a recorded BLOCK end the session as if reviewed.
+printf 'BLOCK\n%s\nreview-required: Code review required before commit' "deadbeef" > "$MARKER_FILE"
+rm -f "$LOCK_FILE"
+output=$(cd "$TEMP_REPO" && node "$HOOK" 2>/dev/null)
+assert_block "Fresh marker with a BLOCK body -> block" "$output"
+
+printf 'PASS\n%s\nnone\ncode-reviewer:round1:PASS' "deadbeef" > "$MARKER_FILE"
+rm -f "$LOCK_FILE"
+output=$(cd "$TEMP_REPO" && node "$HOOK" 2>/dev/null)
+assert_approve "Fresh marker with a PASS body -> approve" "$output"
 
 # --- Block output format ---
 echo ""

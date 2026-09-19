@@ -4,8 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const HOME = process.env.USERPROFILE || process.env.HOME;
-const PENDING_FILE = path.join(HOME, '.claude-pending-review');
+// Per repository and per worktree, never $HOME -- see lib/review-markers.js. A
+// pending review is a fact about one commit in one repository.
+const reviewMarkers = require('./lib/review-markers');
+const PENDING_FILE = reviewMarkers.markerPaths(process.cwd()).pending;
+
+// No repository located -> nothing to record. Exit rather than print a remedy
+// naming a null path.
+if (!PENDING_FILE) process.exit(0);
 
 const input = process.env.CLAUDE_TOOL_INPUT || '';
 
@@ -13,16 +19,10 @@ if (!input.includes('git commit') || input.includes('--amend')) {
     process.exit(0);
 }
 
-const SOURCE_EXTENSIONS = [
-    '.py', '.java', '.js', '.ts', '.tsx', '.jsx',
-    '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs',
-    '.rb', '.php', '.swift', '.kt', '.scala', '.sql'
-];
-
-const EXCLUDE_PATTERNS = [
-    /^\.claude\//, /^\.vscode\//, /^\.idea\//,
-    /^node_modules\//, /^__pycache__\//
-];
+// One shared definition, in lib/source-files.js -- four hooks used to keep their
+// own copy, and all four were blind to shell. See that file for what changed.
+const sourceFiles = require('./lib/source-files');
+const { SOURCE_EXTENSIONS, EXCLUDE_PATTERNS } = sourceFiles;
 
 function isInsideGitRepo() {
     try {
@@ -93,5 +93,5 @@ try {
 
 const fileList = codeFiles.join(', ');
 console.log(JSON.stringify({
-    systemMessage: 'POST_COMMIT_REVIEW: Run /code-review --fresh on the committed code files: ' + fileList + '. After review completes, run: touch ~/.claude-last-review && rm -f ~/.claude-pending-review'
+    systemMessage: 'POST_COMMIT_REVIEW: Run /code-review --fresh on the committed code files: ' + fileList + '. After the review completes, run: rm -f ' + PENDING_FILE
 }));

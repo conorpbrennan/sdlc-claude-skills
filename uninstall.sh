@@ -5,7 +5,8 @@
 # Usage: ./uninstall.sh [--dry-run] [--purge-config] [--yes]
 #
 #   --dry-run        list what would be removed, write nothing
-#   --purge-config   also delete hygiene-repos.json and review-policy.json
+#   --purge-config   also delete hygiene-repos.json, review-policy.json and
+#                    tdd-mandate.json
 #                    (your tuned thresholds and repo opt-ins -- kept by default)
 #   --yes            skip the confirmation prompt
 #
@@ -146,6 +147,7 @@ echo ""
 echo "Removing CLAUDE.md sections..."
 USER_CLAUDE_MD="$USER_CLAUDE_DIR/CLAUDE.md"
 for snippet in "$SCRIPT_DIR/.claude/claude-md-snippet.md" \
+               "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md" \
                "$SCRIPT_DIR/.claude/hygiene-snippet.md" \
                "$SCRIPT_DIR/.claude/feature-workflow-snippet.md"; do
     [ -f "$snippet" ] || continue
@@ -188,9 +190,10 @@ if [ "$PURGE_CONFIG" -eq 1 ]; then
     echo "Purging config..."
     remove_if_owned "$USER_CLAUDE_DIR/hygiene-repos.json" "hygiene-repos.json"
     remove_if_owned "$USER_CLAUDE_DIR/review-policy.json" "review-policy.json"
+    remove_if_owned "$USER_CLAUDE_DIR/tdd-mandate.json" "tdd-mandate.json"
 else
     echo "Config kept (pass --purge-config to delete):"
-    for f in hygiene-repos.json review-policy.json; do
+    for f in hygiene-repos.json review-policy.json tdd-mandate.json; do
         [ -f "$USER_CLAUDE_DIR/$f" ] && echo "  - $USER_CLAUDE_DIR/$f"
     done
 fi

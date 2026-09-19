@@ -5,27 +5,48 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const HOME = process.env.USERPROFILE || process.env.HOME;
-const MARKER_FILE = path.join(HOME, '.claude-last-review');
-const LOCK_FILE = path.join(HOME, '.claude-review-in-progress');
-const PENDING_FILE = path.join(HOME, '.claude-pending-review');
+// Per repository and per worktree, never $HOME. A global marker meant one
+// project's review state governed every other project on the machine, and
+// MARKER_FILE in particular shared its NAME with the commit gate's per-repository
+// marker while living somewhere the commit gate never reads -- so the remedy these
+// hooks printed, `touch ~/.claude-last-review`, silently did nothing.
+const reviewMarkers = require('./lib/review-markers');
+const reviewPaths = reviewMarkers.markerPaths(process.cwd());
+const MARKER_FILE = reviewPaths.sessionMarker;
+const LOCK_FILE = reviewPaths.postLock;
+const PENDING_FILE = reviewPaths.pending;
+
+// No repository located -> nothing to record, and no shared location to fall back
+// on. Do nothing rather than emit instructions naming a null path.
+if (!MARKER_FILE) {
+    console.log(JSON.stringify({ decision: 'approve' }));
+    process.exit(0);
+}
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const LOCK_MAX_AGE_MS = 5 * 60 * 1000;
 
-const SOURCE_EXTENSIONS = [
-    '.py', '.java', '.js', '.ts', '.tsx', '.jsx',
-    '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs',
-    '.rb', '.php', '.swift', '.kt', '.scala', '.sql'
-];
-
-const EXCLUDE_PATTERNS = [
-    /^\.claude\//, /^\.vscode\//, /^\.idea\//,
-    /^node_modules\//, /^__pycache__\//
-];
+// One shared definition, in lib/source-files.js -- four hooks used to keep their
+// own copy, and all four were blind to shell. See that file for what changed.
+const sourceFiles = require('./lib/source-files');
+const { SOURCE_EXTENSIONS, EXCLUDE_PATTERNS } = sourceFiles;
 
 function approve() {
     console.log(JSON.stringify({ decision: 'approve' }));
     process.exit(0);
+}
+
+// True when the marker's body records a pass. An empty marker counts as a pass so
+// that `touch <marker>` -- what this hook's own message tells the user to run --
+// still works; a body whose first line is BLOCK does not.
+function markerRecordsPass(filePath) {
+    let body;
+    try {
+        body = fs.readFileSync(filePath, 'utf-8').trim();
+    } catch (e) {
+        return false;
+    }
+    if (body === '') return true;
+    return body.split('\n')[0].trim().toUpperCase() !== 'BLOCK';
 }
 
 function isFileFresh(filePath, maxAge) {
@@ -89,7 +110,7 @@ if (codeFiles.length === 0 && isFileFresh(PENDING_FILE, MARKER_MAX_AGE_MS)) {
         console.log(JSON.stringify({
             decision: 'block',
             reason: 'Post-commit code review not completed',
-            systemMessage: 'POST_COMMIT_REVIEW: Run /code-review --fresh on: ' + pendingFiles + '. After review completes, run: touch ~/.claude-last-review && rm -f ~/.claude-pending-review'
+            systemMessage: 'POST_COMMIT_REVIEW: Run /code-review --fresh on: ' + pendingFiles + '. After the review completes, run: rm -f ' + PENDING_FILE
         }));
         process.exit(0);
     } catch (e) {
@@ -101,8 +122,14 @@ if (codeFiles.length === 0) {
     approve();
 }
 
-// Gate 4: Marker file fresh -> approve (recent review completed)
-if (isFileFresh(MARKER_FILE, MARKER_MAX_AGE_MS)) {
+// Gate 4: a fresh marker recording a PASS -> approve (a review completed).
+//
+// The body is read, not just the mtime. Freshness alone is not evidence of a pass:
+// a marker file also records failures, and approving on presence would let a
+// recorded block end the session as though it had been reviewed. The marker this
+// gate reads is its own (`.claude-last-session-review`), but the body check is the
+// part that must not be skipped whatever the filename.
+if (isFileFresh(MARKER_FILE, MARKER_MAX_AGE_MS) && markerRecordsPass(MARKER_FILE)) {
     approve();
 }
 
@@ -117,5 +144,5 @@ const fileList = codeFiles.join(', ');
 console.log(JSON.stringify({
     decision: 'block',
     reason: 'Code review required',
-    systemMessage: 'REVIEW_REQUIRED: Run /code-review --context on these modified files before stopping: ' + fileList + '. After review completes, run: touch ~/.claude-last-review'
+    systemMessage: 'REVIEW_REQUIRED: Run /code-review --context on these modified files before stopping: ' + fileList + '. After the review completes, run: touch ' + MARKER_FILE
 }));

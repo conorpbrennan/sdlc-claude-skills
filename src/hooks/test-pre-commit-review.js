@@ -214,6 +214,41 @@ unstageFiles(PRE_STAGED);
 // =========================================================================
 // Suite 1: Classifier unit tests (exported from pre-commit-review.js)
 // =========================================================================
+console.log('\n[UNIT] isSourcePath / SOURCE_EXTENSIONS');
+{
+    const m = require(HOOK_PATH);
+    // Shell is code. Omitting it meant a diff touching only install.sh and
+    // uninstall.sh -- the two scripts that delete paths under ~/.claude and
+    // rewrite the user's global config -- produced zero code files and was
+    // approved via `staged-no-code`, with no review ever requested.
+    assertTrue('install.sh is source', m.isSourcePath('install.sh'));
+    assertTrue('uninstall.sh is source', m.isSourcePath('uninstall.sh'));
+    assertTrue('a nested .sh is source', m.isSourcePath('src/hooks/test-tdd-order.sh'));
+    assertTrue('.ps1 is source', m.isSourcePath('claude-commit-notify.ps1'));
+    assertTrue('.SH uppercase is source', m.isSourcePath('DEPLOY.SH'));
+    assertTrue('.js is still source', m.isSourcePath('src/hooks/pre-commit-review.js'));
+    assertTrue('.py is still source', m.isSourcePath('tools/analyze-review-timing.py'));
+    assert('.md is not source', m.isSourcePath('README.md'), false);
+    assert('.json is not source', m.isSourcePath('package.json'), false);
+    // The exclusions still win over the extension, or installing this project
+    // would gate every skill and agent file it ships.
+    assert('.claude/ is excluded even for .js', m.isSourcePath('.claude/hooks/pre-commit-review.js'), false);
+    assert('node_modules is excluded', m.isSourcePath('node_modules/x/index.js'), false);
+    // Vendored and generated shell: nobody here wrote it, and `.sh` being source
+    // now makes these reachable.
+    assert('nested node_modules is excluded', m.isSourcePath('frontend/node_modules/pkg/install.sh'), false);
+    assert('vendor/ is excluded', m.isSourcePath('vendor/lib/configure.sh'), false);
+    assert('third_party/ is excluded', m.isSourcePath('third_party/x/build.sh'), false);
+    // dist/ and build/ are NOT excluded -- see test-source-files.js, which owns the
+    // exclusion cases now and asserts they stay gated.
+    assert('.venv/ is excluded', m.isSourcePath('.venv/bin/activate.sh'), false);
+    // ...but a directory that merely starts with an excluded name is not.
+    assertTrue('vendored-looking name is still source', m.isSourcePath('vendoring/tool.sh'));
+    assertTrue('buildkit is still source', m.isSourcePath('buildkit/run.sh'));
+    assertTrue('the list carries .sh', m.SOURCE_EXTENSIONS.includes('.sh'));
+    assertTrue('the list carries .ps1', m.SOURCE_EXTENSIONS.includes('.ps1'));
+}
+
 console.log('\n[UNIT] Classifier: isLineSemantic');
 const mod = require(HOOK_PATH);
 const { isLineSemantic, classifyDiff, readBranchCoverage,

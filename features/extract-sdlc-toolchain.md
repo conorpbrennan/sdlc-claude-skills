@@ -3,7 +3,7 @@
 **Requirement**: Extract the workflow skills (plan-spec, code-review-pre-commit, code-review-implementer) and /commit-prep out of risk-claude-skills into a separate sdlc-claude-skills project under ~/dev, with an appropriate install/uninstall script and .gitignore.
 
 **Started**: 2026-09-18
-**Last updated**: 2026-09-18
+**Last updated**: 2026-09-19
 **Branch**: extract-sdlc-toolchain
 
 ## Scope decisions
@@ -82,8 +82,11 @@
 - src/hooks/test-tdd-order.sh
 - src/hooks/test-timing-log.js
 - src/hooks/timing-log.js
+- src/lib/claude-md-section.js
 - src/merge-claude-md.js
 - src/merge-hooks.js
+- src/test-claude-md-section.js
+- src/test-install.sh
 - src/test-merge-claude-md.js
 - src/test-merge-hooks.js
 - src/test-unmerge-claude-md.js

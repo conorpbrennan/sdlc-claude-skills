@@ -189,11 +189,13 @@ new_case symmetry
 CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
 mapfile -t leftover < <(cd "$HOME_DIR" && find . -type f \
     ! -name 'settings.json' ! -name 'CLAUDE.md' \
-    ! -name '*.backup.*' ! -name 'hygiene-repos.json' ! -name 'review-policy.json' | sort)
+    ! -name '*.backup.*' ! -name 'hygiene-repos.json' ! -name 'review-policy.json' \
+    ! -name 'tdd-mandate.json' | sort)
 CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
 mapfile -t still < <(cd "$HOME_DIR" && find . -type f \
     ! -name 'settings.json' ! -name 'CLAUDE.md' \
-    ! -name '*.backup.*' ! -name 'hygiene-repos.json' ! -name 'review-policy.json' | sort)
+    ! -name '*.backup.*' ! -name 'hygiene-repos.json' ! -name 'review-policy.json' \
+    ! -name 'tdd-mandate.json' | sort)
 assert "install deployed files" "$([ ${#leftover[@]} -gt 0 ] && echo yes || echo no)" "yes"
 assert "uninstall removed all of them" "${#still[@]}" "0"
 

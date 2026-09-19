@@ -12,16 +12,12 @@ const BLOCKLIST_BRANCHES = new Set([
     'main', 'master', 'develop', 'trunk', 'HEAD',
 ]);
 
-const SOURCE_EXTENSIONS = [
-    '.py', '.java', '.js', '.ts', '.tsx', '.jsx',
-    '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs',
-    '.rb', '.php', '.swift', '.kt', '.scala', '.sql',
-];
-
-const EXCLUDE_PATTERNS = [
-    /^\.claude\//, /^\.vscode\//, /^\.idea\//,
-    /^node_modules\//, /^__pycache__\//,
-];
+// One shared definition, in lib/source-files.js. This file used to carry its own
+// copy, which -- like the other three -- did not list `.sh`, so a shell-only commit
+// read as docs-only and could go onto `main` with no branch and no feature file.
+// It is gated now because the shared list adds shell.
+const sourceFiles = require('./source-files');
+const { SOURCE_EXTENSIONS, EXCLUDE_PATTERNS } = sourceFiles;
 
 const PLACEHOLDER = '<!-- populated on commit -->';
 
@@ -47,8 +43,7 @@ function isGatedBranch(branch) {
 }
 
 function isSourceFile(file) {
-    if (EXCLUDE_PATTERNS.some(p => p.test(file))) return false;
-    return SOURCE_EXTENSIONS.includes(path.extname(file).toLowerCase());
+    return sourceFiles.isSourcePath(file);
 }
 
 function hasSourceFile(files) {
