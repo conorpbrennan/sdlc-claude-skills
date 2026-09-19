@@ -29,6 +29,11 @@ USER_HOOKS_DIR="$USER_CLAUDE_DIR/hooks"
 USER_AGENTS_DIR="$USER_CLAUDE_DIR/agents"
 USER_COMMANDS_DIR="$USER_CLAUDE_DIR/commands"
 USER_TOOLS_DIR="$USER_CLAUDE_DIR/tools"
+# Skill backups live OUTSIDE the skills directory. Claude Code discovers skills by
+# scanning it, so a backup kept there as `plan-spec.bak.<ts>/` is itself loaded as
+# a skill: observed in a real session, where it appeared in the skill list next to
+# the real one, with the same name and description.
+USER_BACKUP_DIR="$USER_CLAUDE_DIR/backups"
 LOCAL_HOOKS_DIR="$SCRIPT_DIR/.claude/hooks"
 
 run() {
@@ -73,16 +78,19 @@ for skill in "$SCRIPT_DIR/.claude/skills"/*; do
     # `.bak.` left by another project installing the same skill would disable
     # the protection outright. `date +%s` keeps the names distinct.
     if [ -e "$target" ] && ! diff -rq "$skill" "$target" >/dev/null 2>&1; then
+        # Into $USER_BACKUP_DIR, never beside the skill: a copy left in
+        # $USER_SKILLS_DIR is discovered and loaded as a duplicate skill.
         # A free name, not just a timestamped one: `date +%s` is per-second, and
         # `cp -r` onto an existing directory copies *into* it rather than
         # failing, which would bury one backup inside another.
-        bak="$target.bak.$(date +%s)"
+        run mkdir -p "$USER_BACKUP_DIR"
+        bak="$USER_BACKUP_DIR/$skill_name.bak.$(date +%s)"
         suffix=1
         while [ -e "$bak" ]; do
-            bak="$target.bak.$(date +%s)-$suffix"
+            bak="$USER_BACKUP_DIR/$skill_name.bak.$(date +%s)-$suffix"
             suffix=$((suffix + 1))
         done
-        echo "  - backing up existing $skill_name -> $(basename "$bak")"
+        echo "  - backing up existing $skill_name -> backups/$(basename "$bak")"
         run cp -r "$target" "$bak"
     fi
 

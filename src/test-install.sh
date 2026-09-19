@@ -59,7 +59,7 @@ echo '# MY CUSTOMISED plan-spec' > "$HOME_DIR/skills/plan-spec/SKILL.md"
 echo 'my notes' > "$HOME_DIR/skills/plan-spec/my-notes.md"
 CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > "$CASE_DIR/out.txt" 2>&1
 assert "install exits 0" "$?" "0"
-baks=("$HOME_DIR/skills/plan-spec".bak.*)
+baks=("$HOME_DIR/backups/plan-spec".bak.*)
 assert "a backup was taken" "${#baks[@]}" "1"
 if [ "${#baks[@]}" -eq 1 ]; then
     assert "backup holds the user's version" \
@@ -71,6 +71,14 @@ assert "install said so" \
     "$(grep -c 'backing up existing plan-spec' "$CASE_DIR/out.txt")" "1"
 assert "shipped version is now in place" \
     "$(head -1 "$HOME_DIR/skills/plan-spec/SKILL.md" | cut -c1-3)" "---"
+# The assertion this file was missing. Claude Code discovers skills by scanning
+# the skills directory, so a backup left in there is loaded as a second skill
+# with the same name -- observed in a real session. Nothing that is not a shipped
+# skill may appear under skills/.
+stray=("$HOME_DIR/skills"/*.bak.*)
+assert "no backup left inside skills/" "${#stray[@]}" "0"
+assert "backup is under backups/ instead" \
+    "$([ -d "$HOME_DIR/backups" ] && echo yes || echo no)" "yes"
 
 # Test 2: an identical skill is not backed up, and a second install does not
 # pile up backups of its own output.
@@ -79,7 +87,7 @@ echo "Unchanged skill is not backed up:"
 new_case unchanged
 CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
 CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
-baks=("$HOME_DIR/skills/plan-spec".bak.*)
+baks=("$HOME_DIR/backups/plan-spec".bak.*)
 assert "no backup on re-install" "${#baks[@]}" "0"
 
 # Test 2b: every divergence is backed up, not just the first. Guarding on "a
@@ -95,7 +103,7 @@ CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
 echo 'V2 CUSTOM SECOND EDIT' > "$HOME_DIR/skills/plan-spec/SKILL.md"
 sleep 1  # distinct `date +%s`, so the assertion reads two names not one
 CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > "$CASE_DIR/out.txt" 2>&1
-baks=("$HOME_DIR/skills/plan-spec".bak.*)
+baks=("$HOME_DIR/backups/plan-spec".bak.*)
 assert "two backups after two customisations" "${#baks[@]}" "2"
 assert "V1 survives somewhere" \
     "$(grep -rl 'V1 CUSTOM' "$HOME_DIR" | wc -l)" "1"

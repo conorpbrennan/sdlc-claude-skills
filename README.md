@@ -246,8 +246,15 @@ where a block was removed, so blank lines inside your own fenced code and any
 minority line endings come back byte for byte.
 
 Left in place on purpose: the timing log (`~/.claude/code-review-timing.jsonl`),
-the per-repo `.git/` markers, which expire on their own, and the timestamped
-`settings.json` and `CLAUDE.md` backups.
+the per-repo `.git/` markers, which expire on their own, the timestamped
+`settings.json` and `CLAUDE.md` backups, and `~/.claude/backups/`.
+
+That last directory is where `install.sh` puts a copy of any user-scope skill it
+is about to replace, and the location matters: Claude Code discovers skills by
+scanning `~/.claude/skills/`, so a backup kept there as `plan-spec.bak.<ts>/` is
+itself loaded as a skill, appearing in the skill list beside the real one with the
+same name. Nothing that is not a shipped skill may live under `skills/`, and
+`src/test-install.sh` asserts it.
 
 **If another project installs the same hooks** — `risk-claude-skills`
 currently does — uninstalling here removes its deployed copies too, because
