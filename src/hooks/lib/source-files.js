@@ -25,7 +25,28 @@ const SOURCE_EXTENSIONS = Object.freeze([
     '.py', '.java', '.js', '.ts', '.tsx', '.jsx',
     '.c', '.cpp', '.h', '.hpp', '.cs', '.go', '.rs',
     '.rb', '.php', '.swift', '.kt', '.scala', '.sql',
-    '.sh', '.ps1'
+    '.sh', '.ps1',
+    // Self-executing test files. Nobody writes application logic in these, but they
+    // ARE code and they carry their own assertions, and lib/tdd-order.js requires a
+    // test file to be code -- a rule that exists because a `test-*.md` plan and a
+    // `tests/*.json` fixture were otherwise counted as the paired test. Before that
+    // rule the `tests/` directory match recognised these regardless of extension, so
+    // leaving them out flipped the failure to the blocking direction, calling a
+    // genuinely tested commit `no_tests`. Neither belongs in CLASSIFIER_LANGUAGES, so
+    // a diff of them cannot take a fast path either.
+    //
+    // `.feature` (Cucumber/Gherkin) is deliberately NOT here. Three reasons: a
+    // `.feature` carries no assertions -- the step definitions do -- so counting it
+    // as the test lets a commit pass the mandate with a specification that executes
+    // nothing, which is the same error as accepting a `test-*.md` plan; this list is
+    // shared by the review and feature-tracking gates, so adding it would also make a
+    // Gherkin scenario reviewable and block it on `main` without a feature file, and
+    // those files are often written by people who are not engineers; and it would not
+    // even work for the standard Cucumber layout, because `features/` is an exempt
+    // directory here (this project keeps its feature records there). That collision
+    // is a real gap and wants its own fix -- a repo-configurable exemption -- not an
+    // extension bolted on here.
+    '.bats', '.robot'
 ]);
 
 // What lib/diff-classifier.js can actually read. `isLineSemantic` recognises

@@ -77,6 +77,59 @@ const TESTS = [
 ];
 for (const f of TESTS) assert(`test: ${f}`, tdd.isTestFile(f), true);
 
+// A test file must itself be code. Found by checking risk-claude-skills, which has
+// a planning document called `.claude/plans/test-first-ordering-gate.md`: the
+// `test-` prefix rule matched it, so a commit of real Python plus that document
+// satisfied the mandate with no test in it. Same for a JSON fixture under `tests/`.
+// This is the fail-OPEN direction -- a non-code path counted as the paired test.
+console.log('\nA test must be code, not just live in a test-ish path:');
+const NOT_CODE_TESTS = [
+    '.claude/plans/test-first-ordering-gate.md',
+    'docs/test-strategy.md',
+    'tests/README.md',
+    'tests/fixtures/data.json',
+    'tests/fixtures/expected.csv',
+    'spec/fixtures/payload.yaml',
+];
+for (const f of NOT_CODE_TESTS) assert(`not a test: ${f}`, tdd.isTestFile(f), false);
+assert('code + a test-named doc is still no_tests',
+    tdd.classifyFromEvents(['src/api.py', '.claude/plans/test-first-ordering-gate.md'], []).status, 'no_tests');
+assert('code + a fixture under tests/ is still no_tests',
+    tdd.classifyFromEvents(['src/api.py', 'tests/fixtures/data.json'], []).status, 'no_tests');
+// Executable test specifications are code, even though nobody writes application
+// logic in them. Requiring isSourcePath broke these two: before the guard, the
+// `tests/` directory rule matched them regardless of extension, so a Robot
+// Framework or Cucumber suite counted. Losing them flips the failure to the
+// BLOCKING direction -- a genuinely tested commit called `no_tests` -- which is
+// worse for a user than the fail-open case, because the only remedy on offer is
+// disabling the mandate.
+console.log('\nExecutable test specs count as tests:');
+assert('a Robot Framework suite', tdd.isTestFile('tests/test_login.robot'), true);
+assert('a Robot-tested commit is satisfied',
+    tdd.classifyFromEvents(['src/api.py', 'tests/test_login.robot'], []).status, 'not_applicable');
+
+// `.feature` is NOT a test here, and that is a decision rather than an oversight: a
+// Gherkin scenario carries no assertions (its step definitions do), so accepting it
+// would let a commit pass with a specification that executes nothing -- the same
+// error as accepting a `test-*.md` plan. See the note in lib/source-files.js.
+assert('a Gherkin scenario is not a test', tdd.isTestFile('tests/features/checkout.feature'), false);
+assert('code + a bare .feature is not satisfied',
+    tdd.classifyFromEvents(['app/checkout.rb', 'tests/features/checkout.feature'], []).status, 'no_tests');
+// ...but its step definitions are ordinary code and do count, in their own language.
+assert('step definitions in a test dir count',
+    tdd.classifyFromEvents(['app/checkout.rb', 'spec/features/checkout_spec.rb'], []).status, 'not_applicable');
+// ...and the hole this guard closed stays closed: a data fixture in the same
+// directory is still not a test.
+assert('a JSON fixture beside them is still not a test', tdd.isTestFile('tests/fixtures/data.json'), false);
+assert('code + that fixture is still no_tests',
+    tdd.classifyFromEvents(['src/api.py', 'tests/fixtures/data.json'], []).status, 'no_tests');
+
+// ...but a real test in any supported language still counts, including bats, which
+// is a shell test framework and therefore code.
+assert('a bats test counts', tdd.isTestFile('tests/smoke.bats'), true);
+assert('code + a bats test is satisfied',
+    tdd.classifyFromEvents(['src/api.py', 'tests/smoke.bats'], []).status, 'not_applicable');
+
 console.log('\nNot test files:');
 const NOT_TESTS = [
     'src/hooks/pre-commit-review.js',

@@ -85,6 +85,14 @@ function basename(p) {
 
 function isTestFile(p) {
     const n = norm(p);
+    // A test must itself be code. The path rules below are about naming, and naming
+    // alone sweeps in things that cannot test anything: risk-claude-skills has a
+    // planning document at `.claude/plans/test-first-ordering-gate.md`, which the
+    // `test-` prefix rule matched, so a commit of real Python plus that document
+    // satisfied the mandate with no test in it. A JSON fixture under `tests/` did
+    // the same. That is the fail-OPEN direction -- the file is counted as the paired
+    // test AND excluded from the implementation set.
+    if (!sourceFiles.isSourcePath(n)) return false;
     if (TEST_PATH_RE.test(n)) return true;
     // The weak capitalised suffixes, only with a test directory in the path.
     return TEST_SUFFIX_RE.test(n) && TEST_DIR_RE.test(n);
