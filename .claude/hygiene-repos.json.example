@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "_comment": "Per-repo opt-in for pre-commit-hygiene.js. Install to ~/.claude/hygiene-repos.json. Keys are git toplevel paths with forward slashes, e.g. /home/you/dev/your-repo or C:/Users/you/dev/your-repo. The checks below are the canonical ruff -> pytest-cov -> diff-cover recipe; copy it rather than inventing a variant.",
+  "repos": {
+    "/home/you/dev/your-repo": {
+      "shell": "bash",
+      "setup": [
+        "source .env",
+        "source /path/to/conda/etc/profile.d/conda.sh",
+        "conda activate your-env",
+        "export PYTHONIOENCODING=utf-8",
+        "export PYTHONPATH=python_src"
+      ],
+      "checks": [
+        { "name": "ruff-check",  "command": "if [ -n \"$STAGED_PY\" ]; then echo \"$STAGED_PY\" | xargs ruff check --fix --force-exclude --; fi" },
+        { "name": "ruff-format", "command": "if [ -n \"$STAGED_PY\" ]; then echo \"$STAGED_PY\" | xargs ruff format --force-exclude --; fi" },
+        { "name": "pytest-cov",  "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then pytest $(echo \"$STAGED_PY_PKGS\" | tr ',' '\\n' | sed 's|^|--cov=|' | tr '\\n' ' ') --cov-branch --cov-report=xml -q; fi" },
+        { "name": "diff-cover",  "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then diff-cover coverage.xml --compare-branch=HEAD --fail-under=95; fi" }
+      ],
+      "timeoutMs": 900000
+    }
+  }
+}

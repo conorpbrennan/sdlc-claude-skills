@@ -1,0 +1,24 @@
+# Hook deploy target (source of truth is src/hooks/)
+.claude/hooks/
+
+# Python bytecode from the plan-spec helpers and the timing analyser
+__pycache__/
+*.py[cod]
+
+# Local Claude Code state that is per-machine, not project source
+.claude/settings.local.json
+.claude/plans/
+.claude/*.local.json
+
+# Installed config is seeded from the .example files; never commit the live copy
+.claude/hygiene-repos.json
+.claude/review-policy.json
+
+# settings.json backups written by install.sh / uninstall.sh
+*.backup.*
+*.bak.*
+
+# Scratch and generated artefacts
+tmp/
+*.stackdump
+*.log

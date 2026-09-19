@@ -1,0 +1,79 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/session-start-feature.js\"",
+          "timeout": 2000
+        }
+      ]
+    }
+  ],
+  "UserPromptSubmit": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/enforce-review-implementer.js\"",
+          "timeout": 1000
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/pre-commit-feature.js\"",
+          "timeout": 3000
+        },
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/pre-commit-review.js\"",
+          "timeout": 2000
+        },
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/pending-review-gate.js\"",
+          "timeout": 2000
+        },
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/enforce-co-author.js\"",
+          "timeout": 1000
+        },
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/pre-commit-hygiene.js\"",
+          "timeout": 200000
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/post-commit-notify.js\"",
+          "timeout": 10000
+        },
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/claude-attribution-note.js\"",
+          "timeout": 5000
+        },
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/post-commit-feature.js\"",
+          "timeout": 3000
+        }
+      ]
+    }
+  ]
+}

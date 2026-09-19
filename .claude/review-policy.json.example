@@ -1,0 +1,11 @@
+{
+  "_comment": "Per-repo policy for pre-commit-review.js fast paths. Install to ~/.claude/review-policy.json. Keys are git toplevel paths (forward slashes). Defaults apply if a repo is absent or fields are missing.",
+  "repos": {
+    "/home/you/dev/your-repo": {
+      "presentational_paths": ["**/html_report*.py", "docs/**"],
+      "trivial_line_threshold": 3,
+      "diff_cover_threshold": 95,
+      "branch_cover_threshold": 90
+    }
+  }
+}
