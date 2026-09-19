@@ -18,6 +18,13 @@
     "anything under features/, tmp/ or .planning/. Code needs a test, and shell",
     "scripts are code.",
     "",
+    "exempt_paths exempts individual paths within every repository. An entry",
+    "ending in / is a directory prefix; anything else is matched exactly. Use it",
+    "for generated or vendored code that lives somewhere EXCLUDE_PATTERNS does",
+    "not cover. There is no hardcoded directory list -- there was, and a",
+    "project-specific `features/` prefix in a shared library silently un-gated",
+    "every Cucumber suite, whose step definitions live there.",
+    "",
     "Two ways to exempt a repository:",
     "  1. touch <repo>/.claude/tdd-mandate.disabled  -- visible in the tree, and",
     "     the same convention as .claude/feature-tracking.disabled;",
@@ -29,5 +36,6 @@
     "that will not parse does NOT disable the mandate: a typo here must not",
     "silently switch off gating everywhere."
   ],
-  "exempt_repos": []
+  "exempt_repos": [],
+  "exempt_paths": []
 }

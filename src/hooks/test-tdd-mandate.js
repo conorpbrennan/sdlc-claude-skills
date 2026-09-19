@@ -163,6 +163,58 @@ const NOT_TESTS = [
 ];
 for (const f of NOT_TESTS) assert(`not a test: ${f}`, tdd.isTestFile(f), false);
 
+// ------------------------------------------------------- features/ is a test dir ---
+// `features/` was hardcoded as EXEMPT because this project keeps its feature-
+// tracking records there. That was wrong twice over. It is redundant -- those
+// records are `.md`, so the inverted exemption rule (`not code -> no test needed`)
+// already covers them -- and its only live effect was exempting CODE under
+// `features/`, which is Cucumber's standard test directory. A Cucumber suite was
+// therefore invisible to the mandate: step definitions are real Ruby, and they
+// neither counted as tests nor as implementation.
+//
+// It is a test directory now, and that is only safe because isTestFile requires the
+// file to be code: a `.md` record in the same directory still cannot be a test.
+console.log('\nfeatures/ is Cucumber\'s test directory, not an exemption:');
+assert('step definitions are tests', tdd.isTestFile('features/step_definitions/checkout_steps.rb'), true);
+assert('a support helper is a test', tdd.isTestFile('features/support/env.rb'), true);
+assert('a Cucumber-tested commit is satisfied',
+    tdd.classifyFromEvents(['app/checkout.rb', 'features/step_definitions/checkout_steps.rb'], []).status, 'not_applicable');
+// The records this project keeps there are still exempt, and still not tests --
+// they are not code, so neither rule can reach them.
+assert('a feature record is not a test', tdd.isTestFile('features/extract-sdlc-toolchain.md'), false);
+assert('a feature record is still exempt', tdd.isExemptPath('features/extract-sdlc-toolchain.md'), true);
+assert('code + only a feature record is still no_tests',
+    tdd.classifyFromEvents(['src/api.py', 'features/some-slug.md'], []).status, 'no_tests');
+// A bare .feature stays out: no assertions in it (see lib/source-files.js).
+assert('a bare .feature is still not a test', tdd.isTestFile('features/checkout.feature'), false);
+
+// ------------------------------------------------------- configurable exemption ---
+// So that a repository never has to patch a shared lib to exempt a directory, which
+// is how `features/` came to be hardcoded in the first place.
+console.log('\nexempt_paths in the config:');
+const cfgDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tdd-paths-'));
+const pathsCfg = path.join(cfgDir, 'tdd-mandate.json');
+fs.writeFileSync(pathsCfg, JSON.stringify({ exempt_paths: ['generated/', 'legacy/vendor_shim.py'] }));
+assert('a configured directory prefix is exempt',
+    tdd.isExemptPath('generated/api_client.py', { configPath: pathsCfg }), true);
+assert('a configured exact file is exempt',
+    tdd.isExemptPath('legacy/vendor_shim.py', { configPath: pathsCfg }), true);
+// An exact entry must not behave like a prefix. The sibling has to be code itself,
+// or it would be exempt for not being code and the assertion would prove nothing --
+// which is what `vendor_shim.py.bak` did on the first attempt.
+assert('an exact entry does not match a code sibling',
+    tdd.isExemptPath('legacy/vendor_shim2.py', { configPath: pathsCfg }), false);
+// A directory entry must match on a segment boundary, not mid-filename.
+assert('a directory entry does not match mid-filename',
+    tdd.isExemptPath('src/pregenerated/api.py', { configPath: pathsCfg }), false);
+assert('an unconfigured path is not exempt',
+    tdd.isExemptPath('src/api.py', { configPath: pathsCfg }), false);
+assert('the gate honours it',
+    tdd.classifyFromEvents(['generated/api_client.py'], [], { configPath: pathsCfg }).status, 'not_applicable');
+fs.writeFileSync(pathsCfg, '{ not json');
+assert('unparseable config exempts nothing', tdd.isExemptPath('src/api.py', { configPath: pathsCfg }), false);
+fs.rmSync(cfgDir, { recursive: true, force: true });
+
 // ----------------------------------------------------------------- exemptions ---
 // A commit of only these needs no test, or the mandate would block every
 // documentation fix.

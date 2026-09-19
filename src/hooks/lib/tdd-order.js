@@ -29,6 +29,13 @@ const TEST_PATH_RE = new RegExp(
         '(?:^|/)tests?/' +
         '|(?:^|/)__tests__/' +
         '|(?:^|/)specs?/' +
+        // Cucumber's standard layout: features/*.feature with the assertions in
+        // features/step_definitions/*.rb. This was EXEMPT, because this project keeps
+        // its feature-tracking records under features/ -- which made a whole Cucumber
+        // suite invisible to the mandate, step definitions included. Safe as a test
+        // directory only because isTestFile requires the file to be code: a `.md`
+        // record in the same directory still cannot be mistaken for a test.
+        '|(?:^|/)features/' +
         // `test_foo.py`, `test-foo.js`
         '|(?:^|/)test[-_][^/]+$' +
         // `foo_test.go`, `foo_test.py` -- underscore only. The hyphen suffix is not
@@ -71,7 +78,23 @@ const TEST_SUFFIX_RE = /(?:^|\/)[^/]+(?:Test|Tests|Spec|Specs)\.[^/]+$/;
 //
 // One definition of "code" now serves both gates: if the review gate would not
 // review it, the mandate does not demand a test for it.
-const EXEMPT_DIR_PREFIXES = ['.planning/', 'features/', 'tmp/'];
+//
+// There is no hardcoded directory list. There was -- `.planning/`, `features/`,
+// `tmp/` -- and inverting the rule above made it redundant for its own purpose,
+// since everything it was protecting is `.md` or `.txt` and therefore not code. Its
+// only remaining effect was to exempt CODE in those directories, which silently
+// un-gated Cucumber suites. A repository that genuinely needs a path exempt says so
+// in `exempt_paths`, rather than someone adding a project-specific prefix to a
+// shared library, which is how `features/` got here.
+function exemptPaths(opts) {
+    const configPath = (opts && opts.configPath) || defaultMandateConfigPath();
+    try {
+        const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        return Array.isArray(parsed?.exempt_paths) ? parsed.exempt_paths : [];
+    } catch (e) {
+        return [];
+    }
+}
 
 function norm(p) {
     return String(p || '').replace(/\\/g, '/');
@@ -98,10 +121,17 @@ function isTestFile(p) {
     return TEST_SUFFIX_RE.test(n) && TEST_DIR_RE.test(n);
 }
 
-function isExemptPath(p) {
+function isExemptPath(p, opts) {
     const n = norm(p);
-    for (const prefix of EXEMPT_DIR_PREFIXES) {
-        if (n.startsWith(prefix) || n.includes('/' + prefix)) return true;
+    // Configured exemptions: a trailing slash is a directory prefix, anything else is
+    // matched exactly. Compared case-insensitively, like the repo paths.
+    const lower = n.toLowerCase();
+    for (const entry of exemptPaths(opts)) {
+        const e = norm(entry).toLowerCase();
+        if (!e) continue;
+        if (e.endsWith('/') ? (lower.startsWith(e) || lower.includes('/' + e)) : lower === e) {
+            return true;
+        }
     }
     // Not code -> no test required. Covers docs, data, markup, config, lockfiles,
     // dotfiles and extensionless files in one rule, and cannot drift from what the
@@ -181,10 +211,10 @@ function compareEvents(a, b) {
 // `commitPaths` are repo-relative paths (e.g. 'tests/test_a.py'). `events`
 // is the array from readEditEvents. Algorithm mirrors
 // _analyse_commit_scoped in tdd_order.py.
-function classifyFromEvents(commitPaths, events) {
+function classifyFromEvents(commitPaths, events, opts) {
     const cleaned = (commitPaths || []).map(p => String(p || '').trim()).filter(Boolean);
     const testPaths = cleaned.filter(isTestFile);
-    const implPaths = cleaned.filter(p => !isTestFile(p) && !isExemptPath(p));
+    const implPaths = cleaned.filter(p => !isTestFile(p) && !isExemptPath(p, opts));
 
     if (implPaths.length === 0) {
         // No impl in the commit -- test-only or doc-only, not measurable.
@@ -299,9 +329,9 @@ function mandateInForce(repoPath, opts) {
 }
 
 // Convenience: read transcript + classify in one call.
-function classifyTddOrder({ stagedPaths, transcriptPath }) {
+function classifyTddOrder({ stagedPaths, transcriptPath, configPath }) {
     const events = readEditEvents(transcriptPath);
-    return classifyFromEvents(stagedPaths, events);
+    return classifyFromEvents(stagedPaths, events, configPath ? { configPath } : undefined);
 }
 
 module.exports = {

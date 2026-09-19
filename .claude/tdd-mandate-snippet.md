@@ -27,6 +27,13 @@ anything under `features/`, `tmp/` or `.planning/`. Everything that IS code need
 test, shell scripts included: `install.sh` is the most destructive code in this
 project.
 
+A `features/` directory is Cucumber's, and its step definitions count as tests. If
+this project's own feature records live there too, they are `.md` and therefore not
+code, so they are exempt rather than mistaken for tests.
+
+To exempt a path rather than a whole repository, add it to `exempt_paths` in
+`~/.claude/tdd-mandate.json` -- a trailing slash makes it a directory prefix.
+
 **What counts as a test** is a path convention, listed in
 `src/hooks/lib/tdd-order.js`: a `test/`, `tests/`, `spec/` or `__tests__/`
 directory; a `test-` or `test_` prefix; a `_test.` or `.test.` or `.spec.` infix;

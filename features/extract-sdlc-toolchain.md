@@ -106,6 +106,11 @@
 
 ## History
 
+- 2026-09-19 `01d6a7d` — A test file must itself be code
+  - src/hooks/lib/source-files.js
+  - src/hooks/lib/tdd-order.js
+  - src/hooks/test-tdd-mandate.js
+
 - 2026-09-19 `f51edd7` — Make the review gate cover shell, and put the TDD mandate in force
   - .claude/tdd-mandate-snippet.md
   - .claude/tdd-mandate.json.example

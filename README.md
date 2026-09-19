@@ -197,7 +197,11 @@ extensionless files, and anything under `features/`, `tmp/` or `.planning/`. A
 docs-only commit is never gated. Everything else is implementation, shell included.
 
 To exempt a repository: `touch .claude/tdd-mandate.disabled`, or add its path to
-`exempt_repos` in `~/.claude/tdd-mandate.json`. A config file that will not parse
+`exempt_repos` in `~/.claude/tdd-mandate.json`. To exempt a path rather than a whole
+repository, use `exempt_paths` in the same file — a trailing slash makes it a
+directory prefix. There is no hardcoded directory list: there was, and a
+project-specific `features/` prefix sitting in a shared library silently un-gated
+every Cucumber suite, since that is where step definitions live. A config file that will not parse
 does **not** disable the mandate — a typo must not silently switch off gating
 everywhere.
 
