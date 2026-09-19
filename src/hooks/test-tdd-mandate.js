@@ -177,6 +177,23 @@ for (const f of NOT_TESTS) assert(`not a test: ${f}`, tdd.isTestFile(f), false);
 console.log('\nfeatures/ is Cucumber\'s test directory, not an exemption:');
 assert('step definitions are tests', tdd.isTestFile('features/step_definitions/checkout_steps.rb'), true);
 assert('a support helper is a test', tdd.isTestFile('features/support/env.rb'), true);
+// Cucumber's sub-paths only, never a bare `features/` at any depth. "Feature
+// folder" / feature-sliced architecture (Redux, Angular, NestJS) puts real
+// business logic under `src/features/<slug>/`, and counting that as a test is
+// worse than the blanket exemption it replaced: an exemption merely made the file
+// invisible, whereas a false test SUPPLIES THE PAIRING for other genuinely
+// untested files staged alongside it.
+assert('feature-sliced production code is not a test',
+    tdd.isTestFile('src/features/checkout/reducer.js'), false);
+assert('...nor at the repo root', tdd.isTestFile('features/checkout/reducer.js'), false);
+assert('two untested files, one in a feature folder, still block',
+    tdd.classifyFromEvents(['src/features/checkout/reducer.js', 'src/api/other.js'], []).status, 'no_tests');
+// The control: the same shape outside a features/ directory must behave identically.
+assert('...identical to the same commit elsewhere',
+    tdd.classifyFromEvents(['src/modules/checkout/reducer.js', 'src/api/other.js'], []).status, 'no_tests');
+// Cucumber's own layout keeps working at any depth, since monorepos nest it.
+assert('nested step definitions still count',
+    tdd.isTestFile('packages/web/features/step_definitions/login_steps.rb'), true);
 assert('a Cucumber-tested commit is satisfied',
     tdd.classifyFromEvents(['app/checkout.rb', 'features/step_definitions/checkout_steps.rb'], []).status, 'not_applicable');
 // The records this project keeps there are still exempt, and still not tests --

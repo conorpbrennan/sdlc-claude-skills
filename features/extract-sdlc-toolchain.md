@@ -106,6 +106,13 @@
 
 ## History
 
+- 2026-09-19 `09ea49e` — Make features/ Cucumber's test directory, and exemptions configurable
+  - .claude/tdd-mandate-snippet.md
+  - .claude/tdd-mandate.json.example
+  - README.md
+  - src/hooks/lib/tdd-order.js
+  - src/hooks/test-tdd-mandate.js
+
 - 2026-09-19 `01d6a7d` — A test file must itself be code
   - src/hooks/lib/source-files.js
   - src/hooks/lib/tdd-order.js

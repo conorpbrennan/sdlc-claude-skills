@@ -23,7 +23,10 @@ inverted rather than a second list: if a path is not in `SOURCE_EXTENSIONS`
 (`src/hooks/lib/source-files.js`), no test is required. That covers docs, data,
 markup and config -- `.md`, `.rst`, `.txt`, `.csv`, `.css`, `.html`, `.json`,
 `.yaml`, `.toml`, lockfiles, dotfiles, extensionless files such as `LICENSE` -- plus
-anything under `features/`, `tmp/` or `.planning/`. Everything that IS code needs a
+extensionless files such as `LICENSE`. There is no exempt-directory list: `tmp/`
+and `.planning/` had one and lost it, because the rule above already covers the
+docs they held, and its only remaining effect was exempting code. Everything that
+IS code needs a
 test, shell scripts included: `install.sh` is the most destructive code in this
 project.
 

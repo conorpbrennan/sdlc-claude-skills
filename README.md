@@ -193,7 +193,8 @@ classified as implementation and every commit here would have been blocked as
 `no_tests`.
 
 Exempt automatically: `.md`, `.json`, `.toml`, `.yaml`, `.yml`, `.lock`, dotfiles,
-extensionless files, and anything under `features/`, `tmp/` or `.planning/`. A
+extensionless files. There is no exempt-directory list — `tmp/` and `.planning/`
+had one and lost it, so code committed there needs a test like any other. A
 docs-only commit is never gated. Everything else is implementation, shell included.
 
 To exempt a repository: `touch .claude/tdd-mandate.disabled`, or add its path to

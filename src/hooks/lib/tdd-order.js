@@ -29,13 +29,21 @@ const TEST_PATH_RE = new RegExp(
         '(?:^|/)tests?/' +
         '|(?:^|/)__tests__/' +
         '|(?:^|/)specs?/' +
-        // Cucumber's standard layout: features/*.feature with the assertions in
-        // features/step_definitions/*.rb. This was EXEMPT, because this project keeps
-        // its feature-tracking records under features/ -- which made a whole Cucumber
-        // suite invisible to the mandate, step definitions included. Safe as a test
-        // directory only because isTestFile requires the file to be code: a `.md`
-        // record in the same directory still cannot be mistaken for a test.
-        '|(?:^|/)features/' +
+        // Cucumber's own sub-paths, and only those. `features/` was EXEMPT, because
+        // this project keeps its feature-tracking records there -- which made a whole
+        // Cucumber suite invisible to the mandate, step definitions included.
+        //
+        // A bare `features/` is NOT the fix: "feature folder" / feature-sliced
+        // architecture (Redux, Angular, NestJS) puts real business logic under
+        // `src/features/<slug>/`, and calling that a test is worse than the exemption
+        // it replaced. An exemption merely made the file invisible; a false test
+        // supplies the pairing for other genuinely untested files in the same commit,
+        // so `[src/features/checkout/reducer.js, src/api/other.js]` went from
+        // correctly blocked to silently passed on the strength of a directory name.
+        // `exempt_paths` is no remedy either -- it adds exemptions and has no lever to
+        // un-match isTestFile, so such a repo would have to rename the directory.
+        '|(?:^|/)features/step_definitions/' +
+        '|(?:^|/)features/support/' +
         // `test_foo.py`, `test-foo.js`
         '|(?:^|/)test[-_][^/]+$' +
         // `foo_test.go`, `foo_test.py` -- underscore only. The hyphen suffix is not
