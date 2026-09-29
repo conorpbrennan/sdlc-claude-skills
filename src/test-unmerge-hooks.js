@@ -90,6 +90,34 @@ result = unmerge();
 assert('foreign event survives', result.hooks.Notification.length, 1);
 assert('emptied event dropped', result.hooks.PreToolUse, undefined);
 
+// Test 3b: ownership is by script name, not substring. includes() treated a
+// user's my-pre-commit-review.js as ours and deleted it on uninstall.
+console.log('\nSimilarly named foreign hook:');
+write({
+    hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [
+        { type: 'command', command: 'node "$HOME/bin/my-pre-commit-review.js"' },
+        { type: 'command', command: 'node "$HOME/.claude/hooks/pre-commit-review.js"' }
+    ] }] }
+});
+result = unmerge();
+assert('only the lookalike remains',
+    result.hooks.PreToolUse[0].hooks.map(h => h.command), ['node "$HOME/bin/my-pre-commit-review.js"']);
+
+// Test 3c: the script name must end the token. A backup of one of our hooks,
+// or a .json named like one, is the user's.
+console.log('\nOur script name inside a longer token:');
+write({
+    hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [
+        { type: 'command', command: 'node "$HOME/bin/pre-commit-review.js.bak"' },
+        { type: 'command', command: 'lint --cfg pre-commit-review.json' },
+        { type: 'command', command: 'node "$HOME/.claude/hooks/pre-commit-review.js"' }
+    ] }] }
+});
+result = unmerge();
+assert('backup and .json lookalikes remain',
+    result.hooks.PreToolUse[0].hooks.map(h => h.command),
+    ['node "$HOME/bin/pre-commit-review.js.bak"', 'lint --cfg pre-commit-review.json']);
+
 // Test 4: idempotent -- a second run changes nothing and does not throw.
 console.log('\nIdempotence:');
 write({ model: 'opus' });

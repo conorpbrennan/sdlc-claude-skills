@@ -297,8 +297,23 @@ touch .claude/feature-tracking.disabled
 ./uninstall.sh --purge-config   # also delete hygiene-repos.json and review-policy.json
 ```
 
-Removal is derived from this source tree, so a file the project never
-shipped is never touched. `settings.json` is edited surgically —
+Removal is read from the install record `install.sh` writes to
+`~/.claude/backups/sdlc-claude-skills/`: `installed.tsv` lists every file it
+deployed with a checksum, and uninstall deletes a file only while it still
+matches. Anything added after the install — a new agent, a file dropped into
+one of our skill directories, a hook another tool overwrote — is not in the
+record or no longer matches it, and stays. `backups.tsv` lists what install
+moved aside to make room: an `original` (yours before this project was
+installed there) is put back once the path is free; an `edited` copy (our file
+with your changes) stays in `~/.claude/backups/`. The record also keeps the
+`hooks-config.json` and CLAUDE.md snippets that were merged, so uninstall
+strips what was installed even after the source has moved on. An install older
+than the record falls back to this source tree's file list, and says so. A
+symlink in the way (a dotfiles setup) is moved aside, never written through,
+and put back on uninstall. Upgrading such an older install logs its
+differing files as `edited`, since they are this project's own old copies.
+
+`settings.json` is edited surgically —
 `src/unmerge-hooks.js` strips only the entries naming this project's hook
 scripts, and hooks you added from elsewhere survive. `CLAUDE.md` loses only
 the blocks this project wrote — byte for byte, verified by a round-trip test —
@@ -337,19 +352,20 @@ Left in place on purpose: the timing log (`~/.claude/code-review-timing.jsonl`),
 the per-repo `.git/` markers, which expire on their own, the timestamped
 `settings.json` and `CLAUDE.md` backups, and `~/.claude/backups/`.
 
-That last directory is where `install.sh` puts a copy of any user-scope skill it
-is about to replace, and the location matters: Claude Code discovers skills by
+That last directory is where `install.sh` puts a copy of anything it is about
+to replace — a skill, agent, command, tool or hook of yours with the same name —
+unless it is exactly the file the previous install wrote. The location matters: Claude Code discovers skills by
 scanning `~/.claude/skills/`, so a backup kept there as `plan-spec.bak.<ts>/` is
 itself loaded as a skill, appearing in the skill list beside the real one with the
 same name. Nothing that is not a shipped skill may live under `skills/`, and
 `src/test-install.sh` asserts it.
 
 **If another project installs the same hooks** — `risk-claude-skills`
-currently does — uninstalling here removes its deployed copies too, because
-they are the same filenames in `~/.claude/hooks`. Re-run that project's
-install script afterwards. For the same reason `install.sh` only prunes
-"no longer in source" hooks from the project-local `.claude/hooks/`, never
-from `~/.claude/hooks`, so it cannot delete another project's hooks.
+currently does — a copy it wrote over ours no longer matches the record, so
+uninstall here leaves it. A byte-identical copy cannot be told apart and is
+removed; re-run that project's install script afterwards. `install.sh` prunes
+files it no longer ships from `~/.claude` the same way: only those in the
+previous record, and only while unchanged.
 
 ---
 
@@ -406,15 +422,6 @@ instance — the exact-text search cannot find it, so install appends a wrapped
 copy and prints a NOTE. Delete the older copy by hand; there is no way to
 identify it without the heading-matching that caused six consecutive text-loss
 defects, and a false positive there costs you your own writing.
-
-**`install.sh` replaces the whole `hooks` block in `settings.json`.**
-`merge-hooks.js` assigns `settings.hooks` wholesale, so hooks installed by
-anything else are dropped — verified against a sandboxed `CLAUDE_HOME`. A
-timestamped backup is written first, and everything outside `hooks`
-(`model`, `env`, `permissions`, `statusLine`, …) is preserved. `uninstall.sh`
-is the asymmetric case: it strips only this project's entries and leaves
-foreign hooks alone. Making install equally surgical is a behaviour change
-and has been left alone deliberately.
 
 **`protect-user-dir.js` ships but is not wired.** The hook and its passing
 test came across, but `hooks-config.json` declares no `Edit`/`Write` matcher
