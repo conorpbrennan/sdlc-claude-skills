@@ -57,19 +57,86 @@ for (const event of Object.keys(hooksConfig)) {
     assert(`has ${event}`, Array.isArray(result.hooks[event]), true);
 }
 
-// Test 2: Replaces existing hooks section
-console.log('\nSettings with existing hooks:');
+// Test 2: the user's own hooks survive. The merge used to assign
+// `settings.hooks = config`, which dropped every hook the user had added
+// themselves or taken from another project -- and uninstall could not bring
+// them back, since it only strips this project's entries.
+console.log('\nSettings with existing foreign hooks:');
 result = runMerge({
     model: 'opus',
     hooks: {
         PreToolUse: [
             { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo old', timeout: 1000 }] }
+        ],
+        Notification: [
+            { matcher: '', hooks: [{ type: 'command', command: 'node other.js' }] }
         ]
     }
 });
+const commandsOf = (groups) => (groups || []).flatMap(g => (g.hooks || []).map(h => h.command));
+assert('foreign PreToolUse hook kept', commandsOf(result.hooks.PreToolUse).includes('echo old'), true);
+assert('foreign event kept', commandsOf(result.hooks.Notification), ['node other.js']);
 for (const [event, groups] of Object.entries(hooksConfig)) {
-    assert(`${event} matches config`, result.hooks[event].length, groups.length);
+    for (const cmd of commandsOf(groups)) {
+        assert(`${event} has ${cmd.match(/[\w.-]+\.js/)[0]}`, commandsOf(result.hooks[event]).includes(cmd), true);
+    }
 }
+
+// Test 2b: re-running is idempotent -- this project's entries are replaced,
+// never duplicated, and the foreign one stays exactly once.
+console.log('\nMerging twice:');
+const once = runMerge({
+    hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo old' }] }] }
+});
+fs.writeFileSync(TMP_SETTINGS, JSON.stringify(once, null, 2));
+execSync(`node "${MERGE_SCRIPT}" "${TMP_SETTINGS}" "${HOOKS_CONFIG}"`, { encoding: 'utf-8' });
+const twice = JSON.parse(fs.readFileSync(TMP_SETTINGS, 'utf-8'));
+assert('second merge changes nothing', twice, once);
+assert('foreign hook appears once',
+    commandsOf(twice.hooks.PreToolUse).filter(c => c === 'echo old').length, 1);
+
+// Test 2c: an older copy of one of this project's hooks -- a different
+// timeout, a stale matcher -- is replaced, not kept alongside the new one.
+console.log('\nStale copy of our own hook is replaced:');
+result = runMerge({
+    hooks: {
+        PreToolUse: [{ matcher: 'Edit', hooks: [
+            { type: 'command', command: 'node "$HOME/.claude/hooks/pre-commit-review.js"', timeout: 1 }
+        ] }]
+    }
+});
+assert('pre-commit-review.js wired exactly once',
+    commandsOf(result.hooks.PreToolUse).filter(c => c.includes('pre-commit-review.js')).length, 1);
+assert('stale Edit group dropped', result.hooks.PreToolUse.some(g => g.matcher === 'Edit'), false);
+
+// Test 2d: ownership is by script name, not substring. A user hook called
+// my-pre-commit-review.js is theirs.
+console.log('\nSimilarly named foreign hook:');
+result = runMerge({
+    hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [
+        { type: 'command', command: 'node "$HOME/bin/my-pre-commit-review.js"' }
+    ] }] }
+});
+assert('my-pre-commit-review.js kept',
+    commandsOf(result.hooks.PreToolUse).includes('node "$HOME/bin/my-pre-commit-review.js"'), true);
+
+// Test 2e: a settings.json that will not parse is left alone. Replacing it
+// with `{}` plus our hooks would discard everything the user had.
+console.log('\nUnparseable settings.json:');
+const handEdited = '{\n  "model": "opus",\n}\n';
+fs.writeFileSync(TMP_SETTINGS, handEdited);
+let badExit = 0;
+let badErr = '';
+try {
+    execSync(`node "${MERGE_SCRIPT}" "${TMP_SETTINGS}" "${HOOKS_CONFIG}"`, { encoding: 'utf-8', stdio: 'pipe' });
+} catch (e) {
+    badExit = e.status;
+    badErr = String(e.stderr || '');
+}
+assert('exits non-zero', badExit !== 0, true);
+assert('file left byte-identical', fs.readFileSync(TMP_SETTINGS, 'utf-8'), handEdited);
+assert('says nothing changed', /not valid JSON/.test(badErr) && /nothing has been changed/.test(badErr), true);
+assert('no stack trace', /at Object\.|node:internal/.test(badErr), false);
 
 // Test 3: Preserves non-hook settings
 console.log('\nPreserves all other settings:');
@@ -99,12 +166,16 @@ for (const [event, groups] of Object.entries(hooksConfig)) {
     });
 }
 
-// Test 5: Creates backup
+// Test 5: Creates backup, byte-for-byte. Re-serialising the parsed object
+// would lose the user's own formatting.
 console.log('\nBackup creation:');
-fs.writeFileSync(TMP_SETTINGS, JSON.stringify({ model: 'opus' }, null, 2));
+const original = '{"model":   "opus"}\n';
+fs.writeFileSync(TMP_SETTINGS, original);
 execSync(`node "${MERGE_SCRIPT}" "${TMP_SETTINGS}" "${HOOKS_CONFIG}"`, { encoding: 'utf-8' });
 const backupFiles = fs.readdirSync(TMP_DIR).filter(f => f.startsWith('test-settings.json.backup'));
 assert('creates backup file', backupFiles.length > 0, true);
+assert('backup is the original bytes',
+    backupFiles.some(f => fs.readFileSync(path.join(TMP_DIR, f), 'utf-8') === original), true);
 
 // Cleanup backups
 backupFiles.forEach(f => fs.unlinkSync(path.join(TMP_DIR, f)));

@@ -1,13 +1,13 @@
 // Remove this project's hooks from a Claude Code settings.json file.
 // Usage: node unmerge-hooks.js <settings-path> <hooks-config-path>
 //
-// The inverse of merge-hooks.js, but deliberately narrower: merge-hooks.js
-// replaces the whole `hooks` key, whereas this removes only the entries
-// whose command names a hook script listed in <hooks-config-path>. Hooks the
-// user added from elsewhere survive an uninstall. Matcher groups and event
-// keys left empty are dropped, and an empty `hooks` object is removed
-// entirely.
+// The inverse of merge-hooks.js: removes only the entries whose command
+// names a hook script listed in <hooks-config-path> (lib/hook-ownership.js).
+// Hooks the user added from elsewhere survive an uninstall. Matcher groups
+// and event keys left empty are dropped, and an empty `hooks` object is
+// removed entirely.
 const fs = require('fs');
+const { ownedScripts, stripOwned } = require('./lib/hook-ownership');
 
 const [, , settingsPath, hooksConfigPath] = process.argv;
 if (!settingsPath || !hooksConfigPath) {
@@ -37,16 +37,7 @@ function readJson(path, what) {
 
 const hooksConfig = readJson(hooksConfigPath, 'hooks-config.json');
 
-// Collect the basenames this project owns, e.g. "pre-commit-review.js".
-const owned = new Set();
-for (const groups of Object.values(hooksConfig)) {
-    for (const group of groups || []) {
-        for (const hook of group.hooks || []) {
-            const m = String(hook.command || '').match(/([\w.-]+\.js)/g);
-            for (const name of m || []) owned.add(name);
-        }
-    }
-}
+const owned = ownedScripts(hooksConfig);
 
 if (owned.size === 0) {
     console.error('  hooks-config.json named no .js hooks - refusing to guess');
@@ -59,27 +50,10 @@ if (!settings.hooks) {
     process.exit(0);
 }
 
-const isOurs = (hook) => {
-    const cmd = String(hook.command || '');
-    return [...owned].some((name) => cmd.includes(name));
-};
-
-let removed = 0;
-for (const [event, groups] of Object.entries(settings.hooks)) {
-    if (!Array.isArray(groups)) continue;
-    const keptGroups = [];
-    for (const group of groups) {
-        const kept = (group.hooks || []).filter((h) => {
-            if (isOurs(h)) { removed++; return false; }
-            return true;
-        });
-        if (kept.length > 0) keptGroups.push({ ...group, hooks: kept });
-    }
-    if (keptGroups.length > 0) settings.hooks[event] = keptGroups;
-    else delete settings.hooks[event];
-}
-
-if (Object.keys(settings.hooks).length === 0) delete settings.hooks;
+const stripped = stripOwned(settings.hooks, owned);
+const removed = stripped.removed;
+if (stripped.hooks) settings.hooks = stripped.hooks;
+else delete settings.hooks;
 
 if (removed === 0) {
     console.log('  No hooks from this project found in settings.json');
