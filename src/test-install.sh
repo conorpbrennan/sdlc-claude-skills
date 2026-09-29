@@ -210,6 +210,199 @@ assert "install works" "$([ -f "$SPACED/hooks/pre-commit-review.js" ] && echo ye
 CLAUDE_HOME="$SPACED" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
 assert "uninstall works" "$([ -d "$SPACED/hooks" ] && echo yes || echo no)" "no"
 
+# Test 8: a file of the user's that shares a name with one of ours -- an
+# agent, a command, a hook lib -- is moved aside on install and put back on
+# uninstall. A plain `cp` over it, then `rm` on uninstall, lost it for good.
+echo ""
+echo "Same-named user files are backed up and restored:"
+new_case clash
+mkdir -p "$HOME_DIR/agents" "$HOME_DIR/commands" "$HOME_DIR/hooks/lib"
+echo 'MY REVIEWER' > "$HOME_DIR/agents/code-reviewer.md"
+echo 'MY FEATURE CMD' > "$HOME_DIR/commands/feature.md"
+echo '// MY GIT READ' > "$HOME_DIR/hooks/lib/git-read.js"
+mkdir -p "$HOME_DIR/skills/plan-spec"
+echo 'MY PLAN SKILL' > "$HOME_DIR/skills/plan-spec/SKILL.md"
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > "$CASE_DIR/out.txt" 2>&1
+assert "install exits 0" "$?" "0"
+assert "our agent is in place" \
+    "$(cmp -s "$SRC/.claude/agents/code-reviewer.md" "$HOME_DIR/agents/code-reviewer.md" && echo yes || echo no)" "yes"
+assert "user's agent kept under backups/" \
+    "$(grep -rl 'MY REVIEWER' "$HOME_DIR/backups" | wc -l)" "1"
+assert "user's lib kept under backups/" \
+    "$(grep -rl 'MY GIT READ' "$HOME_DIR/backups" | wc -l)" "1"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > "$CASE_DIR/out.txt" 2>&1
+assert "uninstall exits 0" "$?" "0"
+assert "agent restored" "$(cat "$HOME_DIR/agents/code-reviewer.md" 2>/dev/null)" 'MY REVIEWER'
+assert "command restored" "$(cat "$HOME_DIR/commands/feature.md" 2>/dev/null)" 'MY FEATURE CMD'
+assert "hook lib restored" "$(cat "$HOME_DIR/hooks/lib/git-read.js" 2>/dev/null)" '// MY GIT READ'
+assert "skill restored" "$(cat "$HOME_DIR/skills/plan-spec/SKILL.md" 2>/dev/null)" 'MY PLAN SKILL'
+assert "no other agent left" "$(ls "$HOME_DIR/agents" | wc -l)" "1"
+
+# Test 9: the user's own hooks in settings.json survive the round trip.
+echo ""
+echo "User's own settings.json hooks survive install and uninstall:"
+new_case ownhooks
+cat > "$HOME_DIR/settings.json" <<'JSON'
+{
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "node mine.js" } ] }
+    ]
+  }
+}
+JSON
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+assert "own hook kept by install" "$(grep -c 'node mine.js' "$HOME_DIR/settings.json")" "1"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "own hook kept by uninstall" "$(grep -c 'node mine.js' "$HOME_DIR/settings.json")" "1"
+assert "our hooks gone" "$(grep -c 'pre-commit-review.js' "$HOME_DIR/settings.json")" "0"
+
+# Test 10: uninstall removes what install added, read from the install record
+# rather than the source tree as it stands now. A file the source has since
+# dropped is still removed; a user file named like one the source has since
+# gained is not touched.
+echo ""
+echo "Uninstall follows the install record, not the current source:"
+new_case record
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+rm "$SRC/commands/feature.md"
+echo 'new in source' > "$SRC/commands/added-later.md"
+echo 'USER ADDED LATER' > "$HOME_DIR/commands/added-later.md"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "dropped-from-source file still removed" \
+    "$([ -e "$HOME_DIR/commands/feature.md" ] && echo yes || echo no)" "no"
+assert "user's same-named new file untouched" \
+    "$(cat "$HOME_DIR/commands/added-later.md" 2>/dev/null)" 'USER ADDED LATER'
+assert "install record removed" \
+    "$([ -e "$HOME_DIR/backups/sdlc-claude-skills" ] && echo yes || echo no)" "no"
+
+# Test 11: a re-install over our own previous version -- the source moved on
+# -- replaces it silently. Backing it up would pile up copies of our own output
+# and have uninstall "restore" an old copy of this project.
+echo ""
+echo "Re-install over our own older version:"
+new_case upgrade
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+echo '<!-- changed upstream -->' >> "$SRC/commands/feature.md"
+echo '// changed upstream' >> "$SRC/src/hooks/lib/git-read.js"
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+assert "nothing backed up" \
+    "$(find "$HOME_DIR/backups" -name '*.bak.*' 2>/dev/null | wc -l)" "0"
+assert "new version in place" "$(tail -1 "$HOME_DIR/commands/feature.md")" '<!-- changed upstream -->'
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "uninstall leaves no command behind" "$(ls "$HOME_DIR/commands" 2>/dev/null | wc -l)" "0"
+
+# Test 12: an installed file the user then edited is backed up on the next
+# install, and not "restored" on uninstall -- it was ours to begin with.
+echo ""
+echo "Edited installed file:"
+new_case edited
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+echo 'MY TWEAK' >> "$HOME_DIR/agents/code-reviewer.md"
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+assert "edit kept under backups/" "$(grep -rl 'MY TWEAK' "$HOME_DIR/backups" | wc -l)" "1"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "not restored into agents/" \
+    "$([ -e "$HOME_DIR/agents/code-reviewer.md" ] && echo yes || echo no)" "no"
+assert "edit still under backups/" "$(grep -rl 'MY TWEAK' "$HOME_DIR/backups" | wc -l)" "1"
+
+# Test 13: anything added or changed after the install is not ours and stays:
+# a new file in one of our directories, a new file inside one of our skills,
+# a hook another tool overwrote.
+echo ""
+echo "Things added after install survive uninstall:"
+new_case later
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+echo 'LATER AGENT' > "$HOME_DIR/agents/someone-else.md"
+echo 'LATER SKILL FILE' > "$HOME_DIR/skills/plan-spec/my-extra.md"
+echo '// REPLACED BY ANOTHER TOOL' > "$HOME_DIR/hooks/pre-commit-review.js"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > "$CASE_DIR/out.txt" 2>&1
+assert "uninstall exits 0" "$?" "0"
+assert "later agent kept" "$(cat "$HOME_DIR/agents/someone-else.md" 2>/dev/null)" 'LATER AGENT'
+assert "file added inside our skill kept" \
+    "$(cat "$HOME_DIR/skills/plan-spec/my-extra.md" 2>/dev/null)" 'LATER SKILL FILE'
+assert "our SKILL.md removed from it" \
+    "$([ -e "$HOME_DIR/skills/plan-spec/SKILL.md" ] && echo yes || echo no)" "no"
+assert "replaced hook kept" \
+    "$(cat "$HOME_DIR/hooks/pre-commit-review.js" 2>/dev/null)" '// REPLACED BY ANOTHER TOOL'
+assert "uninstall said it kept it" \
+    "$(grep -c 'keeping hooks/pre-commit-review.js' "$CASE_DIR/out.txt")" "1"
+
+# Test 14: an install older than the record still uninstalls, from the
+# source tree's file list, and says so.
+echo ""
+echo "Install with no record falls back to the source tree:"
+new_case legacy
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+rm -rf "$HOME_DIR/backups/sdlc-claude-skills"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > "$CASE_DIR/out.txt" 2>&1
+assert "uninstall exits 0" "$?" "0"
+assert "said it had no record" "$(grep -c 'No install record' "$CASE_DIR/out.txt")" "1"
+assert "hooks removed" "$(ls "$HOME_DIR/hooks" 2>/dev/null | wc -l)" "0"
+assert "agents removed" "$(ls "$HOME_DIR/agents" 2>/dev/null | wc -l)" "0"
+assert "our hooks gone from settings.json" "$(grep -c 'pre-commit-review.js' "$HOME_DIR/settings.json")" "0"
+
+# Test 15: a symlinked file (a dotfiles / stow setup) is never written through.
+# `cp` onto a link overwrote the user's real file, and the "backup" was only a
+# second link to it.
+echo ""
+echo "Symlinked user file:"
+new_case symlink
+mkdir -p "$CASE_DIR/dot" "$HOME_DIR/agents"
+echo 'MY PRECIOUS AGENT' > "$CASE_DIR/dot/agent.md"
+ln -s "$CASE_DIR/dot/agent.md" "$HOME_DIR/agents/code-reviewer.md"
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+assert "install exits 0" "$?" "0"
+assert "the link's target is untouched" "$(cat "$CASE_DIR/dot/agent.md")" 'MY PRECIOUS AGENT'
+assert "our agent is a regular file" \
+    "$([ -f "$HOME_DIR/agents/code-reviewer.md" ] && [ ! -L "$HOME_DIR/agents/code-reviewer.md" ] && echo yes || echo no)" "yes"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "the link is restored" \
+    "$([ -L "$HOME_DIR/agents/code-reviewer.md" ] && echo yes || echo no)" "yes"
+assert "and still points at the user's file" \
+    "$(cat "$HOME_DIR/agents/code-reviewer.md" 2>/dev/null)" 'MY PRECIOUS AGENT'
+
+# Test 16: a user's own test-*.js in hooks/ is not ours to delete. Only the
+# harnesses this source ships are swept.
+echo ""
+echo "User's own test-*.js hook:"
+new_case usertest
+mkdir -p "$HOME_DIR/hooks"
+echo '// my own test hook' > "$HOME_DIR/hooks/test-my-lint.js"
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+assert "kept by install" "$(cat "$HOME_DIR/hooks/test-my-lint.js" 2>/dev/null)" '// my own test hook'
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "kept by uninstall" "$(cat "$HOME_DIR/hooks/test-my-lint.js" 2>/dev/null)" '// my own test hook'
+
+# Test 17: upgrading an install made before the record existed. Its files are
+# our own older versions, not the user's originals, so uninstall must not
+# restore them.
+echo ""
+echo "Upgrade from an install with no record:"
+new_case upgrade-legacy
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+rm -rf "$HOME_DIR/backups/sdlc-claude-skills"
+echo '<!-- changed upstream -->' >> "$SRC/commands/feature.md"
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+assert "no original recorded" \
+    "$(grep -c '^original' "$HOME_DIR/backups/sdlc-claude-skills/backups.tsv" 2>/dev/null || true)" "0"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "our old command not restored" \
+    "$([ -e "$HOME_DIR/commands/feature.md" ] && echo yes || echo no)" "no"
+
+# Test 18: a record missing its hooks-config.json (an install interrupted
+# between writing the record and merging) must not leave settings.json wired
+# to deleted scripts: uninstall falls back to the source tree's config.
+echo ""
+echo "Record without hooks-config.json:"
+new_case nocfg
+CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > /dev/null 2>&1
+rm -f "$HOME_DIR/backups/sdlc-claude-skills/hooks-config.json"
+CLAUDE_HOME="$HOME_DIR" "$SRC/uninstall.sh" --yes > /dev/null 2>&1
+assert "uninstall exits 0" "$?" "0"
+assert "our hooks gone from settings.json" "$(grep -c 'pre-commit-review.js' "$HOME_DIR/settings.json")" "0"
+
 echo ""
 echo "==============================="
 echo "Results: $PASSED passed, $FAILED failed"
