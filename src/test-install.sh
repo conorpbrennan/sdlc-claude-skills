@@ -225,7 +225,7 @@ echo 'MY PLAN SKILL' > "$HOME_DIR/skills/plan-spec/SKILL.md"
 CLAUDE_HOME="$HOME_DIR" "$SRC/install.sh" > "$CASE_DIR/out.txt" 2>&1
 assert "install exits 0" "$?" "0"
 assert "our agent is in place" \
-    "$(cmp -s "$SRC/.claude/agents/code-reviewer.md" "$HOME_DIR/agents/code-reviewer.md" && echo yes || echo no)" "yes"
+    "$(cmp -s "$SRC/agents/code-reviewer.md" "$HOME_DIR/agents/code-reviewer.md" && echo yes || echo no)" "yes"
 assert "user's agent kept under backups/" \
     "$(grep -rl 'MY REVIEWER' "$HOME_DIR/backups" | wc -l)" "1"
 assert "user's lib kept under backups/" \

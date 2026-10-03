@@ -9,15 +9,15 @@ The five defects, for the reader of this fixture:
 
 1. path absent   -- src/hooks/lib/git-write.js has never existed (named in
    prose here, and cited below, so this list does not add a fourth).
-2. symbol absent -- .claude/skills/plan-spec/check_citations.py has no such
+2. symbol absent -- src/hooks/lib/git-read.js has no such
    function; the citation is below.
 3. line past end -- src/hooks/lib/commit-command.js is far shorter than the
    line the constraint below cites.
 4. line past end again, on a file whose step declares a NEW symbol. Declaring
    a symbol new says nothing about the rest of the module, so the line must
    still be checked.
-5. symbol absent although the name is IN the file: check_citations.py binds
-   `names` inside a function, so it is not a module-level definition. A
+5. symbol absent although the name is IN the file: analyze-review-timing.py binds
+   `by_event` inside a function, so it is not a module-level definition. A
    substring search accepts it and the AST rejects it, which is the only
    thing here that tells the two apart.
 
@@ -30,10 +30,10 @@ line would swallow the citation in this sentence — which is
 
 - The symbol check must read Python through the AST, not a substring search.
   Two citations say so together:
-  `.claude/skills/plan-spec/check_citations.py::no_such_function` appears
+  `src/hooks/lib/git-read.js::no_such_function` appears
   nowhere in the file, and
-  `.claude/skills/plan-spec/check_citations.py::names` appears a dozen times
-  in it — as a local inside `defined_symbols`, never at module level. A
+  `tools/analyze-review-timing.py::by_event` appears eight times
+  in it — as a local inside `summarise`, never at module level. A
   substring search would report the first and miss the second.
 - The classifier's table starts at `src/hooks/lib/commit-command.js:99999`.
 

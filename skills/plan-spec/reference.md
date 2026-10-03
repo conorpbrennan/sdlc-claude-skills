@@ -382,8 +382,8 @@ below make it a property.
 **Rules.**
 
 1. **Run the checker before every round and before dispatch.**
-   `python3 .claude/skills/plan-spec/check_citations.py <plan> <branch>`
-   resolves every citation against the branch the work will land on. It is
+   `check_citations.py` in this skill's base directory, run as
+   `python3 <that path> <plan> <branch>`, resolves every citation against the branch the work will land on. It is
    mechanical, so it is a gate (§16), not a review criterion, and it costs
    seconds. Two fields exempt what a step has not written yet: a `NEW` file
    set exempts the paths and symbols in it, and a `TESTS FIRST` field exempts
@@ -758,7 +758,7 @@ harmlessly, and disclosed it. It should not have had the option.
 edits; the pre-diff state is read with `git show HEAD:<path>`. The
 orchestrator verifies the index after every review that touched git at all.
 
-Closed since: `.claude/agents/code-reviewer.md` forbids
+Closed since: `agents/code-reviewer.md` forbids
 `git stash/checkout/add/reset/restore` and any edit, so §15.4 is done rather
 than pending. The consequence is the one this document used to leave open —
 a reviewer that cannot edit cannot fix, so the fix path has to name someone
@@ -1325,7 +1325,7 @@ citing it.
    by reading, substituting and writing one file at a time leaves the
    earlier edits on disk when a later anchor misses, and exits reporting
    only the anchor that failed. The document is half-edited and nothing says
-   which half. Use `.claude/skills/plan-spec/edit_doc.py`, which validates
+   which half. Use `edit_doc.py` in this skill's base directory, which validates
    every anchor before writing anything: `apply_edits` for one file, and
    `apply_edits_multi` when the change touches several, because the
    single-file form decides one file at a time and two calls to it can still

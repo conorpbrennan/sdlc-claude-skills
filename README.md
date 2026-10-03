@@ -69,6 +69,13 @@ cd ~/dev/sdlc-claude-skills
 Your tuned `~/.claude/*.json` config is kept. See [Uninstall](#uninstall) for
 exactly what is removed.
 
+An install older than the install record (no
+`~/.claude/backups/sdlc-claude-skills/installed.tsv`) may leave two flat skill
+files that neither a reinstall nor `uninstall.sh` removes:
+`~/.claude/skills/code-review-pre-commit.md` and
+`~/.claude/skills/code-review-implementer.md`. Delete them by hand after
+uninstalling.
+
 ### Developing the plugin
 
 This repository is the source of truth. To load a working copy instead of the

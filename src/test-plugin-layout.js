@@ -110,6 +110,90 @@ if (legacy && hooksByEvent) {
     assert('parity comparable (both files parsed)', false, true);
 }
 
+// The `name:` value from a markdown file's leading frontmatter block, or null
+// when the file has no frontmatter or the block has no name.
+function frontmatterName(file) {
+    let text;
+    try {
+        text = fs.readFileSync(file, 'utf-8');
+    } catch (e) {
+        return null;
+    }
+    const block = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(text);
+    if (!block) return null;
+    const m = /^name:[ \t]*(.+?)[ \t]*$/m.exec(block[1]);
+    return m ? m[1].replace(/^["']|["']$/g, '') : null;
+}
+
+// A directory's entries. A missing directory is empty; any other read error
+// comes back as one sentinel entry naming the error, so the assertion that
+// reads it fails visibly instead of seeing an empty directory.
+function listDir(dir) {
+    try {
+        return fs.readdirSync(dir, { withFileTypes: true });
+    } catch (e) {
+        if (e.code === 'ENOENT') return [];
+        return [{ name: `UNREADABLE (${e.code})`, isDirectory: () => false, isFile: () => false }];
+    }
+}
+
+// Every file under dir, recursively, as paths relative to ROOT.
+function walk(dir) {
+    const out = [];
+    for (const entry of listDir(dir)) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) out.push(...walk(full));
+        else out.push(path.relative(ROOT, full));
+    }
+    return out;
+}
+
+const SKILLS_DIR = path.join(ROOT, 'skills');
+const AGENTS_DIR = path.join(ROOT, 'agents');
+
+console.log('\nSkills at the plugin layout paths:');
+const skillDirs = listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name).sort();
+assert('skills/ holds the three shipped skills', skillDirs,
+    ['code-review-implementer', 'code-review-pre-commit', 'plan-spec']);
+for (const dir of skillDirs) {
+    assert(`skills/${dir}/SKILL.md name matches its directory`,
+        frontmatterName(path.join(SKILLS_DIR, dir, 'SKILL.md')), dir);
+}
+
+console.log('\nAgents at the plugin layout paths:');
+const agentFiles = listDir(AGENTS_DIR)
+    .filter(e => e.isFile() && e.name.endsWith('.md')).map(e => e.name).sort();
+assert('agents/ holds the two review agents', agentFiles,
+    ['code-reviewer-deep.md', 'code-reviewer.md']);
+for (const file of agentFiles) {
+    const name = frontmatterName(path.join(AGENTS_DIR, file));
+    assert(`agents/${file} has a name`, typeof name === 'string' && name.length > 0, true);
+}
+
+console.log('\nNothing left at the old paths:');
+// Only a missing directory reads as empty; any other read error (here
+// ENOTDIR, from a regular file) must surface, or an unreadable old path
+// would pass the emptiness checks below.
+assert('listDir of a missing path is empty',
+    listDir(path.join(ROOT, 'no-such-dir-for-test-plugin-layout')), []);
+assert('listDir does not report an unreadable path as empty',
+    walk(PLUGIN_JSON).length > 0, true);
+assert('nothing remains under .claude/skills/', walk(path.join(ROOT, '.claude', 'skills')), []);
+assert('nothing remains under .claude/agents/', walk(path.join(ROOT, '.claude', 'agents')), []);
+// A concrete path, not the `.claude/skills/*` glob that check_citations.py and
+// its shapes fixture quote as an example of a non-citation. Bytecode caches
+// are gitignored build output, not text anyone reads.
+const OLD_SKILL_PATH = /\.claude\/skills\/[A-Za-z0-9_.-]/;
+const staleRefs = walk(SKILLS_DIR).filter(rel => {
+    if (rel.split(path.sep).includes('__pycache__')) return false;
+    try {
+        return OLD_SKILL_PATH.test(fs.readFileSync(path.join(ROOT, rel), 'utf-8'));
+    } catch (e) {
+        return true;
+    }
+});
+assert('no text under skills/ names a .claude/skills/ path', staleRefs, []);
+
 console.log(`\n===================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

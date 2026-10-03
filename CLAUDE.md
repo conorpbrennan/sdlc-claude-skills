@@ -14,8 +14,8 @@ the next install.
 
 - Hook source is `src/hooks/`. `.claude/hooks/` is a gitignored deploy
   target populated by `install.sh`.
-- Skills are authored in `.claude/skills/`, commands in `commands/`, review
-  sub-agents in `.claude/agents/`.
+- Skills are authored in `skills/`, commands in `commands/`, review
+  sub-agents in `agents/`.
 - Run `./install.sh` to deploy, `./install.sh --dry-run` to see what it
   would do, `./uninstall.sh` to remove.
 - Tests live beside the code they exercise: `node src/hooks/test-*.js` and
@@ -25,10 +25,10 @@ the next install.
 
 | Piece | Path |
 |---|---|
-| `plan-spec` skill | `.claude/skills/plan-spec/` |
-| `code-review-pre-commit` skill | `.claude/skills/code-review-pre-commit.md` |
-| `code-review-implementer` skill | `.claude/skills/code-review-implementer.md` |
-| `code-reviewer` / `code-reviewer-deep` agents | `.claude/agents/` |
+| `plan-spec` skill | `skills/plan-spec/` |
+| `code-review-pre-commit` skill | `skills/code-review-pre-commit/SKILL.md` |
+| `code-review-implementer` skill | `skills/code-review-implementer/SKILL.md` |
+| `code-reviewer` / `code-reviewer-deep` agents | `agents/` |
 | `/commit-prep`, `/review-timing`, `/feature`, `/feature-new` | `commands/` |
 | Pre/post-commit hooks and their libs | `src/hooks/` |
 | Install-time mergers | `src/merge-*.js`, `src/unmerge-*.js`, `src/lib/` |
@@ -40,7 +40,7 @@ See `README.md` for how the pieces fit together at run time.
 
 The review system exists to produce code that is **correct, tested,
 readable, optimized**, in that order of priority. The reviewer criteria in
-`.claude/agents/code-reviewer.md` are the single source for criteria,
+`agents/code-reviewer.md` are the single source for criteria,
 method, constraints and report format; the skills and the docs refer to
 that file rather than restate it.
 
