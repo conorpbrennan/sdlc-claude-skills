@@ -1479,6 +1479,136 @@ try {
         cleanAll();
     }
 
+    // =====================================================================
+    // Step 3a: "has a test" means the staged test diff ADDS test code. A
+    // test-named file alone (empty, or a blank line in an unrelated test) does
+    // not satisfy the mandate; the test-path diff is read and must add a line
+    // that is neither blank nor a comment.
+    // =====================================================================
+    const tddBlocked = res => /^TDD gate/.test(res.reason || '') || /no_tests|code_first/.test(res.systemMessage || '');
+    const runMandate = (extraEnv, opts) => runHook((opts && opts.command) || 'git commit -m x',
+        { TDD_MANDATE_CONFIG: NO_MANDATE_CFG, ...(extraEnv || {}) },
+        { realMandate: true, input: { transcript_path: '' }, ...(opts || {}) });
+    const IMPL_REL = 'tmp/pcr-billing.py';
+    const TEST_REL = 'tmp/test_pcr_billing.py';
+
+    console.log('\n[INT] An empty test file does not satisfy the mandate:');
+    cleanAll();
+    unstageDummy();
+    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    stageBlob(TEST_REL, '');
+    try {
+        r = runMandate();
+        assert('impl + 0-byte test file: blocked', r.decision, 'block');
+        assertContains('...as no_tests', r.systemMessage || '', 'no_tests');
+    } finally {
+        unstageBlob(TEST_REL);
+        unstageBlob(IMPL_REL);
+        cleanAll();
+    }
+
+    console.log('\n[INT] A blank line added to an unrelated test does not satisfy the mandate:');
+    const OTHER_TEST_REL = 'src/hooks/test-commit-command.js';
+    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    {
+        const mode = execFileSync('git', ['ls-tree', 'HEAD', '--', OTHER_TEST_REL],
+            { cwd: REPO_ROOT, encoding: 'utf-8' }).split(' ')[0];
+        const head = execFileSync('git', ['show', 'HEAD:' + OTHER_TEST_REL], { cwd: REPO_ROOT, encoding: 'utf-8' });
+        const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
+            { cwd: REPO_ROOT, encoding: 'utf-8', input: head + '\n' }).trim();
+        execFileSync('git', ['update-index', '--cacheinfo', mode + ',' + blob + ',' + OTHER_TEST_REL], { cwd: REPO_ROOT });
+    }
+    try {
+        r = runMandate();
+        assert('impl + blank line in an unrelated test: blocked', r.decision, 'block');
+        assertContains('...as no_tests', r.systemMessage || '', 'no_tests');
+    } finally {
+        try { execFileSync('git', ['reset', '-q', 'HEAD', '--', OTHER_TEST_REL], { cwd: REPO_ROOT }); } catch (e) {}
+        unstageBlob(IMPL_REL);
+        cleanAll();
+    }
+
+    console.log('\n[INT] A test that adds test code satisfies the mandate:');
+    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    stageBlob(TEST_REL, 'from pcr_billing import bill\n\ndef test_bill():\n    assert bill() == 1\n');
+    try {
+        r = runMandate();
+        assertFalse('impl + a real test: not blocked by the TDD gate', tddBlocked(r));
+        // From a subdirectory too: the test diff is read at the toplevel, where the
+        // repo-relative paths resolve.
+        cleanAll();
+        r = runMandate({}, { cwd: path.join(REPO_ROOT, 'src') });
+        assertFalse('...nor from a subdirectory', tddBlocked(r));
+    } finally {
+        unstageBlob(TEST_REL);
+        unstageBlob(IMPL_REL);
+        cleanAll();
+    }
+
+    if (process.platform !== 'win32') {
+        console.log('\n[INT] An unreadable test diff blocks:');
+        stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+        stageBlob(TEST_REL, 'def test_bill():\n    assert True\n');
+        try {
+            r = runMandate({ PATH: writeGitShim('-U0') });
+            assert('unreadable test diff: blocked', r.decision, 'block');
+            assertContains('...saying the test diff could not be read', r.systemMessage || '', 'test diff could not be read');
+            assertFalse('...writes no marker', fs.existsSync(MARKER));
+            assertFalse('...writes no lock', fs.existsSync(LOCK));
+        } finally {
+            cleanGitShim();
+            unstageBlob(TEST_REL);
+            unstageBlob(IMPL_REL);
+            cleanAll();
+        }
+    }
+
+    // --amend: the test committed in HEAD is part of the result, so it counts even
+    // though `git diff --cached` (index against HEAD) cannot see it. Built in a
+    // throwaway repository with plumbing, so this suite never commits here.
+    console.log('\n[INT] --amend counts a test already in HEAD, root commit or not:');
+    const buildRepo = commits => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-amend-'));
+        const g = (args, input) => execFileSync('git', args,
+            { cwd: dir, encoding: 'utf-8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        g(['init', '-q']);
+        let parent = null;
+        for (const files of commits) {
+            for (const [rel, content] of Object.entries(files)) {
+                fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+                fs.writeFileSync(path.join(dir, rel), content, 'utf-8');
+                g(['add', '--', rel]);
+            }
+            const tree = g(['write-tree']);
+            parent = g(['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit-tree', tree,
+                ...(parent ? ['-p', parent] : []), '-m', 'c']);
+            g(['update-ref', 'HEAD', parent]);
+        }
+        // The amend's own staged change: the implementation only.
+        fs.writeFileSync(path.join(dir, 'src', 'app.py'), 'def app():\n    return 2\n', 'utf-8');
+        g(['add', '--', 'src/app.py']);
+        return dir;
+    };
+    const AMEND = { command: 'git commit --amend --no-edit' };
+    const APP = { 'src/app.py': 'def app():\n    return 1\n' };
+    const REAL_TEST = { 'tests/test_app.py': 'def test_app():\n    assert app() == 2\n' };
+    const EMPTY_TEST = { 'tests/test_app.py': '' };
+    for (const [name, commits, wantBlocked] of [
+        ['amend of a root commit whose test is in HEAD: passes', [{ ...APP, ...REAL_TEST }], false],
+        ['amend of a non-root commit whose test is in HEAD: passes', [{ 'README.md': 'x\n' }, { ...APP, ...REAL_TEST }], false],
+        ['amend of a root commit whose HEAD test is empty: no_tests', [{ ...APP, ...EMPTY_TEST }], true],
+        // The parent already had the real test; the amended commit adds nothing to it.
+        ['amend whose test predates HEAD: no_tests', [{ ...REAL_TEST }, { ...APP, 'tests/test_app.py': REAL_TEST['tests/test_app.py'] + '\n' }], true],
+    ]) {
+        const dir = buildRepo(commits);
+        try {
+            r = runMandate({}, { ...AMEND, cwd: dir });
+            assert(name, tddBlocked(r), wantBlocked);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
     console.log('\n[UNIT] The marker hash ignores external diff drivers:');
     cleanAll();
     {

@@ -476,6 +476,59 @@ function pathsInResultingCommit(isAmend) {
     return Array.from(new Set([...staged, ...fromHead]));
 }
 
+// The staged diff of the commit's test paths, for the "a test adds a non-comment
+// line" check in lib/tdd-order.js. Returns { text, error }; text is null on any failure.
+//
+// Read at the toplevel, where the repo-relative names resolve. For `--amend` the
+// index is compared with the amended commit's PARENT, not HEAD, so a test that HEAD
+// already carries still counts -- the same reason pathsInResultingCommit unions in
+// HEAD's files. A root commit has no parent: compare with the empty tree.
+//
+// The flags pin what is read against ordinary config, as in readStagedDiff:
+// --no-color, --text, --no-ext-diff, --no-textconv, --literal-pathspecs (a path is
+// never pathspec magic), --no-renames (a renamed test's added lines are seen as
+// added), explicit prefixes and core.quotePath=false (so headers name the path the
+// way testPaths spell it).
+function readStagedTestDiff(testPaths, isAmend, toplevel) {
+    const cwd = toplevel || undefined;
+    let base = [];
+    if (isAmend) {
+        const parent = gitRead.gitRead(['rev-parse', '--verify', '--quiet', 'HEAD~1^{commit}'], { cwd });
+        if (parent.out !== null && parent.out.trim()) {
+            base = [parent.out.trim()];
+        } else {
+            // Unresolved: a root commit, or a failure. Tell them apart.
+            const head = gitRead.gitRead(['rev-list', '--parents', '-n', '1', 'HEAD'], { cwd });
+            if (head.out === null) return { text: null, error: head.error };
+            if (head.out.trim().split(/\s+/).length !== 1) {
+                return { text: null, error: 'HEAD~1 did not resolve: ' + (parent.error || 'no output') };
+            }
+            const empty = gitRead.gitRead(['hash-object', '-t', 'tree', '/dev/null'], { cwd });
+            if (empty.out === null || !empty.out.trim()) {
+                return { text: null, error: 'empty tree: ' + (empty.error || 'no output') };
+            }
+            base = [empty.out.trim()];
+        }
+    }
+    const env = { ...process.env };
+    delete env.GIT_DIFF_OPTS;
+    delete env.GIT_EXTERNAL_DIFF;
+    try {
+        const text = execFileSync('git', ['-c', 'core.quotePath=false', '--literal-pathspecs', 'diff', '--cached',
+            '--no-color', '--text', '--no-ext-diff', '--no-textconv', '--no-renames',
+            '--src-prefix=a/', '--dst-prefix=b/', '-U0', ...base, '--', ...testPaths], {
+            encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: DIFF_MAX_BUFFER_BYTES, cwd, env,
+        });
+        return { text, error: null };
+    } catch (e) {
+        const stderr = (e && e.stderr ? String(e.stderr) : '').trim();
+        const error = e && e.code === 'ENOBUFS'
+            ? 'diff exceeded ' + DIFF_MAX_BUFFER_BYTES + ' bytes'
+            : (stderr || String((e && e.message) || e)).split('\n')[0].slice(0, 200);
+        return { text: null, error };
+    }
+}
+
 function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
     // On by default, everywhere. This used to require an allowlist at
     // ~/.claude/tdd-order-repos.json, and since that file was never created -- and
@@ -496,8 +549,18 @@ function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
         return { action: 'continue', reason: 'no-staged-paths' };
     }
     let result;
+    let testDiffError = null;
     try {
-        result = tddOrder.classifyTddOrder({ stagedPaths, transcriptPath });
+        // Presence means the test diff ADDS a non-comment line, so read it. Only test paths
+        // are diffed; with none, the classifier says `no_tests` without it.
+        const testPaths = stagedPaths.filter(tddOrder.isTestFile);
+        let testDiff = '';
+        if (testPaths.length > 0) {
+            const read = readStagedTestDiff(testPaths, isAmend, toplevel);
+            testDiff = read.text;
+            testDiffError = read.error;
+        }
+        result = tddOrder.classifyTddOrder({ stagedPaths, transcriptPath, testDiff });
     } catch (e) {
         // Fail closed: a classifier that throws gave no verdict, and no verdict
         // is not a pass. `continue` here would open every fast path below with
@@ -522,6 +585,14 @@ function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
     // repo, or add it to `exempt_repos` in ~/.claude/tdd-mandate.json. Both are
     // deliberate and visible in the tree or the config, rather than an environment
     // variable someone forgets is set.
+    if (result.status === 'unreadable') {
+        // The test diff could not be read: no verdict, and no verdict is not a pass.
+        return {
+            action: 'block',
+            status: 'unreadable',
+            reason: 'test-diff-unreadable: ' + (testDiffError || 'unknown'),
+        };
+    }
     if (result.status === 'code_first' || result.status === 'no_tests') {
         return {
             action: 'block',
@@ -689,7 +760,11 @@ function main() {
         if (!noVerdict) writeLock(LOCK_FILE, diffHash);
         let reason;
         let remedy;
-        if (tddGate.status === 'unreadable') {
+        if (tddGate.status === 'unreadable' && /^test-diff-unreadable/.test(tddGate.reason || '')) {
+            reason = 'TDD gate: the staged test diff could not be read (' +
+                tddGate.reason.replace(/^test-diff-unreadable: /, '') + '), so the commit cannot be checked.';
+            remedy = ' Retry; if it persists, check the repository state (index.lock, GIT_DIR, cwd).';
+        } else if (tddGate.status === 'unreadable') {
             reason = 'TDD gate: staged file list could not be read, so the commit cannot be checked.';
             remedy = ' Retry; if it persists, check the repository state (index.lock, GIT_DIR, cwd).';
         } else if (tddGate.status === 'classifier-error') {
@@ -697,8 +772,9 @@ function main() {
             remedy = ' Report this; the check is in lib/tdd-order.js.';
         } else if (tddGate.status === 'no_tests') {
             reason = 'TDD gate: no_tests commit blocked. Impl files were ' +
-                'touched but no test file is in the diff.';
-            remedy = ' Add a paired test for the change before committing.';
+                'touched but the test diff adds no non-comment line.';
+            remedy = ' Add a paired test for the change before committing; an empty test file, ' +
+                'blank lines or comments do not count.';
         } else {
             const detail = (tddGate.firstTestPath && tddGate.firstImplPath)
                 ? ' Impl ' + sanitizePath(tddGate.firstImplPath) +
@@ -953,6 +1029,7 @@ module.exports = {
     loadTddOrderRepos,
     repoIsOptedIn,
     evaluateTddOrderGate,
+    readStagedTestDiff,
     readStagedDiff,
     getStagedDiff,
     readStagedCodeFiles,
