@@ -14,6 +14,7 @@
 - .claude/agents/code-reviewer.md
 - .claude/claude-md-snippet.md
 - .claude/feature-workflow-snippet.md
+- .claude/hygiene-snippet.md
 - .claude/skills/code-review-implementer.md
 - .claude/skills/code-review-pre-commit.md
 - .claude/skills/plan-spec/SKILL.md
@@ -24,6 +25,7 @@
 - .claude/skills/plan-spec/fixtures/shapes-plan.md
 - .claude/skills/plan-spec/fixtures/tests-first-plan.md
 - .claude/skills/plan-spec/reference.md
+- .claude/tdd-mandate-snippet.md
 - CLAUDE.md
 - README.md
 - agents/code-reviewer-deep.md
@@ -31,6 +33,7 @@
 - commands/commit-prep.md
 - commands/feature-new.md
 - commands/feature.md
+- commands/review-timing.md
 - docs/plans/marketplace-plugin.md
 - hooks/hooks.json
 - install.sh
@@ -67,6 +70,25 @@
 - uninstall.sh
 
 ## History
+
+- 2026-10-03 `d15eb16` — Deliver the four CLAUDE.md sections through a plugin SessionStart hook
+  - .claude/claude-md-snippet.md
+  - .claude/feature-workflow-snippet.md
+  - .claude/hygiene-snippet.md
+  - .claude/tdd-mandate-snippet.md
+  - docs/plans/marketplace-plugin.md
+  - hooks/hooks.json
+  - install.sh
+  - instructions/claude-md-snippet.md
+  - instructions/feature-workflow-snippet.md
+  - instructions/hygiene-snippet.md
+  - instructions/tdd-mandate-snippet.md
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-session-start-instructions.js
+  - src/test-merge-claude-md.js
+  - src/test-plugin-layout.js
+  - src/test-unmerge-claude-md.js
+  - uninstall.sh
 
 - 2026-10-03 `921bf2c` — Namespace every invocable name as sdlc:<name> from one constant
   - .claude/claude-md-snippet.md

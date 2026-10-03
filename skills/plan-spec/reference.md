@@ -161,7 +161,7 @@ stated with each.
   trailer it consumes is `TDD_GATE: PASS` or `TDD_GATE: FAIL` as a report's
   last line.
 - **The timing-log CLI** — `node timing-log.js <event> key=value ...`
-  (`src/hooks/timing-log.js`, deployed to `~/.claude/hooks/`), appending
+  (`src/hooks/timing-log.js`, shipped in the plugin), appending
   JSONL to `~/.claude/code-review-timing.jsonl`. A round is recorded as
   `review.completed agent=<name> round=<n> verdict=<PASS|FAIL> critical=<n>
   important=<n> advisory=<n> repo=<path>`. Note what that does not carry:

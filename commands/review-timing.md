@@ -21,10 +21,13 @@ Pass arguments through verbatim to the analyser.
 1. Resolve the analyser path, first match wins:
    - `./tools/analyze-review-timing.py` if `$PWD` is inside the
      `sdlc-claude-skills` source repo;
-   - `~/.claude/tools/analyze-review-timing.py`, where `install.sh`
-     deploys it;
-   - otherwise tell the user to run `install.sh` from the
-     `sdlc-claude-skills` repo, and stop.
+   - else the newest match of
+     `~/.claude/plugins/cache/*/sdlc/*/tools/analyze-review-timing.py`,
+     where Claude Code caches the installed `sdlc` plugin
+     (`cache/<marketplace>/<plugin>/<version>/`), e.g.
+     `ls -t ~/.claude/plugins/cache/*/sdlc/*/tools/analyze-review-timing.py | head -1`;
+   - otherwise tell the user to install the `sdlc` plugin from the
+     `sdlc-claude-skills` marketplace, and stop.
 2. If the repo pins a conda env (a `setup` line in
    `~/.claude/hygiene-repos.json`, or a local convention), source and
    activate it first. Otherwise use whatever `python3` is on PATH — the
