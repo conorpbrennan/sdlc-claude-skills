@@ -4,8 +4,8 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const UNMERGE_SCRIPT = path.join(__dirname, 'unmerge-hooks.js');
-const MERGE_SCRIPT = path.join(__dirname, 'merge-hooks.js');
-const HOOKS_CONFIG = path.join(__dirname, '..', '.claude', 'hooks-config.json');
+const MERGE_SCRIPT = path.join(__dirname, '..', 'legacy', 'merge-hooks.js');
+const HOOKS_CONFIG = path.join(__dirname, '..', 'legacy', 'hooks-config.json');
 const TMP_DIR = path.join(__dirname, '..', 'tmp');
 const TMP_SETTINGS = path.join(TMP_DIR, 'test-unmerge-settings.json');
 

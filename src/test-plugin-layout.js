@@ -1,6 +1,6 @@
-// Tests for the plugin and marketplace layout: the manifests, and hook wiring
-// in hooks/hooks.json that matches install.sh's .claude/hooks-config.json plus
-// the one plugin-only hook, and the instruction sections under instructions/.
+// Tests for the plugin and marketplace layout: the manifests, the hook wiring
+// in hooks/hooks.json against a frozen copy of the expected wiring, the
+// retired installer's absence, and the instruction sections under instructions/.
 const fs = require('fs');
 const path = require('path');
 
@@ -8,11 +8,46 @@ const ROOT = path.join(__dirname, '..');
 const PLUGIN_JSON = path.join(ROOT, '.claude-plugin', 'plugin.json');
 const MARKETPLACE_JSON = path.join(ROOT, '.claude-plugin', 'marketplace.json');
 const PLUGIN_HOOKS = path.join(ROOT, 'hooks', 'hooks.json');
-const LEGACY_HOOKS = path.join(ROOT, '.claude', 'hooks-config.json');
+const LEGACY_HOOKS = path.join(ROOT, 'legacy', 'hooks-config.json');
 
 const PLUGIN_PREFIX = 'node "${CLAUDE_PLUGIN_ROOT}/src/hooks/';
-const LEGACY_PREFIX = 'node "$HOME/.claude/hooks/';
 const INSTRUCTIONS_TIMEOUT = 5;  // seconds
+
+// The wiring hooks/hooks.json must carry, frozen here so the check needs no
+// other file: event -> blocks of { matcher, hooks: [[type, script, timeout]] },
+// in order, since order decides which block wins. A null matcher means the
+// block has no matcher key. It is the legacy install's wiring plus the
+// instructions hook in its own SessionStart block ahead of the feature hook.
+// The other timeouts are copied verbatim from the legacy wiring.
+const EXPECTED_WIRING = {
+    SessionStart: [
+        { matcher: null, hooks: [['command', 'session-start-instructions.js', INSTRUCTIONS_TIMEOUT]] },
+        { matcher: null, hooks: [['command', 'session-start-feature.js', 2000]] },
+    ],
+    UserPromptSubmit: [
+        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 1000]] },
+    ],
+    PreToolUse: [
+        {
+            matcher: 'Bash', hooks: [
+                ['command', 'pre-commit-feature.js', 3000],
+                ['command', 'pre-commit-review.js', 2000],
+                ['command', 'pending-review-gate.js', 2000],
+                ['command', 'enforce-co-author.js', 1000],
+                ['command', 'pre-commit-hygiene.js', 200000],
+            ],
+        },
+    ],
+    PostToolUse: [
+        {
+            matcher: 'Bash', hooks: [
+                ['command', 'post-commit-notify.js', 10000],
+                ['command', 'claude-attribution-note.js', 5000],
+                ['command', 'post-commit-feature.js', 3000],
+            ],
+        },
+    ],
+};
 const PLUGIN_COMMAND = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/src\/hooks\/([A-Za-z0-9._-]+\.js)"$/;
 
 let passed = 0;
@@ -99,26 +134,66 @@ for (const blocks of Object.values(hooksByEvent || {})) {
 }
 assert('hooks.json declares at least one command', commandCount > 0, true);
 
-console.log('\nParity with .claude/hooks-config.json:');
-const legacy = readJson('.claude/hooks-config.json', LEGACY_HOOKS);
-if (legacy && hooksByEvent) {
-    // The plugin adds exactly one hook to the legacy wiring: the instructions
-    // hook, in its own SessionStart block ahead of the feature hook. It
-    // replaces the CLAUDE.md sections install.sh merged, so it has no
-    // legacy counterpart.
-    const expected = wiring(legacy, LEGACY_PREFIX);
-    expected.SessionStart = [
-        { matcher: null, hooks: [['command', 'session-start-instructions.js', INSTRUCTIONS_TIMEOUT]] },
-        ...(expected.SessionStart || []),
-    ];
+console.log('\nThe wiring matches its frozen copy:');
+if (hooksByEvent) {
     const actual = wiring(hooksByEvent, PLUGIN_PREFIX);
-    assert('same events in the same order', Object.keys(actual), Object.keys(expected));
-    for (const event of Object.keys(expected)) {
-        assert(`${event}: matchers, scripts, order and timeouts`, actual[event], expected[event]);
+    assert('same events in the same order', Object.keys(actual), Object.keys(EXPECTED_WIRING));
+    for (const event of Object.keys(EXPECTED_WIRING)) {
+        assert(`${event}: matchers, scripts, order and timeouts`, actual[event], EXPECTED_WIRING[event]);
     }
 } else {
-    assert('parity comparable (both files parsed)', false, true);
+    assert('wiring comparable (hooks.json parsed)', false, true);
 }
+
+console.log('\nThe retired installer is gone; its wiring is kept for uninstall.sh:');
+for (const rel of ['src/merge-hooks.js', 'src/merge-claude-md.js', 'src/test-merge-hooks.js',
+    'src/test-merge-claude-md.js', '.claude/hooks-config.json']) {
+    assert(`${rel} is gone`, fs.existsSync(path.join(ROOT, rel)), false);
+}
+const shellScripts = dir => listDir(path.join(ROOT, dir))
+    .filter(e => e.isFile() && e.name.endsWith('.sh')).map(e => e.name).sort();
+assert('the only shell script at the root is uninstall.sh', shellScripts('.'), ['uninstall.sh']);
+// No installer logic left in src/: a shell script there is a test, never a tool.
+assert('the only shell scripts in src/ are test-*.sh files',
+    shellScripts('src').filter(n => !n.startsWith('test-')), []);
+// The docs name the live wiring, hooks/hooks.json; the old file is mentioned
+// only at its legacy/ path.
+for (const doc of ['README.md', 'CLAUDE.md']) {
+    let text = '';
+    try {
+        text = fs.readFileSync(path.join(ROOT, doc), 'utf-8');
+    } catch (e) { /* text stays empty; the assertion below still runs */ }
+    const stale = text.split('\n').map((line, i) => [i + 1, line])
+        .filter(([, line]) => line.replace(/legacy\/hooks-config\.json/g, '').includes('hooks-config.json'))
+        .map(([n]) => `${doc}:${n}`);
+    assert(`${doc} names hooks-config.json only as legacy/hooks-config.json`, stale, []);
+}
+// README's Update section gives both steps, in order, then the restart.
+{
+    let readme = '';
+    try {
+        readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
+    } catch (e) { /* readme stays empty; the assertions below report it */ }
+    const update = (/^### Update\n([\s\S]*?)^### /m.exec(readme) || [])[1] || '';
+    for (const [form, market, plugin] of [
+        ['slash', '/plugin marketplace update sdlc-claude-skills', '/plugin update sdlc@sdlc-claude-skills'],
+        ['shell', 'claude plugin marketplace update sdlc-claude-skills', 'claude plugin update sdlc@sdlc-claude-skills'],
+    ]) {
+        const m = update.indexOf(market);
+        const p = update.indexOf(plugin);
+        assert(`Update (${form}): marketplace update, then plugin update`, m >= 0 && p > m, true);
+    }
+    assert('Update: says to restart Claude Code', /restart Claude Code/i.test(update), true);
+}
+const legacy = readJson('legacy/hooks-config.json', LEGACY_HOOKS);
+// Every script the legacy wiring names is one the plugin wires too, so the
+// session-start legacy check and uninstall.sh look for the right names.
+const LEGACY_COMMAND = /^node "\$HOME\/\.claude\/hooks\/([A-Za-z0-9._-]+\.js)"$/;
+const legacyScripts = Object.values(legacy || {})
+    .flatMap(blocks => blocks.flatMap(b => b.hooks.map(h => (LEGACY_COMMAND.exec(h.command) || [])[1] || h.command)));
+const pluginScripts = Object.values(EXPECTED_WIRING).flatMap(blocks => blocks.flatMap(b => b.hooks.map(h => h[1])));
+assert('the legacy wiring names scripts', legacyScripts.length > 0, true);
+assert('the plugin wires every legacy script', legacyScripts.filter(s => !pluginScripts.includes(s)), []);
 
 // The `name:` value from a markdown file's leading frontmatter block, or null
 // when the file has no frontmatter or the block has no name.

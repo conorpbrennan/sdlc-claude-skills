@@ -41,6 +41,9 @@
 - instructions/feature-workflow-snippet.md
 - instructions/hygiene-snippet.md
 - instructions/tdd-mandate-snippet.md
+- legacy/hooks-config.json
+- legacy/merge-claude-md.js
+- legacy/merge-hooks.js
 - skills/code-review-implementer/SKILL.md
 - skills/code-review-pre-commit/SKILL.md
 - skills/plan-spec/SKILL.md
@@ -66,10 +69,21 @@
 - src/test-install.sh
 - src/test-merge-claude-md.js
 - src/test-plugin-layout.js
+- src/test-uninstall.sh
 - src/test-unmerge-claude-md.js
+- src/test-unmerge-hooks.js
 - uninstall.sh
 
 ## History
+
+- 2026-10-03 `9a14a9f` — Stop assuming the toolchain lives in ~/.claude
+  - commands/review-timing.md
+  - docs/plans/marketplace-plugin.md
+  - skills/code-review-pre-commit/SKILL.md
+  - skills/plan-spec/reference.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
+  - src/test-plugin-layout.js
 
 - 2026-10-03 `d15eb16` — Deliver the four CLAUDE.md sections through a plugin SessionStart hook
   - .claude/claude-md-snippet.md
