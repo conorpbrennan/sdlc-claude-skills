@@ -8,8 +8,13 @@
 
 ## Files involved
 
-<!-- populated on commit -->
+- docs/plans/fix-subdir-staged-diff.md
+- src/hooks/pre-commit-review.js
+- src/hooks/test-pre-commit-review.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-03 `785a7ef` — Read the staged diff from the repo root and fail closed on an empty read
+  - docs/plans/fix-subdir-staged-diff.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js

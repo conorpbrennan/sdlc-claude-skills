@@ -5,8 +5,84 @@ hooks and slash commands that turn a change into a planned, reviewed,
 tested commit. Extracted from `risk-claude-skills` so the generic
 engineering workflow lives apart from the domain skills.
 
-Install target is `~/.claude`. This repository is the source of truth —
-edit here, then run `./install.sh`.
+## Install
+
+> **Not available yet.** The plugin manifests arrive with
+> `docs/plans/marketplace-plugin.md`. Until that lands on `main`, use the
+> [legacy install](#legacy-install-installsh) below.
+
+The toolchain ships as a Claude Code plugin named `sdlc`. This repository is
+also the marketplace that serves it. Inside Claude Code:
+
+```
+/plugin marketplace add conorpbrennan/sdlc-claude-skills
+/plugin install sdlc@sdlc-claude-skills
+```
+
+Or from a shell:
+
+```bash
+claude plugin marketplace add conorpbrennan/sdlc-claude-skills
+claude plugin install sdlc@sdlc-claude-skills
+```
+
+Node is required, because the hooks are Node. The repository is private, so
+git needs credentials for GitHub before the marketplace can be added. Restart
+Claude Code after installing.
+
+Plugin components are namespaced, so commands and skills are invoked with
+the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
+`/sdlc:review-timing`, `/sdlc:plan-spec` and `/sdlc:code-review-pre-commit`.
+The review agents are `sdlc:code-reviewer` and `sdlc:code-reviewer-deep`.
+
+Your own config stays in `~/.claude/`, and the plugin never writes to it:
+`tdd-mandate.json`, `review-policy.json` and `hygiene-repos.json`. Each is
+optional. See [Configuration](#configuration) and the `.claude/*.json.example`
+templates.
+
+### Update
+
+```
+/plugin marketplace update sdlc-claude-skills
+```
+
+or `claude plugin update sdlc@sdlc-claude-skills` from a shell.
+
+### Uninstall or disable
+
+```bash
+claude plugin disable sdlc@sdlc-claude-skills     # keep it installed, turn it off
+claude plugin uninstall sdlc@sdlc-claude-skills
+```
+
+### Migrating from `install.sh`
+
+An `install.sh` deployment and the plugin must not run together, because every
+gate would fire twice. Remove the legacy copy first, then install the plugin:
+
+```bash
+cd ~/dev/sdlc-claude-skills
+./uninstall.sh --dry-run    # list what would go
+./uninstall.sh              # remove copied files, settings.json hooks and CLAUDE.md sections
+```
+
+Your tuned `~/.claude/*.json` config is kept. See [Uninstall](#uninstall) for
+exactly what is removed.
+
+### Developing the plugin
+
+This repository is the source of truth. To load a working copy instead of the
+installed plugin:
+
+```bash
+claude --plugin-dir ~/dev/sdlc-claude-skills
+```
+
+Check the manifests before pushing with `claude plugin validate .`.
+
+### Legacy install (`install.sh`)
+
+Until the plugin lands, the install target is `~/.claude`:
 
 ```bash
 git clone <this repo> ~/dev/sdlc-claude-skills
@@ -15,8 +91,7 @@ cd ~/dev/sdlc-claude-skills
 ./install.sh               # deploy
 ```
 
-Node is required (the hooks and the install-time mergers are Node).
-Restart Claude Code after installing.
+The install-time mergers are also Node. Restart Claude Code after installing.
 
 ---
 
