@@ -1,5 +1,6 @@
 // Tests for the plugin and marketplace layout: the manifests, and hook wiring
-// in hooks/hooks.json that matches install.sh's .claude/hooks-config.json.
+// in hooks/hooks.json that matches install.sh's .claude/hooks-config.json plus
+// the one plugin-only hook, and the instruction sections under instructions/.
 const fs = require('fs');
 const path = require('path');
 
@@ -11,6 +12,7 @@ const LEGACY_HOOKS = path.join(ROOT, '.claude', 'hooks-config.json');
 
 const PLUGIN_PREFIX = 'node "${CLAUDE_PLUGIN_ROOT}/src/hooks/';
 const LEGACY_PREFIX = 'node "$HOME/.claude/hooks/';
+const INSTRUCTIONS_TIMEOUT = 5;  // seconds
 const PLUGIN_COMMAND = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/src\/hooks\/([A-Za-z0-9._-]+\.js)"$/;
 
 let passed = 0;
@@ -100,7 +102,15 @@ assert('hooks.json declares at least one command', commandCount > 0, true);
 console.log('\nParity with .claude/hooks-config.json:');
 const legacy = readJson('.claude/hooks-config.json', LEGACY_HOOKS);
 if (legacy && hooksByEvent) {
+    // The plugin adds exactly one hook to the legacy wiring: the instructions
+    // hook, in its own SessionStart block ahead of the feature hook. It
+    // replaces the CLAUDE.md sections install.sh merged, so it has no
+    // legacy counterpart.
     const expected = wiring(legacy, LEGACY_PREFIX);
+    expected.SessionStart = [
+        { matcher: null, hooks: [['command', 'session-start-instructions.js', INSTRUCTIONS_TIMEOUT]] },
+        ...(expected.SessionStart || []),
+    ];
     const actual = wiring(hooksByEvent, PLUGIN_PREFIX);
     assert('same events in the same order', Object.keys(actual), Object.keys(expected));
     for (const event of Object.keys(expected)) {
@@ -398,8 +408,8 @@ function scanText(rel, firstLine, text) {
 for (const rel of hookSources) {
     for (const l of hookLiterals[rel]) scanText(rel, l.line, l.value);
 }
-const SNIPPETS = listDir(path.join(ROOT, '.claude'))
-    .filter(e => e.isFile() && e.name.endsWith('snippet.md')).map(e => path.join('.claude', e.name));
+const SNIPPETS = listDir(path.join(ROOT, 'instructions'))
+    .filter(e => e.isFile() && e.name.endsWith('.md')).map(e => path.join('instructions', e.name));
 assert('the snippets are found', SNIPPETS.length > 0, true);
 const textFiles = [
     ...walk(SKILLS_DIR), ...walk(path.join(ROOT, 'commands')), ...walk(AGENTS_DIR), ...SNIPPETS,
@@ -409,6 +419,13 @@ for (const rel of textFiles) {
 }
 assert('no bare slash command or skill name outside the allowlist', bareHits, []);
 assert('every subagent_type and skill value is namespaced or built in', badDispatch, []);
+
+console.log('\nThe instruction sections ship in instructions/:');
+assert('instructions/ holds the four snippets',
+    SNIPPETS.map(rel => path.basename(rel)).sort(),
+    ['claude-md-snippet.md', 'feature-workflow-snippet.md', 'hygiene-snippet.md', 'tdd-mandate-snippet.md']);
+assert('no snippet remains under .claude/',
+    listDir(path.join(ROOT, '.claude')).filter(e => e.name.endsWith('snippet.md')).map(e => e.name), []);
 
 console.log(`\n===================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);

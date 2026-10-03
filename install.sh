@@ -327,10 +327,10 @@ seed_config "$SCRIPT_DIR/.claude/tdd-mandate.json.example" \
 echo ""
 echo "Merging CLAUDE.md sections..."
 USER_CLAUDE_MD="$USER_CLAUDE_DIR/CLAUDE.md"
-for snippet in "$SCRIPT_DIR/.claude/claude-md-snippet.md" \
-               "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md" \
-               "$SCRIPT_DIR/.claude/hygiene-snippet.md" \
-               "$SCRIPT_DIR/.claude/feature-workflow-snippet.md"; do
+for snippet in "$SCRIPT_DIR/instructions/claude-md-snippet.md" \
+               "$SCRIPT_DIR/instructions/tdd-mandate-snippet.md" \
+               "$SCRIPT_DIR/instructions/hygiene-snippet.md" \
+               "$SCRIPT_DIR/instructions/feature-workflow-snippet.md"; do
     if [ -f "$snippet" ]; then
         if [ "$DRY_RUN" -eq 1 ]; then
             echo "    [dry-run] merge $(basename "$snippet") into $USER_CLAUDE_MD"

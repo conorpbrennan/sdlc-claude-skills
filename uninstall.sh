@@ -99,10 +99,10 @@ if [ -f "$INSTALLED" ]; then
     # copies are the next best description of what was merged.
     [ -f "$HOOKS_CONFIG" ] || HOOKS_CONFIG="$SCRIPT_DIR/.claude/hooks-config.json"
     if [ "${#SNIPPETS[@]}" -eq 0 ]; then
-        SNIPPETS=("$SCRIPT_DIR/.claude/claude-md-snippet.md"
-                  "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md"
-                  "$SCRIPT_DIR/.claude/hygiene-snippet.md"
-                  "$SCRIPT_DIR/.claude/feature-workflow-snippet.md")
+        SNIPPETS=("$SCRIPT_DIR/instructions/claude-md-snippet.md"
+                  "$SCRIPT_DIR/instructions/tdd-mandate-snippet.md"
+                  "$SCRIPT_DIR/instructions/hygiene-snippet.md"
+                  "$SCRIPT_DIR/instructions/feature-workflow-snippet.md")
     fi
 else
     echo "No install record at $INSTALLED -- removing the files this source tree ships."
@@ -118,10 +118,10 @@ else
         } | sed 's/$/\t/'
     )"
     HOOKS_CONFIG="$SCRIPT_DIR/.claude/hooks-config.json"
-    SNIPPETS=("$SCRIPT_DIR/.claude/claude-md-snippet.md"
-              "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md"
-              "$SCRIPT_DIR/.claude/hygiene-snippet.md"
-              "$SCRIPT_DIR/.claude/feature-workflow-snippet.md")
+    SNIPPETS=("$SCRIPT_DIR/instructions/claude-md-snippet.md"
+              "$SCRIPT_DIR/instructions/tdd-mandate-snippet.md"
+              "$SCRIPT_DIR/instructions/hygiene-snippet.md"
+              "$SCRIPT_DIR/instructions/feature-workflow-snippet.md")
 fi
 
 # ----------------------------------------------------------- settings.json -

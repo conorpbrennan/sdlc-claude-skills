@@ -262,7 +262,7 @@ fs.rmdirSync(asDir);
 
 console.log('\nShipped snippets round-trip:');
 for (const name of ['claude-md-snippet.md', 'hygiene-snippet.md', 'feature-workflow-snippet.md']) {
-    const snippetPath = path.join(__dirname, '..', '.claude', name);
+    const snippetPath = path.join(__dirname, '..', 'instructions', name);
     const snip = fs.readFileSync(snippetPath, 'utf-8');
     const original = '# User instructions\n\n## Mine\n\nkeep\n';
     fs.writeFileSync(TMP_MD, original);

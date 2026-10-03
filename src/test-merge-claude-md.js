@@ -221,7 +221,7 @@ assert('rejects a snippet with two ## headings', r.rc !== 0, true);
 
 console.log('\nShipped snippets install and are idempotent:');
 for (const name of ['claude-md-snippet.md', 'hygiene-snippet.md', 'feature-workflow-snippet.md']) {
-    const snippetPath = path.join(__dirname, '..', '.claude', name);
+    const snippetPath = path.join(__dirname, '..', 'instructions', name);
     const snip = fs.readFileSync(snippetPath, 'utf-8').trim();
     const head = snip.split('\n')[0];
     fs.writeFileSync(TMP_TARGET, '# User instructions\n\n## Mine\n\nkeep\n');

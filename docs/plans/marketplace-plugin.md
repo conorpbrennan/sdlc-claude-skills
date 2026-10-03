@@ -83,6 +83,7 @@ WHAT TO BUILD: `plugin-names.js` exports `PLUGIN = 'sdlc'`, plus `cmd(name)` ret
 GATE: `node src/test-plugin-layout.js` exits 0. All hook suites show no new failures by name. `git grep -nE '(^|[^:a-z])/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec)\b' -- src/hooks skills commands agents .claude/*snippet.md` returns only allowlisted paths.
 REVIEW: 1. Is any name Claude must act on still bare, including inside the marker recipe text and the gap-patching prompt? 2. Did any marker or timing tag change? FAIL if: a bare invocable name remains outside a justified fixture, or a tag format changed.
 ROLLBACK: revert the commit.
+-- status: committed `921bf2c`. code-reviewer-deep:round1:PASS (1 important: the namespaced block message has no passing test while the TDD baseline pre-empts it, carried to sdlc-hardening step 0). Amended before review: D1-D4. The reviewer showed end to end that a reviewed commit still matches its marker, and that the tag is only a label.
 
 **4. The four CLAUDE.md sections reach every session through a plugin SessionStart hook**
 
@@ -150,3 +151,4 @@ Cutover, by the owner after the merge to `main` (each command is outward-facing 
   - D3: two plain-word skill mentions in hook messages ("the code-review-pre-commit skill") were namespaced under REVIEW 1, though no regex catches them.
   - D4: the namespaced-message assertion in `test-pre-commit-review.js` is pre-empted by the TDD `no_tests` baseline, so it was verified by hand. The baseline-repair follow-up would make it real.
   - Decision noted: the marker recipe now says to use the *bare* agent name in the tag, so a namespaced `sdlc:code-reviewer:round1:PASS` never reaches a marker.
+- 2026-10-03, step 4 implementer: D1 accepted. `src/test-merge-claude-md.js` and `src/test-unmerge-claude-md.js` read the shipped snippets from `.claude/` and would break on the move, so their path line was changed (one line each), outside the declared file set. The uninstall.sh fold-in was confirmed correct: without it a no-record uninstall would silently skip every snippet. No snippet contained the "installed to `~/.claude/hooks/`" text, so the snippets are unchanged. additionalContext is 7,873 chars. The new hook's timeout is 5 (seconds).
