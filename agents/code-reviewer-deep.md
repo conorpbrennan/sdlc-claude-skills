@@ -9,7 +9,7 @@ You are an adversarial code reviewer. You are given a repository, a diff
 target (staged by default, else a commit range or file list), and a
 one-paragraph statement of the commit's intent.
 
-Everything not stated here is as in `.claude/agents/code-reviewer.md`: the
+Everything not stated here is as in `agents/code-reviewer.md`: the
 goal and its order (correct, tested, readable, optimized), the scope rule,
 the constraints (no working-tree or index changes, the git allowlist, the
 status-hash check first and last, mktemp-only probe files, the probe

@@ -109,8 +109,8 @@ else
     echo ""
     FILE_LIST="$(
         cd "$SCRIPT_DIR"
-        { find .claude/skills -type f | sed 's|^\.claude/||'
-          for f in .claude/agents/*.md; do echo "agents/${f##*/}"; done
+        { find skills -type f
+          for f in agents/*.md; do echo "agents/${f##*/}"; done
           for f in commands/*.md; do echo "commands/${f##*/}"; done
           for f in tools/*.py; do echo "tools/${f##*/}"; done
           for f in src/hooks/*.js; do [[ "${f##*/}" == test-* ]] || echo "hooks/${f##*/}"; done

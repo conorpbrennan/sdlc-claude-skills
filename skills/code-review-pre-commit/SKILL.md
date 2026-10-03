@@ -10,7 +10,7 @@ arg_spec: "[files|staged] [--fresh] [--deep]"
 A single-sub-agent review of **the staged diff**, run when the pre-commit
 hook blocks. The review exists to produce code that is correct, tested,
 readable and optimized, in that order; the criteria, method, constraints
-and report format that serve that goal live in `.claude/agents/code-reviewer.md`
+and report format that serve that goal live in `agents/code-reviewer.md`
 and are not restated here. This skill owns four things: which mode runs,
 what the reviewer is handed, how many rounds, and what happens to the
 report.

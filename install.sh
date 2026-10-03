@@ -183,7 +183,7 @@ deploy_dir() {
 
 # ---------------------------------------------------------------- skills ---
 echo "Copying skills..."
-for skill in "$SCRIPT_DIR/.claude/skills"/*; do
+for skill in "$SCRIPT_DIR/skills"/*; do
     [ -e "$skill" ] || continue
     skill_name=$(basename "$skill")
     echo "  - $skill_name"
@@ -199,7 +199,7 @@ done
 # /code-review-pre-commit has nothing to hand the diff to.
 echo ""
 echo "Copying agents..."
-for agent in "$SCRIPT_DIR/.claude/agents"/*.md; do
+for agent in "$SCRIPT_DIR/agents"/*.md; do
     [ -e "$agent" ] || continue
     echo "  - $(basename "$agent")"
     deploy_file "$agent" "agents/$(basename "$agent")"
