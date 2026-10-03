@@ -21,12 +21,29 @@ const COV_XML = path.resolve(TMP_DIR, 'pre-commit-hook-test-coverage.xml');
 const POLICY_PATH = path.resolve(TMP_DIR, 'pre-commit-hook-test-policy.json');
 const DIFF_COVER_STUB = path.resolve(TMP_DIR, 'mock-diff-cover.js');
 
+// Gate isolation. The integration cases stage a lone dummy .py with no test
+// beside it, so under the TDD mandate (on by default) its no_tests block fires
+// first and the coverage gate, the review-required block and its message
+// never run. Every case that targets a
+// gate other than the TDD gate therefore runs with the mandate exempting this
+// repository, through a scratch config (the same pattern the subdir empty-read
+// case uses). Cases that target the TDD gate pass `realMandate: true` and run
+// under the mandate as installed; an explicit TDD_MANDATE_CONFIG in extraEnv
+// also wins.
+const TDD_EXEMPT_CFG = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-exempt.json');
+function writeTddExemptCfg() {
+    fs.mkdirSync(TMP_DIR, { recursive: true });
+    fs.writeFileSync(TDD_EXEMPT_CFG, JSON.stringify({ exempt_repos: [REPO_ROOT] }), 'utf-8');
+}
+function cleanTddExemptCfg() { try { fs.unlinkSync(TDD_EXEMPT_CFG); } catch (e) {} }
+
 function runHook(command, extraEnv = {}, opts = {}) {
+    const isolation = opts.realMandate ? {} : { TDD_MANDATE_CONFIG: TDD_EXEMPT_CFG };
     const result = spawnSync('node', [HOOK_PATH], {
         input: JSON.stringify({ tool_input: { command }, ...(opts.input || {}) }),
         encoding: 'utf-8',
         cwd: opts.cwd || REPO_ROOT,
-        env: { ...process.env, ...extraEnv },
+        env: { ...process.env, ...isolation, ...extraEnv },
     });
     if (!result.stdout.trim()) return { decision: 'silent' };
     return JSON.parse(result.stdout.trim());
@@ -465,6 +482,7 @@ assert('extractUncovered: file name preserved', ex[0].file, 'a.py');
 // =========================================================================
 // Suite 2: Integration tests -- original gate precedence
 // =========================================================================
+writeTddExemptCfg();
 console.log('\n[INT] Ignored commands (silent exit):');
 cleanAll();
 assert('silent on git status', runHook('git status').decision, 'silent');
@@ -588,6 +606,12 @@ try {
     {
         const m = (r.systemMessage || '').match(/run exactly: (printf .*?) \(replace/);
         assertTrue('recipe is extractable from the message', !!m);
+        // The policy names agents namespaced; the marker tag is a label and
+        // stays bare, and TAG_NOTE says so outright.
+        assertContains('recipe tag is the bare agent name', (m && m[1]) || '',
+            " 'code-reviewer:round1:PASS' > ");
+        assertFalse('recipe carries no namespaced name', /sdlc:/.test((m && m[1]) || 'sdlc:'));
+        assertContains('TAG_NOTE says "bare agent name"', r.systemMessage || '', 'bare agent name');
         if (m) {
             const res = spawnSync('bash', ['-c', m[1]], { cwd: REPO_ROOT, encoding: 'utf-8' });
             assert('recipe runs cleanly', res.status, 0);
@@ -815,7 +839,8 @@ try {
     r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: '/dev/null/not-a-file' });
     assertTrue('unreadable policy path does not crash the hook', r.decision === 'block' || r.decision === 'approve');
     // Force a throw inside main via a poisoned TDD config path that is a directory.
-    r = runHook('git commit -m x', { TDD_ORDER_REPOS_CONFIG: REPO_ROOT });
+    // A TDD-gate input, so it runs under the real mandate.
+    r = runHook('git commit -m x', { TDD_ORDER_REPOS_CONFIG: REPO_ROOT }, { realMandate: true });
     assertTrue('directory as config path does not crash the hook', r.decision === 'block' || r.decision === 'approve');
 
     console.log('\n[INT] Gate 0 directory change before the commit:');
@@ -851,9 +876,10 @@ try {
         // what stands between the block and a cached BLOCK marker.
         const TDD_CFG2 = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-repos2.json');
         fs.writeFileSync(TDD_CFG2, JSON.stringify({ repos: [REPO_ROOT] }), 'utf-8');
+        // Targets the TDD gate's own read, so it runs under the real mandate.
         r = runHook('git commit -m x',
             { PATH: writeGitShim('--name-only', 2), TDD_ORDER_REPOS_CONFIG: TDD_CFG2 },
-            { input: { transcript_path: '/nonexistent/transcript.jsonl' } });
+            { input: { transcript_path: '/nonexistent/transcript.jsonl' }, realMandate: true });
         assert('tdd gate unreadable paths block', r.decision, 'block');
         assertContains('tdd gate unreadable message', r.systemMessage || '', 'could not be read');
         assertFalse('tdd gate unreadable writes no marker', fs.existsSync(MARKER));
@@ -1109,6 +1135,7 @@ try {
     cleanCoverageXml();
     cleanDiffCoverStub();
     cleanPolicy();
+    cleanTddExemptCfg();
     // Restore any files that were staged before the test started.
     restageFiles(PRE_STAGED);
 }
