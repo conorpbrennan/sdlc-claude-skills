@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 const section = require('./lib/claude-md-section');
 
 const UNMERGE_SCRIPT = path.join(__dirname, 'unmerge-claude-md.js');
-const MERGE_SCRIPT = path.join(__dirname, 'merge-claude-md.js');
+const MERGE_SCRIPT = path.join(__dirname, '..', 'legacy', 'merge-claude-md.js');
 const TMP_DIR = path.join(__dirname, '..', 'tmp');
 const TMP_MD = path.join(TMP_DIR, 'test-unmerge-CLAUDE.md');
 const TMP_SNIPPET = path.join(TMP_DIR, 'test-unmerge-snippet.md');

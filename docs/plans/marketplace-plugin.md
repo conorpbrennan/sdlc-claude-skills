@@ -106,6 +106,7 @@ WHAT TO BUILD: the hook embeds the absolute timing-log path in its block message
 GATE: tests exit 0, with no new failures by name. `git grep -nE '(\$HOME|~)/\.claude/(hooks|tools)' -- skills commands agents instructions src/hooks ':!src/hooks/test-*'` returns nothing.
 REVIEW: 1. Do the user-config paths (`tdd-mandate.json`, `review-policy.json`, `hygiene-repos.json`, the timing log) still resolve under `~/.claude/`, unchanged? FAIL if: any of those moved, or a toolchain path still points at `~/.claude/`.
 ROLLBACK: revert the commit.
+-- status: committed `9a14a9f`. code-reviewer:round1:PASS (0/0/2 advisory; `ls -t` picks the cached version by mtime, acceptable with no version field). Its new assertion joins the TDD-pre-empted baseline (27).
 
 **6. `install.sh` is retired, `uninstall.sh` is the migration, and a doubled install is detected**
 
@@ -154,3 +155,10 @@ Cutover, by the owner after the merge to `main` (each command is outward-facing 
   - Decision noted: the marker recipe now says to use the *bare* agent name in the tag, so a namespaced `sdlc:code-reviewer:round1:PASS` never reaches a marker.
 - 2026-10-03, step 4 implementer: D1 accepted. `src/test-merge-claude-md.js` and `src/test-unmerge-claude-md.js` read the shipped snippets from `.claude/` and would break on the move, so their path line was changed (one line each), outside the declared file set. The uninstall.sh fold-in was confirmed correct: without it a no-record uninstall would silently skip every snippet. No snippet contained the "installed to `~/.claude/hooks/`" text, so the snippets are unchanged. additionalContext is 7,873 chars. The new hook's timeout is 5 (seconds).
 - 2026-10-03, step 5: its new assertion "block message carries the timing-log command at the hook's own path" joins the TDD-pre-empted baseline (now 27 names). The message was verified by hand against a scratch repo with the mandate disabled, and sdlc-hardening step 0 makes the assertion real. The analyser and timing-log fallbacks use the observed cache layout, `~/.claude/plugins/cache/*/sdlc/*/`.
+- 2026-10-03, step 6 implementer: D1 accepted. The plan's delete list would have broken `src/test-unmerge-hooks.js` and `src/test-unmerge-claude-md.js`, whose round trips call the mergers. `src/merge-hooks.js` and `src/merge-claude-md.js` move to `legacy/` as frozen fixtures, with a one-line path change in each unmerge test. Their own tests are still deleted. F1 and F4 were verified correct against the code. The legacy check matches 13 script names in four home forms, only ENOENT is silent, and additionalContext with the warning is 8,246 chars.
+- 2026-10-03, step 6 review round 1 (code-reviewer-deep): FAIL, 1 critical and 3 important, all of which the owner chose to fix:
+  1. README:187 (and :508) named the moved `.claude/hooks-config.json`.
+  2. README's Update section offered `marketplace update` and `plugin update` as alternatives; it needs both in order, then a restart.
+  3. Deleting `test-install.sh` left `uninstall.sh` untested.
+  4. `LEGACY_SCRIPTS` named three scripts the legacy wiring never had, so the warning could fire when `uninstall.sh` cannot clear it.
+  File set amended: NEW `src/test-uninstall.sh`, built on `legacy/merge-*.js`. Re-review on code-reviewer-deep, per the rounds policy after a CRITICAL.

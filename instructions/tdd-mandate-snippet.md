@@ -27,7 +27,7 @@ markup and config -- `.md`, `.rst`, `.txt`, `.csv`, `.css`, `.html`, `.json`,
 There is no exempt-directory list. `tmp/` and `.planning/` had one and lost it,
 because the rule above already covers the docs they held and its only remaining
 effect was exempting code. Everything that IS code needs a test, shell scripts
-included: `install.sh` is the most destructive code in this project.
+included: `uninstall.sh` is the most destructive code in this project.
 
 A `features/` directory is Cucumber's, and its step definitions count as tests. If
 this project's own feature records live there too, they are `.md` and therefore not

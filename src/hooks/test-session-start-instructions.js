@@ -30,9 +30,30 @@ function assert(name, actual, expected) {
     }
 }
 
+// A scratch HOME. With `settings`, its .claude/settings.json holds that text
+// (a string) or that object as JSON; `dir: true` makes settings.json a
+// directory, which no read can open.
+function scratchHome(settings, opts) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-home-'));
+    const target = path.join(home, '.claude', 'settings.json');
+    if (opts && opts.dir) {
+        fs.mkdirSync(target, { recursive: true });
+    } else if (settings !== undefined) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, typeof settings === 'string' ? settings : JSON.stringify(settings, null, 2));
+    }
+    return home;
+}
+
+// A clean HOME (no settings.json), so a legacy install on the machine running
+// the tests cannot change what the shipped-instructions checks see.
+const CLEAN_HOME = scratchHome();
+
 // Run a hook script with stdin `{}`; parse stdout as exactly one JSON object.
-function run(script) {
-    const res = spawnSync('node', [script], { input: '{}', encoding: 'utf-8' });
+function run(script, home) {
+    const h = home || CLEAN_HOME;
+    const env = { ...process.env, HOME: h, USERPROFILE: h };
+    const res = spawnSync('node', [script], { input: '{}', encoding: 'utf-8', env });
     let json = null;
     try {
         json = JSON.parse(res.stdout);
@@ -131,6 +152,148 @@ console.log('\nSentinels are stripped:');
     assert('sentinels removed', ctx.includes('sdlc-claude-skills:'), false);
     fs.rmSync(s.root, { recursive: true, force: true });
 }
+
+// A settings.json hook block wiring one command, the shape a legacy install
+// merged in.
+function wired(command) {
+    return {
+        model: 'opus',
+        hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command, timeout: 2000 }] }] },
+    };
+}
+
+const LEGACY_COMMAND = 'node "$HOME/.claude/hooks/pre-commit-review.js"';
+const WARNING_HEAD = '> sdlc plugin WARNING:';
+
+// The fix the warning must give: uninstall.sh run from a checkout.
+function namesFix(text) {
+    return text.includes('./uninstall.sh') && /checkout/.test(text);
+}
+
+console.log('\nA legacy install still wired in settings.json:');
+{
+    const home = scratchHome(wired(LEGACY_COMMAND));
+    const r = run(HOOK, home);
+    assert('exits 0', r.status, 0);
+    assert('stdout is one JSON object', r.json !== null && typeof r.json === 'object', true);
+    const ctx = context(r);
+    assert('additionalContext begins with the warning', ctx.startsWith(WARNING_HEAD), true);
+    const warning = ctx.split('\n\n---\n\n')[0];
+    assert('the warning names the double-run', /twice/.test(warning), true);
+    assert('the warning names the script it found', warning.includes('pre-commit-review.js'), true);
+    assert('the warning gives the fix (./uninstall.sh from a checkout)', namesFix(warning), true);
+    for (const [name, heading] of SECTIONS) {
+        assert(`still carries ${heading} (${name})`, ctx.includes(heading + '\n'), true);
+    }
+    console.log(`  additionalContext length with the warning: ${ctx.length} (cap ${CAP})`);
+    assert(`length with the warning under the ${CAP}-character cap`, ctx.length < CAP, true);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nLEGACY_SCRIPTS is exactly the scripts the legacy wiring names:');
+{
+    let legacy = {};
+    try {
+        legacy = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'legacy', 'hooks-config.json'), 'utf-8'));
+    } catch (e) { /* legacy stays empty; the next assertion reports it */ }
+    const commands = Object.values(legacy).flatMap(blocks => blocks.flatMap(b => b.hooks.map(h => h.command)));
+    assert('the legacy wiring names commands', commands.length > 0, true);
+    const wiredScripts = [...new Set(commands
+        .map(c => (/[\\/]\.claude[\\/]hooks[\\/]([\w.-]+\.js)/.exec(c) || [])[1])
+        .filter(Boolean))].sort();
+    assert('every legacy command names a ~/.claude/hooks script', wiredScripts.length, commands.length);
+    // The list is inline in the hook, which runs on load rather than export it,
+    // so it is read from the source text.
+    const source = fs.readFileSync(HOOK, 'utf-8');
+    const literal = (/const LEGACY_SCRIPTS = \[([^\]]*)\]/.exec(source) || [])[1] || '';
+    const listed = [...literal.matchAll(/'([^']+)'/g)].map(m => m[1]).sort();
+    assert('LEGACY_SCRIPTS equals the scripts in legacy/hooks-config.json', listed, wiredScripts);
+    for (const command of commands) {
+        const home = scratchHome(wired(command));
+        const ctx = context(run(HOOK, home));
+        assert(`warns on ${command}`, ctx.startsWith(WARNING_HEAD), true);
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+}
+
+console.log('\nA hook the legacy wiring never had is not a legacy install:');
+{
+    // uninstall.sh strips only what legacy/hooks-config.json names, so a warning
+    // here would be one its own fix cannot clear.
+    const home = scratchHome(wired('node "$HOME/.claude/hooks/stop-review-trigger.js"'));
+    const ctx = context(run(HOOK, home));
+    assert('no warning for stop-review-trigger.js', ctx.includes('WARNING'), false);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nAn expanded home path is detected too:');
+{
+    const home = scratchHome();
+    fs.mkdirSync(path.join(home, '.claude'));
+    fs.writeFileSync(path.join(home, '.claude', 'settings.json'),
+        JSON.stringify(wired(`node "${home}/.claude/hooks/enforce-co-author.js"`)));
+    const ctx = context(run(HOOK, home));
+    assert('warns on an absolute home path', ctx.startsWith(WARNING_HEAD), true);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nA clean settings.json:');
+{
+    const home = scratchHome(wired('node "/opt/tools/someone-elses-hook.js"'));
+    const ctx = context(run(HOOK, home));
+    assert('no warning', ctx.includes('WARNING'), false);
+    assert('begins with the first section', ctx.startsWith(SECTIONS[0][1]), true);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nA user script that only resembles a toolchain hook:');
+{
+    const home = scratchHome(wired('node "$HOME/.claude/hooks/my-pre-commit-review.js"'));
+    const ctx = context(run(HOOK, home));
+    assert('no warning for my-pre-commit-review.js', ctx.includes('WARNING'), false);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nThe plugin\'s own wiring is not a legacy install:');
+{
+    const home = scratchHome(wired('node "${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-commit-review.js"'));
+    const ctx = context(run(HOOK, home));
+    assert('no warning for a CLAUDE_PLUGIN_ROOT command', ctx.includes('WARNING'), false);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nNo settings.json:');
+{
+    const ctx = context(run(HOOK, CLEAN_HOME));
+    assert('no warning', ctx.includes('WARNING'), false);
+}
+
+console.log('\nAn unreadable settings.json:');
+{
+    const home = scratchHome(undefined, { dir: true });
+    const r = run(HOOK, home);
+    assert('exits 0', r.status, 0);
+    assert('stdout is one JSON object', r.json !== null && typeof r.json === 'object', true);
+    const ctx = context(r);
+    assert('additionalContext begins with a warning', ctx.startsWith(WARNING_HEAD), true);
+    assert('the warning gives the fix', namesFix(ctx.split('\n\n---\n\n')[0]), true);
+    assert('the sections still follow', ctx.includes(SECTIONS[3][1] + '\n'), true);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nAn unparseable settings.json:');
+{
+    const home = scratchHome('{ "hooks": ');
+    const r = run(HOOK, home);
+    assert('exits 0', r.status, 0);
+    assert('stdout is one JSON object', r.json !== null && typeof r.json === 'object', true);
+    const ctx = context(r);
+    assert('additionalContext begins with a warning', ctx.startsWith(WARNING_HEAD), true);
+    assert('the sections still follow', ctx.includes(SECTIONS[0][1] + '\n'), true);
+    fs.rmSync(home, { recursive: true, force: true });
+}
+
+fs.rmSync(CLEAN_HOME, { recursive: true, force: true });
 
 console.log(`\n================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);

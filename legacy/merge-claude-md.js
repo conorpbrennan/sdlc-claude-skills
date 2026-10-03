@@ -1,4 +1,6 @@
 // Merge a markdown section into a target CLAUDE.md file.
+// Frozen legacy code: the retired installer's merge, kept only so
+// src/test-unmerge-claude-md.js can build the CLAUDE.md a legacy install wrote.
 // Usage: node merge-claude-md.js <target-path> <snippet-path>
 //
 // The section is written wrapped in sentinels (see lib/claude-md-section.js), so
@@ -8,7 +10,7 @@
 //   2. our snippet's exact text, unwrapped -> adopt it, wrapping it this time
 //   3. neither                             -> append after a `---` separator
 const fs = require('fs');
-const section = require('./lib/claude-md-section');
+const section = require('../src/lib/claude-md-section');
 
 const [,, targetPath, snippetPath] = process.argv;
 if (!targetPath || !snippetPath) {
@@ -93,7 +95,7 @@ const { spans, ambiguous } = section.findBlocks(target, snippetHeading);
 
 // A begin sentinel with no end means someone truncated or hand-edited the block.
 // Guessing where it ends is how the old heading-matching version destroyed text,
-// so refuse: install.sh runs under `set -e`, and the file is left untouched.
+// so refuse: the installer ran under `set -e`, and the file is left untouched.
 if (ambiguous) {
     console.error('  ' + targetPath + ' has an opening ' + section.beginMark(snippetHeading));
     console.error('  and ' + ambiguous + '. Repair or delete that block and re-run;');

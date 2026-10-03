@@ -7,10 +7,6 @@ engineering workflow lives apart from the domain skills.
 
 ## Install
 
-> **Not available yet.** The plugin manifests arrive with
-> `docs/plans/marketplace-plugin.md`. Until that lands on `main`, use the
-> [legacy install](#legacy-install-installsh) below.
-
 The toolchain ships as a Claude Code plugin named `sdlc`. This repository is
 also the marketplace that serves it. Inside Claude Code:
 
@@ -42,11 +38,21 @@ templates.
 
 ### Update
 
+Two steps, in order: refresh the marketplace, then update the plugin from it.
+
 ```
 /plugin marketplace update sdlc-claude-skills
+/plugin update sdlc@sdlc-claude-skills
 ```
 
-or `claude plugin update sdlc@sdlc-claude-skills` from a shell.
+or from a shell:
+
+```bash
+claude plugin marketplace update sdlc-claude-skills
+claude plugin update sdlc@sdlc-claude-skills
+```
+
+Then restart Claude Code; the update takes effect only after a restart.
 
 ### Uninstall or disable
 
@@ -58,7 +64,9 @@ claude plugin uninstall sdlc@sdlc-claude-skills
 ### Migrating from `install.sh`
 
 An `install.sh` deployment and the plugin must not run together, because every
-gate would fire twice. Remove the legacy copy first, then install the plugin:
+gate would fire twice. The plugin checks for this: while `~/.claude/settings.json`
+still wires one of the legacy hook scripts, every session opens with a warning
+naming them and this fix. Remove the legacy copy first, then install the plugin:
 
 ```bash
 cd ~/dev/sdlc-claude-skills
@@ -86,19 +94,6 @@ claude --plugin-dir ~/dev/sdlc-claude-skills
 ```
 
 Check the manifests before pushing with `claude plugin validate .`.
-
-### Legacy install (`install.sh`)
-
-Until the plugin lands, the install target is `~/.claude`:
-
-```bash
-git clone <this repo> ~/dev/sdlc-claude-skills
-cd ~/dev/sdlc-claude-skills
-./install.sh --dry-run     # see what would change
-./install.sh               # deploy
-```
-
-The install-time mergers are also Node. Restart Claude Code after installing.
 
 ---
 
@@ -132,22 +127,28 @@ commit stays your command.
 
 ## What gets installed where
 
-| Source | Installed to | Purpose |
-|---|---|---|
-| `.claude/skills/*` | `~/.claude/skills/` | the three workflow skills |
-| `.claude/agents/*.md` | `~/.claude/agents/` | `code-reviewer` (Sonnet), `code-reviewer-deep` (Opus) |
-| `commands/*.md` | `~/.claude/commands/` | `/commit-prep`, `/review-timing`, `/feature`, `/feature-new` |
-| `src/hooks/*.js` (not `test-*`) | `~/.claude/hooks/` and `.claude/hooks/` | the gates |
-| `src/hooks/lib/*.js` | `~/.claude/hooks/lib/` | shared hook helpers |
-| `tools/*.py` | `~/.claude/tools/` | timing analyser, resolved by `/review-timing` |
-| `.claude/hooks-config.json` | merged into `~/.claude/settings.json` | wires the hooks to events |
-| `.claude/*-snippet.md` | merged into `~/.claude/CLAUDE.md` | the instructions Claude follows on a block, including the TDD mandate |
-| `.claude/*.json.example` | seeded to `~/.claude/*.json` **first install only** | thresholds, repo opt-ins, TDD exemptions |
+`/plugin install` copies the repository into Claude Code's plugin cache
+(`~/.claude/plugins/cache/`), and everything runs from there. Nothing is copied
+into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
+`CLAUDE.md` is edited: disabling the plugin turns all of it off.
 
-The `.json.example` files are seeded once and never overwritten: they hold per-repo
-thresholds, opt-ins and exemptions you are expected to tune. `tdd-mandate.json`
-seeds empty, because the mandate is on by default and that file only lists the
-exceptions.
+| Source | At run time | Purpose |
+|---|---|---|
+| `.claude-plugin/plugin.json`, `marketplace.json` | read by `/plugin` | the `sdlc` plugin, served by the `sdlc-claude-skills` marketplace |
+| `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer` | the three workflow skills |
+| `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
+| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new` | slash commands |
+| `hooks/hooks.json` | registered while the plugin is enabled | wires `src/hooks/*.js` to events through `${CLAUDE_PLUGIN_ROOT}` |
+| `src/hooks/*.js`, `src/hooks/lib/*.js` (not `test-*`) | run in place from the cache | the gates and their shared helpers |
+| `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired |
+| `tools/*.py` | run in place, found by `/sdlc:review-timing` | timing analyser |
+| `.claude/*.json.example` | templates only | thresholds, repo opt-ins, TDD exemptions |
+| `legacy/hooks-config.json` | read only by `uninstall.sh` | the pre-plugin wiring it strips from `settings.json` |
+
+Your config lives in `~/.claude/*.json` and the plugin only reads it. Copy a
+`.json.example` there to tune per-repo thresholds, opt-ins or exemptions; every
+file is optional. `tdd-mandate.json` starts empty, because the mandate is on by
+default and that file only lists the exceptions.
 
 ---
 
@@ -193,7 +194,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 
 ## The hooks
 
-Wired to events by `.claude/hooks-config.json`. The `PreToolUse` chain runs
+Wired to events by `hooks/hooks.json`. The `PreToolUse` chain runs
 in order, cheapest rejection first.
 
 | Hook | Event | Gate |
@@ -373,33 +374,55 @@ touch .claude/feature-tracking.disabled
 
 ## Uninstall
 
+The plugin is removed like any other:
+
+```bash
+claude plugin disable sdlc@sdlc-claude-skills     # keep it, turn it off
+claude plugin uninstall sdlc@sdlc-claude-skills   # remove it from the cache
+```
+
+That touches nothing outside the plugin cache. Your `~/.claude/*.json` config and
+the timing log stay; delete them by hand if you want them gone.
+
+### Removing a pre-plugin install (`uninstall.sh`)
+
+`uninstall.sh` is the one-time migration for a machine that ran the retired
+`install.sh`, which copied files into `~/.claude/` and merged into
+`settings.json` and `CLAUDE.md`. Run it from a checkout of this repository (or
+of the pre-plugin toolchain):
+
 ```bash
 ./uninstall.sh --dry-run        # list what would go
 ./uninstall.sh                  # remove, keeping your tuned config
-./uninstall.sh --purge-config   # also delete hygiene-repos.json and review-policy.json
+./uninstall.sh --purge-config   # also delete hygiene-repos.json, review-policy.json and tdd-mandate.json
 ```
 
-Removal is read from the install record `install.sh` writes to
+Removal is read from the install record the old `install.sh` wrote to
 `~/.claude/backups/sdlc-claude-skills/`: `installed.tsv` lists every file it
 deployed with a checksum, and uninstall deletes a file only while it still
-matches. Anything added after the install — a new agent, a file dropped into
-one of our skill directories, a hook another tool overwrote — is not in the
-record or no longer matches it, and stays. `backups.tsv` lists what install
+matches. Anything added after that install — a new agent, a file dropped into
+one of its skill directories, a hook another tool overwrote — is not in the
+record or no longer matches it, and stays. `backups.tsv` lists what the install
 moved aside to make room: an `original` (yours before this project was
-installed there) is put back once the path is free; an `edited` copy (our file
-with your changes) stays in `~/.claude/backups/`. The record also keeps the
-`hooks-config.json` and CLAUDE.md snippets that were merged, so uninstall
-strips what was installed even after the source has moved on. An install older
-than the record falls back to this source tree's file list, and says so. A
-symlink in the way (a dotfiles setup) is moved aside, never written through,
-and put back on uninstall. Upgrading such an older install logs its
-differing files as `edited`, since they are this project's own old copies.
+installed there) is put back once the path is free; an `edited` copy (its file
+with your changes) stays in `~/.claude/backups/`. The record also keeps its
+own copies of the hooks wiring and the CLAUDE.md snippets that were merged
+(the wiring as it stood at that install, of which `legacy/hooks-config.json`
+is the final form), so uninstall strips exactly what was installed even
+though this tree has moved on.
 
-`settings.json` is edited surgically —
-`src/unmerge-hooks.js` strips only the entries naming this project's hook
-scripts, and hooks you added from elsewhere survive. `CLAUDE.md` loses only
-the blocks this project wrote — byte for byte, verified by a round-trip test —
-which it can identify exactly because install wraps them in sentinels:
+Without a record — an install older than it — uninstall falls back to this
+tree's file list, the snippets in `instructions/` and the frozen pre-plugin
+wiring in `legacy/hooks-config.json`, and says so. Read the flat-skill-file note
+under [Migrating](#migrating-from-installsh) before relying on that fallback.
+
+`settings.json` is edited surgically — `src/unmerge-hooks.js` strips only the
+entries naming this project's hook scripts, and hooks you added from elsewhere
+survive. It runs before any file is deleted, so a `settings.json` that will not
+parse stops the uninstall with the hooks still wired to scripts that exist.
+`CLAUDE.md` loses only the blocks this project wrote — byte for byte, verified
+by a round-trip test — which it can identify exactly because the install
+wrapped them in sentinels:
 
 ```
 <!-- sdlc-claude-skills:begin Feature Tracking -->
@@ -411,43 +434,32 @@ which it can identify exactly because install wraps them in sentinels:
 Every lookup is a literal string search for those markers — there is no markdown
 parsing, so a heading of ours quoted in a code example, a section of yours called
 `## Feature Tracking Notes`, a sentence mentioning one of the headings, CRLF line
-endings and tabs are all simply irrelevant. A `CLAUDE.md` installed before the
-sentinels existed is found by searching for the snippet's exact text instead,
-which works because this repository wrote it; install then adopts it in place
-rather than appending a second copy. If neither search matches — you edited our
-section, or our wording changed since — nothing is deleted: install appends a
-wrapped copy and says so, and uninstall leaves the old text alone and tells you.
+endings and tabs are all simply irrelevant. A `CLAUDE.md` merged before the
+sentinels existed is found by searching for the snippet's exact text instead. If
+neither search matches — you edited the section, or its wording changed since —
+nothing is deleted: uninstall leaves the old text alone and tells you.
 
 Ambiguity is refused, never resolved by guessing. A begin marker with no end, a
 second begin marker before the matching end (which a marker quoted in prose or
 pasted from this page would produce), more than one verbatim copy of a snippet,
 a target that is not valid UTF-8, or a read that fails for any reason other than
-"not there yet" all abort with a message naming the problem, leaving the file
-untouched — and under `install.sh`'s `set -e` that stops the install.
+"not there" all abort with a message naming the problem, leaving the file
+untouched — and under `uninstall.sh`'s `set -e` that stops the run.
 
-Both sides write a timestamped `CLAUDE.md.backup.*` before overwriting, on every
-path. Nothing outside a block is rewritten: blank-line runs are adjusted only
-where a block was removed, so blank lines inside your own fenced code and any
-minority line endings come back byte for byte.
+A timestamped `CLAUDE.md.backup.*` is written before overwriting, on every path.
+Nothing outside a block is rewritten: blank-line runs are adjusted only where a
+block was removed, so blank lines inside your own fenced code and any minority
+line endings come back byte for byte.
 
 Left in place on purpose: the timing log (`~/.claude/code-review-timing.jsonl`),
 the per-repo `.git/` markers, which expire on their own, the timestamped
-`settings.json` and `CLAUDE.md` backups, and `~/.claude/backups/`.
+`settings.json` and `CLAUDE.md` backups, and whatever stays in
+`~/.claude/backups/` (edited copies, and originals whose path is in use).
 
-That last directory is where `install.sh` puts a copy of anything it is about
-to replace — a skill, agent, command, tool or hook of yours with the same name —
-unless it is exactly the file the previous install wrote. The location matters: Claude Code discovers skills by
-scanning `~/.claude/skills/`, so a backup kept there as `plan-spec.bak.<ts>/` is
-itself loaded as a skill, appearing in the skill list beside the real one with the
-same name. Nothing that is not a shipped skill may live under `skills/`, and
-`src/test-install.sh` asserts it.
-
-**If another project installs the same hooks** — `risk-claude-skills`
-currently does — a copy it wrote over ours no longer matches the record, so
-uninstall here leaves it. A byte-identical copy cannot be told apart and is
-removed; re-run that project's install script afterwards. `install.sh` prunes
-files it no longer ships from `~/.claude` the same way: only those in the
-previous record, and only while unchanged.
+**If another project installed the same hooks** — `risk-claude-skills` did — a
+copy it wrote over ours no longer matches the record, so uninstall here leaves
+it. A byte-identical copy cannot be told apart and is removed; re-run that
+project's install script afterwards.
 
 ---
 
@@ -455,7 +467,7 @@ previous record, and only while unchanged.
 
 ```bash
 for t in src/hooks/test-*.js src/test-*.js; do node "$t"; done
-for t in src/hooks/test-*.sh src/test-*.sh; do bash "$t"; done
+for t in src/hooks/test-*.sh; do bash "$t"; done
 ```
 
 `src/test-claude-md-section.js` tests `src/lib/claude-md-section.js` directly,
@@ -470,10 +482,9 @@ against `$PWD`'s repo, and in a repo with no commit it blocks before its
 cleanup runs, leaving `features/pre-commit-hook-test.md` and
 `tmp/pre-commit-hook-test-fixture.xml` in your index.
 
-`src/test-install.sh` drives `install.sh` and `uninstall.sh` against a
-throwaway `CLAUDE_HOME` and a throwaway copy of the source tree. It never
-touches the real `~/.claude`, which matters because install also populates
-`.claude/hooks/` in the source tree and uninstall deletes it.
+`src/test-unmerge-hooks.js` and `src/test-unmerge-claude-md.js` build the
+`settings.json` and `CLAUDE.md` a legacy install wrote with the frozen mergers in
+`legacy/`, then check that `uninstall.sh`'s unmergers reverse them exactly.
 
 Every suite passes except one, inherited from `risk-claude-skills` at the same count
 and not caused by the split. Run them from a clone with history, not from this repo
@@ -506,7 +517,7 @@ identify it without the heading-matching that caused six consecutive text-loss
 defects, and a false positive there costs you your own writing.
 
 **`protect-user-dir.js` ships but is not wired.** The hook and its passing
-test came across, but `hooks-config.json` declares no `Edit`/`Write` matcher
+test came across, but `hooks/hooks.json` declares no `Edit`/`Write` matcher
 for it, so the guard against editing `~/.claude` directly is not active. It
 is not wired upstream either. Add a `PreToolUse` entry if you want it.
 

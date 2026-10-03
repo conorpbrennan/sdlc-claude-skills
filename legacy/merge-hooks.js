@@ -1,4 +1,6 @@
-// Merges hooks configuration into a Claude Code settings.json file
+// Merges hooks configuration into a Claude Code settings.json file.
+// Frozen legacy code: the retired installer's merge, kept only so
+// src/test-unmerge-hooks.js can build the settings.json a legacy install wrote.
 // Usage: node merge-hooks.js <settings-path> <hooks-config-path>
 //
 // - Removes this project's existing entries (lib/hook-ownership.js), then
@@ -9,7 +11,7 @@
 // - Creates a timestamped byte-for-byte backup before writing
 // - Refuses to touch a settings.json that will not parse
 const fs = require('fs');
-const { ownedScripts, stripOwned } = require('./lib/hook-ownership');
+const { ownedScripts, stripOwned } = require('../src/lib/hook-ownership');
 
 const settingsPath = process.argv[2];
 const hooksConfigPath = process.argv[3];
