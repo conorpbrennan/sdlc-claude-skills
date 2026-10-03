@@ -48,7 +48,7 @@ Answered 2026-10-03, all with the recommended option: Q1 = keep the presentation
 
 ## 4. Order
 
-0 -> 1 -> 2 -> 3a -> 3b -> 3c -> 4b -> 4a -> 5 (4b runs first, so that `pending-review-gate.js` is unwired before 4a asserts that no wired PreToolUse hook prints on allow) -> 6 -> 7a -> 7b -> 8 -> 9 -> 10, strictly sequential. Most steps share `src/hooks/pre-commit-review.js` or a test suite, so no two overlap.
+0 -> 1 -> 1a -> 1b -> 1c -> 9 -> 2 -> 3a -> 3b -> 3c -> 4b -> 4a -> 5 (owner, 2026-10-03: step 9 moved up to run right after 1c, because the quoted-filename bypass is live today) (4b runs first, so that `pending-review-gate.js` is unwired before 4a asserts that no wired PreToolUse hook prints on allow) -> 6 -> 7a -> 7b -> 8 -> 10, strictly sequential. Most steps share `src/hooks/pre-commit-review.js` or a test suite, so no two overlap.
 
 ## Steps
 
@@ -60,6 +60,7 @@ WHAT TO BUILD: in `test-pre-commit-review.js`, run every integration case that t
 GATE: every `src/hooks/test-*` and `src/test-*` suite reports 0 failures on Linux. Every recorded baseline name now passes, and none were deleted (each name is listed with its new result).
 REVIEW: 1. Does any case now pass only because it was exempted from the gate it was meant to test? 2. Was any assertion weakened? FAIL if: a suite still fails, an assertion was removed or loosened, or a TDD-gate case was exempted.
 ROLLBACK: revert the commit.
+-- status: committed `eb4689c`. code-reviewer:round1:PASS. All 28 baseline names pass; review suite 221/0, co-author 7/0, every suite green. Isolation is the default in `runHook`, opted out with `realMandate: true` for TDD-gate cases. The hook itself was right; the co-author test's channel was wrong.
 
 **1. Only comments and whitespace are trivial, and no fast path runs before the TDD gate (W)**
 
@@ -69,6 +70,44 @@ TESTS FIRST: a table test over `isLineTrivial`. Every line in the verified-facts
 WHAT TO BUILD: replace `isLineSemantic` with `isLineTrivial(line, ext)`: true only for blank lines, lines that are wholly a line comment for the file's language (`#` only for .py/.rb/.php, since it is a preprocessor directive in C-family files), and lines that are wholly one block comment (`^\s*/\*([^*]|\*(?!/))*\*/\s*$`). A block-comment continuation (` * x`) is non-trivial, because with -U0 hunks it cannot be told from a pointer dereference. Anything else, docstrings included, is non-trivial. `classifyDiff` counts non-trivial added and removed lines. Delete `SEMANTIC_KEYWORDS`, `findAssignEq`, `isPureLiteralRHS` and `resolvePythonCmd` (the per-line Python spawn). In `main`, evaluate the TDD gate before Gate 3b, and take a fast path only when the TDD verdict is `continue`. Presentational path per Q1.
 GATE: all suites green. `node -e` over the verified-facts lines prints `false` for each `isLineTrivial`. Windows suite green.
 REVIEW: 1. Can any non-comment line still score trivial? Try string-literal lines, line continuations, and comment markers inside strings. 2. Does a comment-only change in a test file alone still fast-path when the TDD gate allows it? FAIL if: any verified-facts line is trivial, or a fast path can approve before the TDD gate.
+ROLLBACK: revert the commit.
+
+**1a. A crash in the TDD check blocks, and never opens a fast path** (inserted after step 1 per plan-spec §18.6; unreviewed by any plan round)
+
+Found by the step 1 implementer: `evaluateTddOrderGate` in `src/hooks/pre-commit-review.js` returns action `continue` when the classifier throws (a `classifier-error:` status). Since step 1, a fast path approves only when the TDD verdict is `continue`, so a crash in `src/hooks/lib/tdd-order.js` would let a `trivial-diff` or `presentational` approval through without the mandate being checked.
+
+EXTEND `src/hooks/pre-commit-review.js`, `src/hooks/test-pre-commit-review.js`.
+IMPORTS: step 1. MUST NOT TOUCH: `src/hooks/lib/tdd-order.js`.
+TESTS FIRST: with `tdd-order.js` made to throw (a stub module on the require path, or an injected classifier via the existing unit seam), a comment-only staged diff in a mandate-on repo is blocked, never approved `trivial-diff`. The block message names the TDD check's error. `evaluateTddOrderGate` on a throwing classifier returns a blocking action, not `continue`. Red today.
+WHAT TO BUILD: on any throw inside the TDD classification, `evaluateTddOrderGate` returns a block action with a reason naming the error, in the same shape as the existing unreadable-paths block. Nothing downstream treats an error as `continue`.
+GATE (commands, expected output): the suite command from section 2, run from a scratch worktree's root, shows every suite at `0 failed`. `grep -n "classifier-error" src/hooks/pre-commit-review.js` shows no path that yields `action: 'continue'`.
+REVIEW: 1. Is there any other path where an exception in a gate yields an approving verdict? FAIL if: a TDD-check crash can reach any fast path or approval.
+ROLLBACK: revert the commit.
+
+**1b. Moving code to a non-code path is reviewed** (inserted after step 1's round-1 fix per plan-spec §18.6; unreviewed by any plan round)
+
+Found and proven end to end by the step 1 fix implementer: `git mv src/guard.js docs/guard.md` is approved. `git diff --cached --name-only` detects the rename and lists only the destination, a `.md`, so the deleted code file never enters the code-file list. Moving a short file into a presentational path behaves the same way.
+
+EXTEND `src/hooks/pre-commit-review.js` (`readStagedCodeFiles` and the TDD path list's `--name-only` reads), `src/hooks/test-pre-commit-review.js`.
+IMPORTS: step 1a. MUST NOT TOUCH: step 9's `-z` change (keep this to `--no-renames`).
+TESTS FIRST: in a scratch repo with history, `git mv` of a code file to a `.md` path is not approved, and the deleted source appears in the code-file list. A rename of a code file to another code path is still classified as a deletion plus an addition (both sides reviewed). Red today.
+WHAT TO BUILD: add `--no-renames` to every `git diff --cached --name-only` read in pre-commit-review.js, so both sides of a rename are listed and a deleted code path counts as code. `readStagedDiff` also gets `--no-renames`, so the classifier sees the deletion's removed lines.
+GATE (commands, expected output): the section 2 suite command from a scratch worktree's root shows every suite at `0 failed`. `grep -n "name-only" src/hooks/pre-commit-review.js` shows `--no-renames` on every read.
+REVIEW: 1. Does any other hook (feature, hygiene) or lib read staged names with rename detection on, in a way that gates? FAIL if: a moved-away code file escapes review.
+ROLLBACK: revert the commit.
+
+**1c. Ignored submodules and mode changes cannot hide behind a trivial diff** (inserted after step 1 round 4 per plan-spec §18.6; unreviewed by any plan round)
+
+Found and reproduced end to end by step 1's round-4 reviewer:
+- `diff.ignoreSubmodules=all` (in config or `GIT_CONFIG_*`), or `submodule.<n>.ignore=all` in a staged `.gitmodules`, drops a gitlink bump from `git diff --cached` and from the name-only reads, so a bump plus a comment-only change was approved as `trivial-diff`.
+- A 100644 -> 100755 mode change that comes with a comment-only hunk is trivial (only a mode-only change was opaque).
+
+EXTEND `src/hooks/pre-commit-review.js` (`readStagedDiff`, `readStagedCodeFiles`, the TDD path list read), `src/hooks/lib/git-read.js` (`stagedDiffHash`, `HASH_PIPELINE`), `src/hooks/lib/diff-classifier.js` (`OPAQUE_HEADER_RES`), `src/hooks/test-pre-commit-review.js`, `src/hooks/test-fast-path-languages.js`, `src/hooks/test-review-markers.js`.
+IMPORTS: step 1b. MUST NOT TOUCH: step 9's `-z` change.
+TESTS FIRST: end to end (real hook, real mandate, impl plus test staged, with a gitlink bump at a source-extension path): under `diff.ignoreSubmodules=all` the commit is not approved and no PASS marker is written; the same with a staged `.gitmodules` `ignore = all`. `chmod +x` on a `.py` file with a comment-only hunk is not approved. The marker hash changes when only a gitlink bump changes under `diff.ignoreSubmodules=all`. Red today.
+WHAT TO BUILD: add `--ignore-submodules=none` to `readStagedDiff`, to every `--name-only` read in pre-commit-review.js, and to the staged-diff hash read and its shell pipeline (the recipe the block message prints must compute the same hash). Any `old mode`/`new mode` header makes its section opaque.
+GATE (commands, expected output): the section 2 suite command from a scratch worktree's root shows every suite at `0 failed`. The marker recipe printed in a block message, run in Git Bash on Linux, gives the same hash as `stagedDiffHash()` (assert this in a test).
+REVIEW: 1. Does the hash pipeline in the block message still match `stagedDiffHash()` byte for byte? 2. Any other read that honours `ignoreSubmodules`? FAIL if: an ignored gitlink bump or a mode change escapes review, or the recipe and the hook disagree on the hash.
 ROLLBACK: revert the commit.
 
 **2. Every commit-producing git command is gated or refused**
@@ -163,6 +202,7 @@ WHAT TO BUILD:
 - The snippet states that writing the marker is the act of attestation.
 - The TDD snippet lists `specs/` and `[-_]spec.rb`, and that the order check now covers sub-agents (step 3c).
 - plan-spec section 20.2 gains the review-commit permission note.
+- README's classifier paragraph (it still describes Python/JS keywords, assignments and calls scoring "semantic lines") describes the step 1 rule: only blank lines and whole-line comments are trivial, plus the documented residual (comment-shaped lines inside multi-line strings). Add `README.md` to this step's file set.
 - The manual-run fallbacks in `skills/code-review-pre-commit/SKILL.md` and `commands/review-timing.md` find the plugin through `installPath` in `~/.claude/plugins/installed_plugins.json`, not `ls -t` over the cache (after `plugin update` the old cache dir has the newer mtime; observed 2026-10-03). Add `commands/review-timing.md` to this step's file set.
 GATE: all suites green. `node src/test-plugin-layout.js` passes.
 REVIEW: 1. Does every instruction a model acts on match the hook's behaviour after steps 1-6? FAIL if: an instruction contradicts the code.
@@ -173,7 +213,7 @@ ROLLBACK: revert the commit.
 EXTEND `src/hooks/lib/source-files.js`, `src/hooks/test-source-files.js`.
 IMPORTS: step 7a.
 TESTS FIRST: the paths .claude/skills/x/tool.py and .claude/foo.js are code; .claude/hooks/pre-commit-review.js is not. Red today.
-WHAT TO BUILD: narrow the exclusion from `/^\.claude\//` to `/^\.claude\/hooks\//`.
+WHAT TO BUILD: narrow the exclusion from `/^\.claude\//` to `/^\.claude\/hooks\//`. Also update the comment above `CLASSIFIER_LANGUAGES`, which still describes `isLineSemantic` (step 1 replaced it with `isLineTrivial`).
 GATE: all suites green.
 REVIEW: 1. Does this repo's own `.claude/` still hold anything the gates now newly require tests for? List it. FAIL if: a `.claude/` code file is excluded.
 ROLLBACK: revert the commit.
@@ -193,7 +233,7 @@ ROLLBACK: revert the commit.
 EXTEND `src/hooks/pre-commit-review.js` (`readStagedCodeFiles`, `readStagedDiff`, the TDD path list), `src/hooks/pre-commit-hygiene.js` and `src/hooks/pre-commit-feature.js` (their `--name-only` reads), `src/hooks/test-pre-commit-review.js`.
 IMPORTS: step 8.
 TESTS FIRST: a staged `é.py` with semantic content is not approved as `staged-no-code`. A staged file literally named `:(exclude)evil.py` next to a semantic `evil.py` is not approved. Red today.
-WHAT TO BUILD: every `--name-only` read uses `-z` and splits on NUL. `readStagedDiff` runs `git --literal-pathspecs diff ...`.
+WHAT TO BUILD: every `--name-only` read uses `-z` and splits on NUL. `readStagedDiff` runs `git --literal-pathspecs diff ...`. The marker-hash read in `src/hooks/lib/git-read.js` (`stagedDiffHash` and `HASH_PIPELINE`) adds `--no-ext-diff --no-textconv --text`, so a configured driver cannot keep the hash stable while the content changes. Keep its `:(top,exclude)` magic; `--literal-pathspecs` would break it. Add `src/hooks/lib/git-read.js` and `src/hooks/test-review-markers.js` (or wherever the hash pipeline is pinned) to this step's file set.
 GATE: all suites green on Linux and Windows.
 REVIEW: 1. Is any other path list read without `-z`? FAIL if: either crafted name escapes review.
 ROLLBACK: revert the commit.
@@ -240,3 +280,31 @@ Steps 0-10 committed and reviewed. Every suite green on Linux and on the Windows
   - F8 (10): stated honestly that the opt-out is tracked but not reviewed.
   - Added by the orchestrator: step 7a's `installPath` fallback fix (from the post-cutover finding).
   - The cap (2 rounds) is reached, so the loop stops. These fold-ins are unreviewed text (plan-spec §2b), and implementers and step reviewers are told so.
+- 2026-10-03, step 1 implementer DISAGREEMENTS, all accepted (each closes a hole the fold-in text left open, and all fail closed):
+  - D1: nested block comments (Rust, Swift, Kotlin, Scala). A block-comment body containing `/*` is non-trivial.
+  - D2: comment-shaped lines that change behaviour are non-trivial: C `// x \`, Java `\u000a`, trigraphs, PHP `#[...]` and `?>`, shebangs and encoding lines, Go `//go:` / `//line` / `//export` / `// +build` and `// #` (.go), TS `/// <reference`, SQL `/*!` and `/*+`, and line comments containing `/*` or `*/`.
+  - D3: `readStagedDiff` reads -U1, and a line after a `\`-continued line is non-trivial (a `#define` continuation is invisible at -U0). This is a design change inside the file set.
+  - D4: stale descriptions in README and source-files.js are carried to steps 7a and 7b.
+  - D5: a documented residual that the hunk-level design cannot close: comment-shaped lines inside multi-line strings and raw strings, PHP's HTML mode and cgo preambles. Closing it needs a whole-file parse, which is not in this plan.
+  - The implementer also found a fail-open: `evaluateTddOrderGate` returns `continue` on a classifier throw. Inserted as step 1a.
+- 2026-10-03, step 1 review round 1 (deep reviewer, run as Opus from `agents/code-reviewer-deep.md`): FAIL, 2 critical and 2 important, each proven end to end (the hook approved staged code running `execSync("id")`). The owner approved fixing all four plus the advisory:
+  - C1: a lone CR, U+2028, U+2029 or U+0085 after a line comment hides code (JS/TS, Python, Java, C, PHP, Kotlin, C#). Any line containing one is non-trivial.
+  - C2: binary-looking diffs (a NUL byte, or a `-diff` attribute, including from an untracked `.gitattributes`) emit no `+`/`-` lines, and textconv or external drivers can rewrite the read. Read with `--text --no-ext-diff --no-textconv`; a `Binary files` line or a hunk-less file section is non-trivial.
+  - I3: mode-only changes are closed by the hunk-less rule.
+  - I4: a test pins the presentational path's zero-removed-lines rule.
+  - A1: trim only space and tab.
+  Re-review on the deep reviewer, per the rounds policy after a CRITICAL.
+- 2026-10-03, step 1 round-1 fix implementer: all five items fixed, with tests first and mutation checks (review suite 304/0, fast-path suite 41/0). Decisions accepted: exactly one trailing CR is stripped (a CRLF ending hides nothing); a hunk-less or binary section counts one non-trivial line on both sides, so it cannot slip under a presentational threshold; `GIT binary patch` is opaque. New findings: the rename bypass (proven) is inserted as step 1b; the hash read honouring diff drivers (unproven) is folded into step 9.
+- 2026-10-03, step 1 review round 2 (deep reviewer): FAIL, the second on this step. All five round-1 items were closed end to end, but there were 2 new critical escapes (`color.ui=always` makes every commit trivial; a symlink target `//tmp/evil.js` reads as a comment) and 3 important (whole-file add/delete of comment-only files; `GIT_DIFF_OPTS=--unified=0` overrides `-U1`; block-comment state across lines). The owner's git config has no colour setting, so the hole was not live for them. Per the rounds policy the orchestrator stopped and asked.
+- OWNER DECISION, 2026-10-03, supersedes Q1: remove the classifier fast paths (`trivial-diff` and `presentational`) entirely. Every staged code change gets a review. Rationale: three rounds each found a new class of escape in hunk-level triage, and the fast path saved one Sonnet review on comment-only commits. Kept from step 1: the TDD gate before every approval path, the hardened diff-read flags, and the tests that pin "no approval without review". The coverage `thresholds-met` approval is not a classifier fast path and stays; step 1a still applies to it. Step 1's file set extends to whatever the removal touches (README's fast-path text, the review-policy example's `presentational_paths` / `trivial_line_threshold` keys, `src/hooks/lib/source-files.js`'s `classifierUnderstands` if it becomes unused), and the implementer reports each.
+- OWNER DECISION REVISED, 2026-10-03: "keep fast path". The removal above is withdrawn before anything was changed (the rework agent was stopped with no edits made), and Q1 stands. The owner chose to fix all five round-2 findings and authorised a third deep review round past the two-FAIL stop:
+  - `--no-color`, plus fail closed on `\x1b` or on a non-empty read with no `diff --git`
+  - symlink/gitlink (mode 120000/160000) sections opaque
+  - `new file mode` / `deleted file mode` sections opaque
+  - `GIT_DIFF_OPTS` and `GIT_EXTERNAL_DIFF` stripped from the read's env
+  - removed whole-line block comments counted as non-trivial
+- 2026-10-03, step 1 review round 3 (deep reviewer): FAIL with 1 critical. All five round-2 items held end to end, and the fast path is still reachable for a genuinely trivial change. The critical: `diff.submodule=log` or `diff` prints a gitlink bump as `Submodule ...` lines with no header, which the classifier skipped, so the bump was approved as trivial. The owner approved both fixes and a fourth round: `--submodule=short` on the read; and a structural fail-closed, where any hunk line not starting with space, `+`, `-` or `\` (or empty), and any non-empty line outside a section, makes the diff opaque. Follow-up noted: a gitlink whose path has no source extension never reaches review at all. This predates the plan and belongs to source-files.js scope; candidate for step 7b or a later plan.
+- 2026-10-03, step 1 round-3 fix: `--submodule=short`, plus a structural fail-closed. Unknown pre-section lines, unknown header-window lines, unknown hunk-line tags, and hunks whose line count disagrees with their `@@` header each count once on both sides. DISAGREEMENT accepted: a prefix rule alone cannot catch `  > msg` (it starts with a space), so hunk-length tracking was added, which is stricter. Verified: the classifier's output is identical on 1,221 real commit diffs from four repos (no false positives), and the fast path still approves a genuine comment-only change.
+- 2026-10-03, step 1 review round 4 (deep reviewer): FAIL with 1 critical and 1 important. The round-3 item was closed end to end; the structural parser survived every malformation tried; the fast path is reachable. Critical: `diff.ignoreSubmodules=all`, or `.gitmodules` `ignore=all`, drops a gitlink bump from every read. Important: a mode change that comes with a comment-only hunk is trivial. Out of scope but live: `core.quotePath` quoting makes `src/café.py` read as a non-code `.py"` path, approved with no review and no TDD check (step 9's `-z`).
+- OWNER DECISION, 2026-10-03, after the fourth FAIL: accept step 1 with the two round-4 gaps named in its commit message (both exist at HEAD; step 1 closes many more). Insert step 1c for them, and move step 9 to run right after 1c because the quoted-filename bypass is live. The session's hooks are not live (pre-restart), so no marker gates this commit; the owner's choice is the acceptance.
+-- step 1 status: committed (see the next commit's tracker line), accepted with gaps after deep rounds 1-4 FAIL, all of whose items except round 4's are fixed and verified end to end.
