@@ -88,6 +88,24 @@ function writeGitShim(failArg = 'diff', fromCall = 1) {
     return GIT_SHIM_DIR + path.delimiter + process.env.PATH;
 }
 function cleanGitShim() { try { fs.rmSync(GIT_SHIM_DIR, { recursive: true, force: true }); } catch (e) {} }
+// A git shim on PATH that makes any invocation whose argv contains `emptyArg`
+// print nothing and exit 0, and passes everything else to the real git.
+// Simulates a read that "succeeds" with an empty diff. Shares GIT_SHIM_DIR, so
+// cleanGitShim removes it.
+function writeGitEmptyShim(emptyArg = '-U0') {
+    const realGit = execSync('command -v git', { encoding: 'utf-8', shell: '/bin/bash' }).trim();
+    fs.mkdirSync(GIT_SHIM_DIR, { recursive: true });
+    const shim = path.resolve(GIT_SHIM_DIR, 'git');
+    fs.writeFileSync(shim, [
+        '#!/bin/bash',
+        'for a in "$@"; do',
+        '  if [ "$a" = ' + JSON.stringify(emptyArg) + ' ]; then exit 0; fi',
+        'done',
+        'exec ' + JSON.stringify(realGit) + ' "$@"',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    return GIT_SHIM_DIR + path.delimiter + process.env.PATH;
+}
 
 // A directory that is guaranteed not to be inside this repository.
 const NON_REPO_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-nonrepo-'));
@@ -705,6 +723,56 @@ try {
     assertContains('block message says the diff could not be read',
         r.systemMessage || '', 'could not be read');
     assertFalse('null read writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+
+    // =====================================================================
+    // Subdirectory commits. `--name-only` prints root-relative paths, so a
+    // diff read that resolves them against a subdirectory cwd matches nothing
+    // and git returns '' with exit 0. Incident: 33 staged code files read as a
+    // 0-byte diff and were approved via trivial-diff.
+    // =====================================================================
+    console.log('\n[UNIT] readStagedDiff fails closed on an empty read over staged code files:');
+    cleanAll();
+    stageDummyContent('def foo():\n    return 1\n');
+    const emptyRead = mod.readStagedDiff([dummyRel], { cwd: path.join(REPO_ROOT, 'src') });
+    assert('empty read over staged code files yields null text', emptyRead.text, null);
+    assertContains('empty read error names the empty diff', emptyRead.error || '', 'empty diff');
+
+    console.log('\n[INT] Gate 3b from a subdirectory does not fast-path a semantic change:');
+    cleanAll();
+    stageDummyContent('def foo():\n    return 1\n');
+    const subLogBefore = fastPassLogLines();
+    r = runHook('git commit -m x', {}, { cwd: path.join(REPO_ROOT, 'src') });
+    assertTrue('subdir semantic change is not approved', r.decision !== 'approve');
+    assertFalse('subdir semantic change writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+    assert('subdir semantic change adds no fast-pass log line', fastPassLogLines(), subLogBefore);
+
+    console.log('\n[INT] Gate 3b from a subdirectory still fast-paths a trivial diff:');
+    cleanAll();
+    stageDummyContent('# comment only\n');
+    r = runHook('git commit -m x', {}, { cwd: path.join(REPO_ROOT, 'src') });
+    assert('subdir comment-only change is approved', r.decision, 'approve');
+    assertContains('subdir comment-only marker tagged trivial-diff', readMarker() || '', 'trivial-diff');
+
+    if (process.platform !== 'win32') {
+        console.log('\n[INT] Gate 3b empty diff read fails closed from the root:');
+        cleanAll();
+        stageDummyContent('def foo():\n    return 1\n');
+        const TDD_CFG3 = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-mandate3.json');
+        fs.writeFileSync(TDD_CFG3, JSON.stringify({ exempt_repos: [REPO_ROOT] }), 'utf-8');
+        try {
+            r = runHook('git commit -m x',
+                { PATH: writeGitEmptyShim('-U0'), TDD_MANDATE_CONFIG: TDD_CFG3 });
+            assertTrue('empty diff read is not approved', r.decision !== 'approve');
+            assertFalse('empty diff read writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+            assertContains('empty diff read message says the diff could not be read',
+                r.systemMessage || '', 'could not be read');
+        } finally {
+            try { fs.unlinkSync(TDD_CFG3); } catch (e) {}
+            cleanGitShim();
+        }
+    }
+    unstageDummy();
+    cleanAll();
 
     // =====================================================================
     // Unreadable index: a failed `git diff --cached --name-only` must not
