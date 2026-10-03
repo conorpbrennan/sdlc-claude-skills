@@ -1,6 +1,6 @@
 ---
 name: code-review-pre-commit
-description: Runs the pre-commit review a PRE_COMMIT_REVIEW hook block asks for - one code-reviewer (or, with --deep, code-reviewer-deep) sub-agent on the staged diff, ending in the TDD_GATE trailer, then writes the marker with the printf command from the block message - or, on a gap-patching block, patches the uncovered lines. Not for ad-hoc PR or branch review; use the built-in code-review for that.
+description: Runs the pre-commit review a PRE_COMMIT_REVIEW hook block asks for - one sdlc:code-reviewer (or, with --deep, sdlc:code-reviewer-deep) sub-agent on the staged diff, ending in the TDD_GATE trailer, then writes the marker with the printf command from the block message - or, on a gap-patching block, patches the uncovered lines. Not for ad-hoc PR or branch review; use the built-in code-review for that.
 user_invocable: true
 arg_spec: "[files|staged] [--fresh] [--deep]"
 ---
@@ -10,7 +10,7 @@ arg_spec: "[files|staged] [--fresh] [--deep]"
 A single-sub-agent review of **the staged diff**, run when the pre-commit
 hook blocks. The review exists to produce code that is correct, tested,
 readable and optimized, in that order; the criteria, method, constraints
-and report format that serve that goal live in `.claude/agents/code-reviewer.md`
+and report format that serve that goal live in `agents/code-reviewer.md`
 and are not restated here. This skill owns four things: which mode runs,
 what the reviewer is handed, how many rounds, and what happens to the
 report.
@@ -29,16 +29,16 @@ name is historical.
 ## Usage
 
 ```
-/code-review-pre-commit --fresh            # what the hook asks for: one sub-agent on the staged diff
-/code-review-pre-commit --fresh --deep     # adversarial reviewer on Opus (code-reviewer-deep)
-/code-review-pre-commit staged             # scope: staged changes (the default and only automatic scope)
-/code-review-pre-commit src/file.py        # scope: one file's staged portion
+/sdlc:code-review-pre-commit --fresh            # what the hook asks for: one sub-agent on the staged diff
+/sdlc:code-review-pre-commit --fresh --deep     # adversarial reviewer on Opus (sdlc:code-reviewer-deep)
+/sdlc:code-review-pre-commit staged             # scope: staged changes (the default and only automatic scope)
+/sdlc:code-review-pre-commit src/file.py        # scope: one file's staged portion
 ```
 
-`--deep` selects `code-reviewer-deep` (Opus). Use it for security-sensitive
+`--deep` selects `sdlc:code-reviewer-deep` (Opus). Use it for security-sensitive
 or parser-shaped changes (input validation, auth, secrets, shell or git
 command handling, gates that must fail closed), and when the rounds policy
-below calls for it. Everything else stays on `code-reviewer` (Sonnet): it
+below calls for it. Everything else stays on `sdlc:code-reviewer` (Sonnet): it
 is the everyday gate.
 
 <review-protocol>
@@ -46,8 +46,9 @@ is the everyday gate.
 <mode-selection>
 - Hook block whose message names **gap-patching** → `<gap-patching-mode>`
   below. One sub-agent only.
-- Otherwise → dispatch exactly ONE sub-agent: `subagent_type:
-  "code-reviewer"`, or `"code-reviewer-deep"` when `--deep` is given or
+- Otherwise → dispatch exactly ONE sub-agent:
+  `subagent_type: "sdlc:code-reviewer"`, or
+  `subagent_type: "sdlc:code-reviewer-deep"` when `--deep` is given or
   the rounds policy selects it. Do not dispatch a Plan agent. Pass the
   sub-agent the repository path, the diff target (the staged diff unless
   files were named), the commit's stated intent in one paragraph, and,
@@ -64,37 +65,45 @@ hunk and nothing more, per its own definition.
 The block message states this policy; it is repeated here so a manual run
 follows it too.
 
-- Round 1 runs `code-reviewer`.
+- Round 1 runs `sdlc:code-reviewer`.
 - A FAIL with a CRITICAL finding, or a correctness finding in a parser,
-  gate or shell hunk, reruns on `code-reviewer-deep` after the fix.
+  gate or shell hunk, reruns on `sdlc:code-reviewer-deep` after the fix.
 - A FAIL on §6 alone (scope, commented-out code, debug artefact, secret,
-  reformat churn) reruns on `code-reviewer` after the fix.
+  reformat churn) reruns on `sdlc:code-reviewer` after the fix.
 - After two FAILs, stop. Do not dispatch a third review. Show the open
   items and ask the user to choose: fix and rerun, or accept with the gap
   named in the commit message. On accept, the user writes the marker.
 
-The marker's fourth line records the agent and round
-(`code-reviewer-deep:round2:PASS`), so the next block message and the
-timing log can say where a change stands.
+The marker's fourth line records the bare agent name, without the `sdlc:`
+prefix, and the round (`code-reviewer-deep:round2:PASS`), so the next
+block message and the timing log can say where a change stands.
 </rounds>
 
 <post-review>
 - `TDD_GATE: PASS` → run the `printf` command from the block message
-  verbatim, replacing `code-reviewer:round1` with the agent and round
-  used. It recomputes both hashes at write time and writes the absolute
-  marker path; do not compose a marker command by hand. Then stop. Do
+  verbatim, replacing `code-reviewer:round1` with the bare agent name
+  (`code-reviewer` or `code-reviewer-deep`) and the round used. It
+  recomputes both hashes at write time and writes the absolute marker
+  path; do not compose a marker command by hand. Then stop. Do
   **not** commit: staging and committing are the user's separate
   commands, and a completed review does not grant permission for either.
 - `TDD_GATE: FAIL` → do not write the marker. Surface the failing items.
-  With the user's permission, fix them (`/code-review-implementer
+  With the user's permission, fix them (`/sdlc:code-review-implementer
   critical important` applies the numbered items), then rerun per the
   rounds policy.
 - Either way, record the round so the timing log can join it to the
-  hook's own events (the hooks never see the report):
+  hook's own events (the hooks never see the report). Run the timing
+  command exactly as the block message gives it, filling in the
+  placeholders. The hook builds it from its own location, so its path to
+  `timing-log.js` is right wherever the plugin is installed:
 
   ```bash
-  node "$HOME/.claude/hooks/timing-log.js" review.completed agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"
+  node "<path from the block message>/timing-log.js" review.completed agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"
   ```
+
+  A manual run with no block message: use `./src/hooks/timing-log.js`
+  inside the `sdlc-claude-skills` source repo, else the newest
+  `~/.claude/plugins/cache/*/sdlc/*/src/hooks/timing-log.js`.
 
 - The review is done when the trailer is the last line of the report,
   the event is recorded and, on PASS, the four-line marker is written.

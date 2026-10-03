@@ -1,8 +1,7 @@
 #!/bin/bash
-# Uninstall script for sdlc-claude-skills
-# Removes from ~/.claude everything install.sh deploys, and nothing else.
-#
-# Usage: ./uninstall.sh [--dry-run] [--purge-config] [--yes]
+# Migration for sdlc-claude-skills: removes a pre-plugin install (the retired
+# install.sh deployed into ~/.claude), and nothing else. Run once, then install
+# the plugin. Usage: ./uninstall.sh [--dry-run] [--purge-config] [--yes]
 #
 #   --dry-run        list what would be removed, write nothing
 #   --purge-config   also delete hygiene-repos.json, review-policy.json and
@@ -10,14 +9,15 @@
 #                    (your tuned thresholds and repo opt-ins -- kept by default)
 #   --yes            skip the confirmation prompt
 #
-# What is removed is read from the install record install.sh writes to
+# What is removed is read from the install record install.sh wrote to
 # ~/.claude/backups/sdlc-claude-skills/: each file it deployed, and only while
 # that file is still exactly what was deployed. Anything added or changed since
 # -- by you or by another tool -- is left alone, and files of yours that install
-# moved aside are put back. (An install older than the record falls back to the
-# file list in this source tree.) Two things are deliberately left behind:
+# moved aside are put back. (An install older than the record falls back to
+# this tree's file list and legacy/hooks-config.json.) Left behind on purpose:
 # the marker files in each repo's .git/ (they expire on their own), and the
-# timing log at ~/.claude/code-review-timing.jsonl (it is your data).
+# timing log at ~/.claude/code-review-timing.jsonl (it is your data). The
+# plugin itself is removed with `claude plugin uninstall`, not by this script.
 
 set -euo pipefail
 shopt -s nullglob
@@ -97,31 +97,31 @@ if [ -f "$INSTALLED" ]; then
     SNIPPETS=("$RECORD_DIR/snippets"/*.md)
     # A record from an interrupted install may lack these; the source tree's
     # copies are the next best description of what was merged.
-    [ -f "$HOOKS_CONFIG" ] || HOOKS_CONFIG="$SCRIPT_DIR/.claude/hooks-config.json"
+    [ -f "$HOOKS_CONFIG" ] || HOOKS_CONFIG="$SCRIPT_DIR/legacy/hooks-config.json"
     if [ "${#SNIPPETS[@]}" -eq 0 ]; then
-        SNIPPETS=("$SCRIPT_DIR/.claude/claude-md-snippet.md"
-                  "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md"
-                  "$SCRIPT_DIR/.claude/hygiene-snippet.md"
-                  "$SCRIPT_DIR/.claude/feature-workflow-snippet.md")
+        SNIPPETS=("$SCRIPT_DIR/instructions/claude-md-snippet.md"
+                  "$SCRIPT_DIR/instructions/tdd-mandate-snippet.md"
+                  "$SCRIPT_DIR/instructions/hygiene-snippet.md"
+                  "$SCRIPT_DIR/instructions/feature-workflow-snippet.md")
     fi
 else
     echo "No install record at $INSTALLED -- removing the files this source tree ships."
     echo ""
     FILE_LIST="$(
         cd "$SCRIPT_DIR"
-        { find .claude/skills -type f | sed 's|^\.claude/||'
-          for f in .claude/agents/*.md; do echo "agents/${f##*/}"; done
+        { find skills -type f
+          for f in agents/*.md; do echo "agents/${f##*/}"; done
           for f in commands/*.md; do echo "commands/${f##*/}"; done
           for f in tools/*.py; do echo "tools/${f##*/}"; done
           for f in src/hooks/*.js; do [[ "${f##*/}" == test-* ]] || echo "hooks/${f##*/}"; done
           for f in src/hooks/lib/*.js; do echo "hooks/lib/${f##*/}"; done
         } | sed 's/$/\t/'
     )"
-    HOOKS_CONFIG="$SCRIPT_DIR/.claude/hooks-config.json"
-    SNIPPETS=("$SCRIPT_DIR/.claude/claude-md-snippet.md"
-              "$SCRIPT_DIR/.claude/tdd-mandate-snippet.md"
-              "$SCRIPT_DIR/.claude/hygiene-snippet.md"
-              "$SCRIPT_DIR/.claude/feature-workflow-snippet.md")
+    HOOKS_CONFIG="$SCRIPT_DIR/legacy/hooks-config.json"
+    SNIPPETS=("$SCRIPT_DIR/instructions/claude-md-snippet.md"
+              "$SCRIPT_DIR/instructions/tdd-mandate-snippet.md"
+              "$SCRIPT_DIR/instructions/hygiene-snippet.md"
+              "$SCRIPT_DIR/instructions/feature-workflow-snippet.md")
 fi
 
 # ----------------------------------------------------------- settings.json -

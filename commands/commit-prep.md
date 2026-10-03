@@ -20,7 +20,7 @@ Parse `$ARGUMENTS` for `--skip-tests` (run lint/format only, skip pytest/coverag
 4. Run each stage in a single `bash -c` invocation so environment (conda, PYTHONPATH) is preserved across stages. Stop on the first failing stage.
 5. Report per-stage PASS/FAIL. On failure, print the last ~30 lines of combined output and stop — do not attempt to auto-fix beyond what the tools do themselves (ruff's `--fix` is enough).
 
-The configured hygiene `checks` may reference `$STAGED_PY` / `$STAGED_PY_PKGS`, which the hygiene hook exports from the staged diff. For `/commit-prep` (which runs before staging), export them from the working tree instead:
+The configured hygiene `checks` may reference `$STAGED_PY` / `$STAGED_PY_PKGS`, which the hygiene hook exports from the staged diff. For `/sdlc:commit-prep` (which runs before staging), export them from the working tree instead:
 
 ```bash
 STAGED_PY=$(git diff --name-only --diff-filter=ACMR HEAD | grep '\.py$' | sed "s|^|$(pwd)/|" | tr '\n' ' ')

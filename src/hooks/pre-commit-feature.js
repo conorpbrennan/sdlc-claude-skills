@@ -36,6 +36,7 @@ const timingLog = require('./timing-log');
 const ff = require('./lib/feature-file');
 const commitCommand = require('./lib/commit-command');
 const gitRead = require('./lib/git-read');
+const { cmd } = require('./lib/plugin-names');
 
 const hookTimer = timingLog.timer();
 const hookMeta = { hook: 'pre-commit-feature' };
@@ -128,7 +129,7 @@ if (gitDir && fs.existsSync(path.resolve(repo, gitDir, 'MERGE_HEAD'))) {
     approve('skip-merge');
 }
 
-const stagedRaw = runGit(['diff', '--cached', '--name-only', '--diff-filter=ACMR'], repo);
+const stagedRaw = runGit(['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR'], repo);
 if (stagedRaw === null) {
     // Fail closed: an index we cannot read might hold a source commit on a
     // protected branch. "No diff to reason about" is not a reason to approve.
@@ -138,7 +139,8 @@ if (stagedRaw === null) {
         'branch and feature-file rules cannot be checked. Retry; if it persists, ' +
         'check the repository state (index.lock, GIT_DIR, cwd).');
 }
-const staged = stagedRaw.split('\n').map(s => s.trim()).filter(Boolean);
+// -z: NUL-terminated paths are never C-quoted under core.quotePath.
+const staged = gitRead.splitNul(stagedRaw);
 if (staged.length === 0) {
     // Genuinely nothing staged. Let git itself decide.
     approve('skip-nothing-staged');
@@ -182,7 +184,7 @@ if (ff.isGatedBranch(branch)) {
         + 'Create one — your staged changes carry over untouched:\n'
         + '  git checkout -b <slug>\n\n'
         + 'Then ask the user for a one-sentence requirement and run '
-        + '`/feature-new <slug> "<their answer>"` before retrying the commit.\n\n'
+        + '`' + cmd('feature-new') + ' <slug> "<their answer>"` before retrying the commit.\n\n'
         + 'If this repo should not be tracked: touch .claude/feature-tracking.disabled',
     );
 }
@@ -215,7 +217,7 @@ if (!fs.existsSync(featurePath)) {
         + (created ? ' — a stub was just created at `' + relPath + '`.' : '.')
         + '\n\nAsk the user: "What\'s the one-sentence requirement for `'
         + branch + '`?" Then run:\n'
-        + '  /feature-new ' + branch + ' "<their answer>"\n\n'
+        + '  ' + cmd('feature-new') + ' ' + branch + ' "<their answer>"\n\n'
         + 'Retry the commit once the requirement is captured.',
         { created_stub: created },
     );
@@ -236,7 +238,7 @@ if (ff.hasTbdRequirement(content)) {
         + 'this commit would record nothing useful.\n\n'
         + 'Ask the user: "What\'s the one-sentence requirement for `'
         + branch + '`?" Then run:\n'
-        + '  /feature-new ' + branch + ' "<their answer>"\n\n'
+        + '  ' + cmd('feature-new') + ' ' + branch + ' "<their answer>"\n\n'
         + 'Retry the commit once the requirement is captured.',
     );
 }

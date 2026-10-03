@@ -5,10 +5,22 @@ HOOK="$(cd "$(dirname "$0")" && pwd)/enforce-co-author.js"
 PASS=0
 FAIL=0
 
+# `input` is the tool_input object as JSON. The hook reads the PreToolUse
+# payload from stdin and takes `tool_input.command`, so the harness wraps it
+# as Claude Code does and pipes it in. A payload that is not valid JSON fails
+# the case outright: the hook would read it as no command and approve, which
+# passes every "approves" case for the wrong reason.
 run_test() {
     local desc="$1" input="$2" expected="$3"
-    local output
-    output=$(CLAUDE_TOOL_INPUT="$input" node "$HOOK" 2>&1) || true
+    local payload output
+    payload="{\"tool_input\":$input}"
+    if ! printf '%s' "$payload" | node -e 'JSON.parse(require("fs").readFileSync(0, "utf-8"))' 2>/dev/null; then
+        echo "FAIL: $desc"
+        echo "  Payload is not valid JSON: $payload"
+        FAIL=$((FAIL + 1))
+        return
+    fi
+    output=$(printf '%s' "$payload" | node "$HOOK" 2>&1) || true
 
     if echo "$output" | grep -q "\"decision\":\"$expected\"" || \
        echo "$output" | grep -q "\"decision\": \"$expected\""; then
@@ -50,7 +62,7 @@ run_test "amend commit approves" \
 
 # Should approve: heredoc commit with trailer
 run_test "heredoc commit with trailer approves" \
-    "git commit -m \"\$(cat <<'EOF'\nFix bug\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\"" \
+    '{"command":"git commit -m \"$(cat <<'"'"'EOF'"'"'\nFix bug\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n)\""}' \
     "approve"
 
 # Should approve: not using -m flag (e.g. merge commit)

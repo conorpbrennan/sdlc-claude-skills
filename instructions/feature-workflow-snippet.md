@@ -15,14 +15,14 @@ advisory. Never work around it by disabling tracking without asking.
 - Committing source on a feature branch is BLOCKED until
   `features/<branch>.md` exists with a real requirement. On a block, ask the
   user for a one-sentence requirement, run
-  `/feature-new <branch> "<their answer>"`, then retry.
+  `/sdlc:feature-new <branch> "<their answer>"`, then retry.
 - On a passing commit the hook merges the touched file list into the feature
   file and stages it, so the record ships **in the same commit** as the code.
 - On a new feature branch with no stub, the `session-start-feature` hook
   creates `features/<branch>.md` and instructs Claude to ask you for a
   one-sentence requirement *before* starting any build work.
-- Seed or update a feature explicitly: `/feature-new <slug> "<requirement>"`.
-- Recall prior context: `/feature <slug>` or `/feature list`.
+- Seed or update a feature explicitly: `/sdlc:feature-new <slug> "<requirement>"`.
+- Recall prior context: `/sdlc:feature <slug>` or `/sdlc:feature list`.
 - The `post-commit-feature` hook then appends the sha-stamped history entry
   and stages it for the next commit — the sha cannot exist before the commit
   does, so that one line always lands with the following commit.

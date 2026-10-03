@@ -101,13 +101,13 @@ function stagedDiffHash() {
 // vacuously: a failed read must refuse, never return empty.
 function stagedPyContext(toplevel) {
     try {
-        const output = execSync('git diff --cached --name-only --diff-filter=ACMR', {
+        // -z: NUL-terminated paths are never C-quoted under core.quotePath,
+        // so a staged `café.py` still ends in `.py`.
+        const output = execSync('git diff --cached --name-only -z --diff-filter=ACMR', {
             encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], cwd: toplevel,
             maxBuffer: 64 * 1024 * 1024,
         });
-        const files = output.trim().split('\n')
-            .map(f => f.trim())
-            .filter(f => f.endsWith('.py'));
+        const files = gitRead.splitNul(output).filter(f => f.endsWith('.py'));
         const absFiles = files.map(f => (toplevel + '/' + f).replace(/\\/g, '/'));
         const pkgSet = new Set(files.map(f => {
             const dir = f.includes('/') ? f.replace(/\/[^/]+$/, '') : '.';

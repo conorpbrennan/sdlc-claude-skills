@@ -313,6 +313,133 @@ assert('impl edited first', tdd.classifyFromEvents(['src/a.js', 'src/test-a.js']
 
 fs.rmSync(sb, { recursive: true, force: true });
 
+// ------------------------------------------------- presence means test CODE ---
+// A test-named file in the diff is not a test. An empty `test_billing.py`, or a
+// blank line added to an unrelated test, satisfied the mandate by name alone. When
+// the hook hands the classifier the staged diff of the test paths (`testDiff`), at
+// least one ADDED line must be neither blank nor a comment in the file's language.
+// A null diff could not be read, and blocks as `unreadable`.
+console.log('\nPresence means the test diff adds test code:');
+// A -U0 diff of one file, as `git diff --cached -U0` prints it.
+const fileDiff = (p, added, opts) => {
+    const o = opts || {};
+    const head = 'diff --git a/' + p + ' b/' + p + '\n' +
+        (o.isNew ? 'new file mode 100644\nindex 0000000..1111111\n--- /dev/null\n'
+                 : 'index 1111111..2222222 100644\n--- a/' + p + '\n') +
+        '+++ b/' + p + '\n';
+    if (!added.length) return o.isNew ? head.split('--- /dev/null')[0].replace('1111111', 'e69de29') : head;
+    return head + '@@ -' + (o.isNew ? '0,0' : '5,0') + ' +' + (o.isNew ? '1' : '6') + ',' + added.length + ' @@\n' +
+        added.map(l => '+' + l).join('\n') + '\n';
+};
+const withDiff = (paths, testDiff) => tdd.classifyFromEvents(paths, [], { testDiff }).status;
+
+// The named bypasses.
+assert('impl + a 0-byte test_billing.py is no_tests',
+    withDiff(['src/billing.py', 'test_billing.py'], fileDiff('test_billing.py', [], { isNew: true })), 'no_tests');
+assert('impl + one blank line added to an unrelated test is no_tests',
+    withDiff(['src/billing.py', 'tests/test_other.py'], fileDiff('tests/test_other.py', [''])), 'no_tests');
+assert('impl + whitespace-only lines added to a test is no_tests',
+    withDiff(['src/billing.py', 'tests/test_other.py'], fileDiff('tests/test_other.py', ['    ', '\t'])), 'no_tests');
+assert('an empty test diff string is no_tests',
+    withDiff(['src/billing.py', 'tests/test_other.py'], ''), 'no_tests');
+// Comments cannot satisfy it, in any of the comment syntaxes in use.
+for (const [p, line] of [
+    ['tests/test_billing.py', '# assert bill() == 1'],
+    ['tests/test_billing.py', '    # def test_bill():'],
+    ['src/billing.test.js', '// expect(bill()).toBe(1);'],
+    ['src/billing.test.js', ' * it("bills", () => {})'],
+    ['src/billing.test.js', '/* test("bills") */'],
+    ['src/billing.test.js', '/* it( */'],
+    ['tests/billing_test.c', '#  assert(x)'],
+    ['src/test/java/BillingTest.java', '// @Test'],
+    ['tests/test_billing.sql', '-- SELECT ok(true);'],
+    ['spec/billing_spec.rb', '# expect(bill).to eq(1)'],
+]) {
+    assert('a comment is not test code: ' + line.trim(),
+        withDiff(['src/billing.py', p], fileDiff(p, [line])), 'no_tests');
+}
+// Only ADDED lines count. A removed assertion is not a new test.
+assert('a removed assertion is not test code', withDiff(['src/billing.py', 'tests/test_b.py'],
+    'diff --git a/tests/test_b.py b/tests/test_b.py\nindex 1..2 100644\n--- a/tests/test_b.py\n+++ b/tests/test_b.py\n' +
+    '@@ -3 +2,0 @@\n-    assert bill() == 1\n'), 'no_tests');
+// Diff headers are not added lines, even when the path looks like test code.
+assert('a +++ header is not an added line', withDiff(['src/billing.py', 'tests/test_b.py'],
+    fileDiff('tests/test_b.py', [], { isNew: false })), 'no_tests');
+
+// Honest test edits count, whatever their style. The rule is "an added line that is
+// neither blank nor a comment", so none of these can be falsely blocked: this repo's
+// own helpers, parametrize and table rows, a changed expected value outside an
+// assert line, and styles a per-language shape list would miss.
+for (const [p, line] of [
+    ['src/hooks/test-billing.sh', 'run_test "bills" \\'],
+    ['src/hooks/test-billing.js', "ok('bills', bill() === 1);"],
+    ['src/hooks/test-billing.js', "blocks('git commit -a', run('git commit -a'));"],
+    ['src/hooks/test-billing.js', "allows('git status', run('git status'));"],
+    ['tests/test_billing.py', '    (1, 2),'],
+    ['src/billing.test.js', '    [1, 2],'],
+    ['billing_test.go', '\t\t{"a", 1, 2},'],
+    ['tests/test_billing.py', '@pytest.mark.parametrize("a,b", ['],
+    ['tests/test_billing.py', '    expected = 5'],
+    ['spec/billing_spec.rb', '  it { is_expected.to be_ok }'],
+    ['src/test/java/BillingTest.java', '    public void testBill() {'],
+    ['billing_test.go', '\tif !reflect.DeepEqual(got, want) {'],
+    ['tests/billing_test.rs', '#[test]'],
+    ['tests/BillingTest.php', '    #[Test]'],
+    ['tests/BillingTests.swift', '    #expect(bill() == 1)'],
+    ['tests/BillingTests.swift', '    #require(bill() != nil)'],
+    ['tests/billing_test.c', '#include "billing.h"'],
+    ['tests/billing_test.c', '#define WANT 1'],
+    ['tests/test_login.robot', '*** Test Cases ***'],
+    ['tests/billing_test.c', '    *out = bill();'],
+    ['tests/test_billing.py', 'def test_x():'],
+    ['src/billing.spec.ts', '  expect(bill()).toBe(1);'],
+]) {
+    assert('honest test edit counts: ' + p.split('.').pop() + ': ' + line.trim(),
+        withDiff(['src/billing.py', p], fileDiff(p, [line])), 'not_applicable');
+}
+// A docstring-only addition is a comment in all but name.
+assert('a docstring-only addition is no_tests', withDiff(['src/billing.py', 'tests/test_b.py'],
+    fileDiff('tests/test_b.py', ['    """', '    assert bill() == 1', '    """'])), 'no_tests');
+assert('a one-line docstring addition is no_tests', withDiff(['src/billing.py', 'tests/test_b.py'],
+    fileDiff('tests/test_b.py', ["    '''Bills once.'''"])), 'no_tests');
+assert('code after a closed docstring counts', withDiff(['src/billing.py', 'tests/test_b.py'],
+    fileDiff('tests/test_b.py', ['    """Bills.', '    """', '    assert bill() == 1'])), 'not_applicable');
+// A real test among several test files is enough; the blank one does not veto it.
+assert('one real test among a blank-line test change passes',
+    withDiff(['src/billing.py', 'tests/test_a.py', 'tests/test_b.py'],
+        fileDiff('tests/test_a.py', ['']) + fileDiff('tests/test_b.py', ['def test_b():', '    assert True'])),
+    'not_applicable');
+// A docstring left open in one file does not swallow the next file's code.
+assert('an unclosed docstring does not cross into the next file',
+    withDiff(['src/billing.py', 'tests/test_a.py', 'tests/test_b.py'],
+        fileDiff('tests/test_a.py', ['"""']) + fileDiff('tests/test_b.py', ['    assert True'])),
+    'not_applicable');
+// The order verdict is still reached once presence is satisfied.
+assert('presence satisfied, then order is judged (test first)',
+    tdd.classifyFromEvents(['src/a.js', 'src/test-a.js'], [mk('src/test-a.js', 0), mk('src/a.js', 1)],
+        { testDiff: fileDiff('src/test-a.js', ["assert('a', a(), 1);"]) }).status, 'test_first');
+assert('presence not satisfied wins over order',
+    tdd.classifyFromEvents(['src/a.js', 'src/test-a.js'], [mk('src/test-a.js', 0), mk('src/a.js', 1)],
+        { testDiff: fileDiff('src/test-a.js', ['']) }).status, 'no_tests');
+// Unreadable.
+assert('a null test diff is unreadable', withDiff(['src/billing.py', 'tests/test_b.py'], null), 'unreadable');
+assert('a non-string test diff is unreadable',
+    withDiff(['src/billing.py', 'tests/test_b.py'], undefined), 'unreadable');
+// No impl: nothing to pair, so the diff is not consulted.
+assert('tests only with a null diff is still not applicable',
+    withDiff(['tests/test_b.py'], null), 'not_applicable');
+// No test path at all is no_tests whatever the diff says.
+assert('impl only with a null diff is still no_tests', withDiff(['src/billing.py'], null), 'no_tests');
+// The convenience wrapper forwards it.
+assert('classifyTddOrder forwards testDiff', tdd.classifyTddOrder({
+    stagedPaths: ['src/billing.py', 'test_billing.py'], transcriptPath: '',
+    testDiff: fileDiff('test_billing.py', [], { isNew: true }) }).status, 'no_tests');
+// A path the diff header quotes is still read.
+assert('a quoted header path still counts its test code', withDiff(['src/billing.py', 'tests/test_"q".py'],
+    'diff --git "a/tests/test_\\"q\\".py" "b/tests/test_\\"q\\".py"\nindex 1..2 100644\n' +
+    '--- "a/tests/test_\\"q\\".py"\n+++ "b/tests/test_\\"q\\".py"\n@@ -1,0 +2 @@\n+def test_q():\n'),
+    'not_applicable');
+
 console.log('\n=================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

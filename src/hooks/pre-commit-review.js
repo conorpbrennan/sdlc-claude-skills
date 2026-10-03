@@ -19,13 +19,15 @@
 //                         no marker matched: a review was requested and has
 //                         not passed. The lock never approves. A lock for a
 //                         different diff is stale and removed.
-//   classifier         -> approve a diff with no semantic change (or a small
-//                         change confined to presentational paths); writes
-//                         the marker.
 //   tdd mandate        -> on by default everywhere: block impl edited before
 //                         its test, or impl with no test in the diff. Order
 //                         comes from the session transcript; when it cannot
-//                         be known, a test must still be present.
+//                         be known, a test must still be present. Runs before
+//                         every fast path, and only a `continue` verdict lets
+//                         one approve.
+//   classifier         -> approve a diff whose every changed line is blank or
+//                         a whole comment (or, opt-in, a few non-trivial lines
+//                         confined to presentational paths); writes the marker.
 //   coverage           -> Python repos with coverage.xml: approve when
 //                         diff-cover and branch thresholds are met; block
 //                         with a gap-patching message when they are not;
@@ -63,6 +65,7 @@ const timingLog = require('./timing-log');
 const tddOrder = require('./lib/tdd-order');
 const commitCommand = require('./lib/commit-command');
 const gitRead = require('./lib/git-read');
+const { cmd, agent, skill } = require('./lib/plugin-names');
 
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const BLOCK_MARKER_MAX_AGE_MS = 30 * 1000;
@@ -112,9 +115,9 @@ function readMarkerBody(filePath) {
 // Returns { files, error }. files is null when the index could not be read:
 // an unreadable index is not an empty one, and Gate 3 must not approve on it.
 function readStagedCodeFiles() {
-    const r = gitRead.gitRead(['diff', '--cached', '--name-only'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
+    const r = gitRead.gitRead(['diff', '--cached', '--name-only', '-z'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
     if (r.out === null) return { files: null, error: r.error };
-    const files = r.out.trim().split('\n').filter(f => f.length > 0);
+    const files = gitRead.splitNul(r.out);
     return { files: files.filter(isSourcePath), error: null };
 }
 
@@ -125,7 +128,10 @@ function readStagedDiff(codeFiles, opts) {
     //
     // Returns { text, bytes, error }. On failure text is null, NOT '' -- an
     // unreadable diff must never be mistaken for an empty one. Gate 3b treats
-    // null as "cannot classify" and skips the fast path (fail closed).
+    // null as "cannot classify" and skips the fast path (fail closed). An
+    // empty read over a non-empty codeFiles list is also a failure: a path
+    // listed by --name-only always yields diff output, so '' means the
+    // pathspecs matched nothing (e.g. resolved against a subdirectory cwd).
     //
     // NB: the marker hash (Gate 3a) deliberately keeps hashing the FULL
     // staged diff; its job is to detect any change to the commit, not only
@@ -134,10 +140,32 @@ function readStagedDiff(codeFiles, opts) {
     const maxBuffer = o.maxBuffer ||
         parseInt(process.env.REVIEW_DIFF_MAX_BUFFER || '', 10) || DIFF_MAX_BUFFER_BYTES;
     try {
-        const text = execFileSync('git', ['diff', '--cached', '-U0', '--', ...(codeFiles || [])], {
-            encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer, cwd: o.cwd,
+        // -U1: one line of context gives each changed line its predecessor, so the
+        // classifier can see a line continued from the one before it.
+        // --text: a NUL byte or a `-diff`/`binary` attribute (an untracked
+        // .gitattributes is enough) would otherwise print `Binary files ...
+        // differ` with no +/- lines. --no-ext-diff, --no-textconv: a configured
+        // driver or filter could rewrite the lines the classifier reads.
+        // --no-color: `color.ui=always` (user or repo config, or GIT_CONFIG_COUNT)
+        // wraps every header in ANSI codes, and no section would be recognised.
+        // --submodule=short: `diff.submodule=log|diff` prints a gitlink bump as bare
+        // `Submodule ...` lines with no `diff --git` header, index line or hunk.
+        // The env drops GIT_DIFF_OPTS (`--unified=0` there overrides -U1 and
+        // hides a continued line's predecessor) and GIT_EXTERNAL_DIFF.
+        const env = { ...process.env };
+        delete env.GIT_DIFF_OPTS;
+        delete env.GIT_EXTERNAL_DIFF;
+        // --literal-pathspecs: a staged file named `:(exclude)x.py` is a path,
+        // not pathspec magic that drops its sibling `x.py` from the read.
+        const text = execFileSync('git', ['--literal-pathspecs', 'diff', '--cached', '--text', '--no-ext-diff', '--no-textconv',
+            '--no-color', '--submodule=short', '-U1', '--', ...(codeFiles || [])], {
+            encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer, cwd: o.cwd, env,
         });
-        return { text, bytes: Buffer.byteLength(text), error: null };
+        const bytes = Buffer.byteLength(text);
+        if (bytes === 0 && codeFiles && codeFiles.length > 0) {
+            return { text: null, bytes: 0, error: 'empty diff for ' + codeFiles.length + ' staged code file(s)' };
+        }
+        return { text, bytes, error: null };
     } catch (e) {
         const error = e && e.code === 'ENOBUFS'
             ? 'diff exceeded ' + maxBuffer + ' bytes'
@@ -230,11 +258,23 @@ function markerRecipe(markerPath, coveragePath, tag) {
 }
 
 // What every review-required block tells Claude, in one place: the rounds
-// policy and the marker recipe.
-const ROUNDS_POLICY = 'Round 1 is code-reviewer. Rerun with --deep (code-reviewer-deep) only after a ' +
+// policy and the marker recipe. The policy names the agents to dispatch, so
+// they are namespaced; the marker tag is a label and stays bare, which
+// TAG_NOTE says outright so a namespaced agent name does not leak into it.
+const REVIEW_CMD = cmd('code-review-pre-commit');
+const ROUNDS_POLICY = 'Round 1 is ' + agent('code-reviewer') + '. Rerun with --deep (' +
+    agent('code-reviewer-deep') + ') only after a ' +
     'FAIL with a CRITICAL or a correctness finding in a parser, gate or shell hunk; a pure scope/' +
-    'artefact/secret/churn FAIL reruns on code-reviewer. After two FAILs stop, show the open items, ' +
+    'artefact/secret/churn FAIL reruns on ' + agent('code-reviewer') + '. After two FAILs stop, show the open items, ' +
     'and ask the user to fix-and-rerun or to accept with the gap named in the commit message.';
+const TAG_NOTE = ' (replace code-reviewer:round1 with the bare agent name, code-reviewer or ' +
+    'code-reviewer-deep, and the round used)';
+// The round record the skill asks for, at this hook's own location: the
+// plugin cache, a source checkout or a legacy install all hold timing-log.js
+// beside this file, so the path is right wherever the toolchain lives.
+const TIMING_CMD = 'node "' + path.join(__dirname, 'timing-log.js') + '" review.completed ' +
+    'agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> ' +
+    'advisory=<n> repo="$(git rev-parse --show-toplevel)"';
 
 function writeMarker(markerPath, diffHash, covHash, tag) {
     try {
@@ -412,8 +452,8 @@ function repoIsOptedIn(toplevel, repos) {
 
 // null when the index could not be read (never [] for a failure).
 function getAllStagedPaths() {
-    const r = gitRead.gitRead(['diff', '--cached', '--name-only'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
-    return r.out === null ? null : r.out.trim().split('\n').filter(Boolean);
+    const r = gitRead.gitRead(['diff', '--cached', '--name-only', '-z'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
+    return r.out === null ? null : gitRead.splitNul(r.out);
 }
 
 // Returns { action: 'block'|'continue', status, firstTestPath, firstImplPath, mode, reason }.
@@ -430,10 +470,63 @@ function getAllStagedPaths() {
 function pathsInResultingCommit(isAmend) {
     const staged = getAllStagedPaths();
     if (staged === null || !isAmend) return staged;
-    const head = gitRead.gitRead(['show', '--name-only', '--pretty=format:', 'HEAD']);
+    const head = gitRead.gitRead(['show', '--name-only', '-z', '--pretty=format:', 'HEAD']);
     if (head.out === null) return staged;   // cannot read HEAD: judge the staged set
-    const fromHead = head.out.trim().split('\n').map(f => f.trim()).filter(Boolean);
+    const fromHead = gitRead.splitNul(head.out).map(f => f.trim()).filter(Boolean);
     return Array.from(new Set([...staged, ...fromHead]));
+}
+
+// The staged diff of the commit's test paths, for the "a test adds a non-comment
+// line" check in lib/tdd-order.js. Returns { text, error }; text is null on any failure.
+//
+// Read at the toplevel, where the repo-relative names resolve. For `--amend` the
+// index is compared with the amended commit's PARENT, not HEAD, so a test that HEAD
+// already carries still counts -- the same reason pathsInResultingCommit unions in
+// HEAD's files. A root commit has no parent: compare with the empty tree.
+//
+// The flags pin what is read against ordinary config, as in readStagedDiff:
+// --no-color, --text, --no-ext-diff, --no-textconv, --literal-pathspecs (a path is
+// never pathspec magic), --no-renames (a renamed test's added lines are seen as
+// added), explicit prefixes and core.quotePath=false (so headers name the path the
+// way testPaths spell it).
+function readStagedTestDiff(testPaths, isAmend, toplevel) {
+    const cwd = toplevel || undefined;
+    let base = [];
+    if (isAmend) {
+        const parent = gitRead.gitRead(['rev-parse', '--verify', '--quiet', 'HEAD~1^{commit}'], { cwd });
+        if (parent.out !== null && parent.out.trim()) {
+            base = [parent.out.trim()];
+        } else {
+            // Unresolved: a root commit, or a failure. Tell them apart.
+            const head = gitRead.gitRead(['rev-list', '--parents', '-n', '1', 'HEAD'], { cwd });
+            if (head.out === null) return { text: null, error: head.error };
+            if (head.out.trim().split(/\s+/).length !== 1) {
+                return { text: null, error: 'HEAD~1 did not resolve: ' + (parent.error || 'no output') };
+            }
+            const empty = gitRead.gitRead(['hash-object', '-t', 'tree', '/dev/null'], { cwd });
+            if (empty.out === null || !empty.out.trim()) {
+                return { text: null, error: 'empty tree: ' + (empty.error || 'no output') };
+            }
+            base = [empty.out.trim()];
+        }
+    }
+    const env = { ...process.env };
+    delete env.GIT_DIFF_OPTS;
+    delete env.GIT_EXTERNAL_DIFF;
+    try {
+        const text = execFileSync('git', ['-c', 'core.quotePath=false', '--literal-pathspecs', 'diff', '--cached',
+            '--no-color', '--text', '--no-ext-diff', '--no-textconv', '--no-renames',
+            '--src-prefix=a/', '--dst-prefix=b/', '-U0', ...base, '--', ...testPaths], {
+            encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: DIFF_MAX_BUFFER_BYTES, cwd, env,
+        });
+        return { text, error: null };
+    } catch (e) {
+        const stderr = (e && e.stderr ? String(e.stderr) : '').trim();
+        const error = e && e.code === 'ENOBUFS'
+            ? 'diff exceeded ' + DIFF_MAX_BUFFER_BYTES + ' bytes'
+            : (stderr || String((e && e.message) || e)).split('\n')[0].slice(0, 200);
+        return { text: null, error };
+    }
 }
 
 function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
@@ -456,10 +549,27 @@ function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
         return { action: 'continue', reason: 'no-staged-paths' };
     }
     let result;
+    let testDiffError = null;
     try {
-        result = tddOrder.classifyTddOrder({ stagedPaths, transcriptPath });
+        // Presence means the test diff ADDS a non-comment line, so read it. Only test paths
+        // are diffed; with none, the classifier says `no_tests` without it.
+        const testPaths = stagedPaths.filter(tddOrder.isTestFile);
+        let testDiff = '';
+        if (testPaths.length > 0) {
+            const read = readStagedTestDiff(testPaths, isAmend, toplevel);
+            testDiff = read.text;
+            testDiffError = read.error;
+        }
+        result = tddOrder.classifyTddOrder({ stagedPaths, transcriptPath, testDiff });
     } catch (e) {
-        return { action: 'continue', reason: 'classifier-error:' + (e.message || 'unknown') };
+        // Fail closed: a classifier that throws gave no verdict, and no verdict
+        // is not a pass. `continue` here would open every fast path below with
+        // the mandate never checked.
+        return {
+            action: 'block',
+            status: 'classifier-error',
+            reason: 'classifier-error: ' + String((e && e.message) || e || 'unknown').split('\n')[0].slice(0, 200),
+        };
     }
     // Block both code_first (impl edited before test) and no_tests (impl touched,
     // no test file in the diff). Together they mean every substantive code change
@@ -475,6 +585,14 @@ function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
     // repo, or add it to `exempt_repos` in ~/.claude/tdd-mandate.json. Both are
     // deliberate and visible in the tree or the config, rather than an environment
     // variable someone forgets is set.
+    if (result.status === 'unreadable') {
+        // The test diff could not be read: no verdict, and no verdict is not a pass.
+        return {
+            action: 'block',
+            status: 'unreadable',
+            reason: 'test-diff-unreadable: ' + (testDiffError || 'unknown'),
+        };
+    }
     if (result.status === 'code_first' || result.status === 'no_tests') {
         return {
             action: 'block',
@@ -614,17 +732,74 @@ function main() {
             block('review-in-flight', reason,
                 'PRE_COMMIT_REVIEW: ' + reason + '. Finish that review and, on ' +
                     'TDD_GATE: PASS, run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
-                    ' (replace code-reviewer:round1 with the agent and round used); or run `rm ' +
+                    TAG_NOTE + '; or run `rm ' +
                     shellQuote(LOCK_FILE) + '` to request a fresh review.');
         }
         try { fs.unlinkSync(LOCK_FILE); } catch (e) {}
     }
 
+    // The TDD mandate, on by default in every repository. See
+    // evaluateTddOrderGate and lib/tdd-order.js `mandateInForce` for the rule and
+    // the two ways out.
+    //
+    // It runs BEFORE every fast path. It used to run after the classifier, so a
+    // diff the classifier called trivial was approved -- and given a PASS marker --
+    // without the mandate ever being asked. No approval below this point may skip
+    // it: every fast path also checks that the verdict is `continue`.
+    const tddGate = evaluateTddOrderGate(toplevel, hookData.transcript_path, !!shape.amend);
+    timingLog.logEvent('tdd_order_gate', {
+        ...hookMeta,
+        action: tddGate.action,
+        status: tddGate.status || null,
+        reason: tddGate.reason,
+    });
+    if (tddGate.action === 'block') {
+        // No lock and no BLOCK marker when the gate reached no verdict (an
+        // unreadable index, a classifier that threw): the retry must re-check.
+        const noVerdict = tddGate.status === 'unreadable' || tddGate.status === 'classifier-error';
+        if (!noVerdict) writeLock(LOCK_FILE, diffHash);
+        let reason;
+        let remedy;
+        if (tddGate.status === 'unreadable' && /^test-diff-unreadable/.test(tddGate.reason || '')) {
+            reason = 'TDD gate: the staged test diff could not be read (' +
+                tddGate.reason.replace(/^test-diff-unreadable: /, '') + '), so the commit cannot be checked.';
+            remedy = ' Retry; if it persists, check the repository state (index.lock, GIT_DIR, cwd).';
+        } else if (tddGate.status === 'unreadable') {
+            reason = 'TDD gate: staged file list could not be read, so the commit cannot be checked.';
+            remedy = ' Retry; if it persists, check the repository state (index.lock, GIT_DIR, cwd).';
+        } else if (tddGate.status === 'classifier-error') {
+            reason = 'TDD gate: the TDD check failed (' + tddGate.reason + '), so the commit cannot be checked.';
+            remedy = ' Report this; the check is in lib/tdd-order.js.';
+        } else if (tddGate.status === 'no_tests') {
+            reason = 'TDD gate: no_tests commit blocked. Impl files were ' +
+                'touched but the test diff adds no non-comment line.';
+            remedy = ' Add a paired test for the change before committing; an empty test file, ' +
+                'blank lines or comments do not count.';
+        } else {
+            const detail = (tddGate.firstTestPath && tddGate.firstImplPath)
+                ? ' Impl ' + sanitizePath(tddGate.firstImplPath) +
+                  ' was edited before test ' + sanitizePath(tddGate.firstTestPath) + '.'
+                : '';
+            reason = 'TDD gate: code_first commit blocked.' + detail;
+            remedy = ' Split the commit so the test edit goes in first, or amend ' +
+                'the test before the impl edit.';
+        }
+        if (!noVerdict) {
+            writeBlockMarker(MARKER_FILE, diffHash, 'tdd-order: ' + tddGate.status);
+        }
+        timingLog.logEvent('review.requested', { ...hookMeta, via: 'tdd-order' });
+        block('tdd-order', reason,
+            'PRE_COMMIT_REVIEW: ' + reason + remedy +
+                ' To exempt this repository: touch .claude/tdd-mandate.disabled, or add it' +
+                ' to exempt_repos in ~/.claude/tdd-mandate.json.');
+    }
+    const tddAllowsFastPath = tddGate.action === 'continue';
+
     // Classifier: trivial-diff fast path over the staged CODE files only.
     // A read failure (null) is not an empty diff: skip the fast path and let
     // the review gates below decide. The note is carried into the default
     // block message so the developer can see why the fast path was skipped.
-    const diffRead = readStagedDiff(codeFiles);
+    const diffRead = readStagedDiff(codeFiles, { cwd: toplevel });
     timingLog.logEvent('staged_diff_read', {
         ...hookMeta, bytes: diffRead.bytes, ok: diffRead.text !== null, error: diffRead.error,
     });
@@ -637,21 +812,25 @@ function main() {
     if (diffRead.text === null) {
         fastPathSkipNote = 'Staged diff could not be read (' + diffRead.error + '), so the trivial-diff fast path was skipped. ';
     } else if (!codeFiles.every(classifierUnderstands)) {
-        // Fail closed on a language the classifier does not model. Scoring every
-        // shell line as non-semantic would otherwise make any shell diff look
-        // trivial and take a fast path.
+        // Fail closed on a language the classifier has no comment syntax for. A
+        // shell diff has no line it could prove trivial, and must not reach a
+        // fast path through a language table that does not describe it.
         const unreadable = codeFiles.filter(f => !classifierUnderstands(f));
         fastPathSkipNote = 'Staged diff includes ' + unreadable.length + ' file(s) the ' +
             'classifier cannot read (' + unreadable.slice(0, 3).map(sanitizePath).join(', ') +
             (unreadable.length > 3 ? ', ...' : '') + '), so both fast paths were skipped. ';
     } else {
+        // Counts NON-TRIVIAL lines: anything but blank lines and whole comments.
         const classification = classifyDiff(diffRead.text);
-        semanticNote = ' (' + classification.semanticAdded + ' semantic lines added, ' +
+        semanticNote = ' (' + classification.semanticAdded + ' non-trivial lines added, ' +
             classification.semanticRemoved + ' removed)';
         let fastPathReason = null;
         if (classification.semanticAdded === 0 && classification.semanticRemoved === 0) {
             fastPathReason = 'trivial-diff';
         } else if (
+            // Presentational (Q1: kept, opt-in, off by default): at most
+            // trivial_line_threshold non-trivial added lines, none removed, and
+            // every staged code file inside a configured presentational_paths glob.
             classification.semanticAdded <= policy.trivial_line_threshold &&
             classification.semanticRemoved === 0 &&
             policy.presentational_paths.length > 0 &&
@@ -659,53 +838,12 @@ function main() {
         ) {
             fastPathReason = 'presentational';
         }
-        if (fastPathReason) {
+        if (fastPathReason && tddAllowsFastPath) {
             writeMarker(MARKER_FILE, diffHash, covHash, fastPathReason);
             appendFastPassLog(gitDir, fastPathReason, (diffHash || '').slice(0, 8), codeFiles.length);
             endHook('approve', { via: 'classifier-' + fastPathReason });
             approve();
         }
-    }
-
-    // The TDD mandate, on by default in every repository. See
-    // evaluateTddOrderGate and lib/tdd-order.js `mandateInForce` for the rule and
-    // the two ways out.
-    const tddGate = evaluateTddOrderGate(toplevel, hookData.transcript_path, !!shape.amend);
-    timingLog.logEvent('tdd_order_gate', {
-        ...hookMeta,
-        action: tddGate.action,
-        status: tddGate.status || null,
-        reason: tddGate.reason,
-    });
-    if (tddGate.action === 'block') {
-        // No lock for an unreadable index: the retry must re-read.
-        if (tddGate.status !== 'unreadable') writeLock(LOCK_FILE, diffHash);
-        let reason;
-        let remedy;
-        if (tddGate.status === 'unreadable') {
-            reason = 'TDD gate: staged file list could not be read, so the commit cannot be checked.';
-            remedy = ' Retry; if it persists, check the repository state (index.lock, GIT_DIR, cwd).';
-        } else if (tddGate.status === 'no_tests') {
-            reason = 'TDD gate: no_tests commit blocked. Impl files were ' +
-                'touched but no test file is in the diff.';
-            remedy = ' Add a paired test for the change before committing.';
-        } else {
-            const detail = (tddGate.firstTestPath && tddGate.firstImplPath)
-                ? ' Impl ' + sanitizePath(tddGate.firstImplPath) +
-                  ' was edited before test ' + sanitizePath(tddGate.firstTestPath) + '.'
-                : '';
-            reason = 'TDD gate: code_first commit blocked.' + detail;
-            remedy = ' Split the commit so the test edit goes in first, or amend ' +
-                'the test before the impl edit.';
-        }
-        if (tddGate.status !== 'unreadable') {
-            writeBlockMarker(MARKER_FILE, diffHash, 'tdd-order: ' + tddGate.status);
-        }
-        timingLog.logEvent('review.requested', { ...hookMeta, via: 'tdd-order' });
-        block('tdd-order', reason,
-            'PRE_COMMIT_REVIEW: ' + reason + remedy +
-                ' To exempt this repository: touch .claude/tdd-mandate.disabled, or add it' +
-                ' to exempt_repos in ~/.claude/tdd-mandate.json.');
     }
 
     // Coverage: hook-level threshold check (Python only, coverage.xml must exist).
@@ -775,7 +913,7 @@ function main() {
                     : 'coverage.xml is stale (older than staged files) and no hygiene cov check is configured';
                 const guidance = deferToHygiene
                     ? ' Wait for the hygiene hook to finish or check why it failed (ruff/pytest), then retry the commit.'
-                    : ' Regenerate manually: pytest --cov --cov-branch --cov-report=xml -q (or run /commit-prep).';
+                    : ' Regenerate manually: pytest --cov --cov-branch --cov-report=xml -q (or run ' + cmd('commit-prep') + ').';
                 block('coverage-stale', reason,
                     'PRE_COMMIT_REVIEW: ' + reason + '.' + guidance);
             }
@@ -813,7 +951,7 @@ function main() {
         // Only the APPROVAL is withheld. The gap-block below stays unconditional:
         // a coverage gap is still a gap whatever else is staged.
         const allCoverable = codeFiles.every(coverageMeasurable);
-        if (dcRan && !haveActionableGap && allCoverable) {
+        if (dcRan && !haveActionableGap && allCoverable && tddAllowsFastPath) {
             const tag = dcOk ? 'thresholds-met' : 'thresholds-met-empty-gap';
             writeMarker(MARKER_FILE, diffHash, effectiveCovHash, tag);
             appendFastPassLog(gitDir, tag, (diffHash || '').slice(0, 8), codeFiles.length);
@@ -844,7 +982,7 @@ function main() {
             block('coverage-gap-patch', 'Coverage thresholds not met',
                 'PRE_COMMIT_REVIEW: diff-cover reported uncovered lines.' + branchNote +
                     ' Dispatch ONE gap-patching sub-agent per the <gap-patching-mode> section of the ' +
-                    'code-review-pre-commit skill. Thresholds: diff-cover ' + policy.diff_cover_threshold +
+                    skill('code-review-pre-commit') + ' skill. Thresholds: diff-cover ' + policy.diff_cover_threshold +
                     '%, branch ' + policy.branch_cover_threshold + '%. Uncovered: ' + uncoveredSummary +
                     '. On success run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'gap-patch:round1:PASS') + '.');
         }
@@ -857,9 +995,9 @@ function main() {
     const fileList = codeFiles.map(sanitizePath).join(', ');
     let reason;
     if (markerFresh && markerBody === '') {
-        reason = 'Review marker is empty. Run /code-review-pre-commit --fresh and write the marker with the printf command below if the review passes.';
+        reason = 'Review marker is empty. Run ' + REVIEW_CMD + ' --fresh and write the marker with the printf command below if the review passes.';
     } else if (markerFresh && markerBody && markerBody.split('\n')[0] !== 'PASS') {
-        reason = 'Last review did not pass the review gate (marker body: ' + markerBody.split('\n')[0] + '). Fix the failing items and rerun /code-review-pre-commit --fresh.';
+        reason = 'Last review did not pass the review gate (marker body: ' + markerBody.split('\n')[0] + '). Fix the failing items and rerun ' + REVIEW_CMD + ' --fresh.';
     } else if (markerFresh && markerBody && markerBody.split('\n').length < 3) {
         reason = 'Review marker has no hashes (a legacy one-line PASS no longer approves). Rerun the review and write the marker with the printf command below.';
     } else {
@@ -868,10 +1006,11 @@ function main() {
     reason = fastPathSkipNote + reason;
     writeBlockMarker(MARKER_FILE, diffHash, 'review-required: ' + reason.split('\n')[0].slice(0, 120));
     block('review-required', reason,
-        'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run /code-review-pre-commit --fresh on the ' +
+        'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run ' + REVIEW_CMD + ' --fresh on the ' +
         'staged files: ' + fileList + semanticNote + '. ' + ROUNDS_POLICY +
         ' On TDD_GATE: PASS run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
-        ' (replace code-reviewer:round1 with the agent and round used). On TDD_GATE: FAIL do not write the marker.');
+        TAG_NOTE + '. On TDD_GATE: FAIL do not write the marker. Either way, record the round by running ' +
+        'exactly: ' + TIMING_CMD + ' (fill in the placeholders).');
 }
 
 if (require.main === module) {
@@ -890,6 +1029,7 @@ module.exports = {
     loadTddOrderRepos,
     repoIsOptedIn,
     evaluateTddOrderGate,
+    readStagedTestDiff,
     readStagedDiff,
     getStagedDiff,
     readStagedCodeFiles,

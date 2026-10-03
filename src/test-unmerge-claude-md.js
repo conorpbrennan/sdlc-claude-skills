@@ -12,7 +12,7 @@ const { execSync } = require('child_process');
 const section = require('./lib/claude-md-section');
 
 const UNMERGE_SCRIPT = path.join(__dirname, 'unmerge-claude-md.js');
-const MERGE_SCRIPT = path.join(__dirname, 'merge-claude-md.js');
+const MERGE_SCRIPT = path.join(__dirname, '..', 'legacy', 'merge-claude-md.js');
 const TMP_DIR = path.join(__dirname, '..', 'tmp');
 const TMP_MD = path.join(TMP_DIR, 'test-unmerge-CLAUDE.md');
 const TMP_SNIPPET = path.join(TMP_DIR, 'test-unmerge-snippet.md');
@@ -262,7 +262,7 @@ fs.rmdirSync(asDir);
 
 console.log('\nShipped snippets round-trip:');
 for (const name of ['claude-md-snippet.md', 'hygiene-snippet.md', 'feature-workflow-snippet.md']) {
-    const snippetPath = path.join(__dirname, '..', '.claude', name);
+    const snippetPath = path.join(__dirname, '..', 'instructions', name);
     const snip = fs.readFileSync(snippetPath, 'utf-8');
     const original = '# User instructions\n\n## Mine\n\nkeep\n';
     fs.writeFileSync(TMP_MD, original);

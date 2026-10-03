@@ -177,7 +177,7 @@ echo "print('x')" > "$REPO5/widget.py"
 git -C "$REPO5" add widget.py
 out=$(run_hook "$REPO5")
 assert_contains "missing stub -> block" "$out" '"block"'
-assert_contains "block mentions feature-new" "$out" 'feature-new'
+assert_contains "block mentions /sdlc:feature-new" "$out" '/sdlc:feature-new'
 assert_file_contains "stub was created" "$REPO5/features/add-widget.md" "Requirement"
 
 # --- Feature branch, TBD requirement ---------------------------------------
@@ -190,7 +190,7 @@ echo "print('x')" > "$REPO6/parser.py"
 git -C "$REPO6" add parser.py
 out=$(run_hook "$REPO6")
 assert_contains "TBD -> block" "$out" '"block"'
-assert_contains "TBD block mentions feature-new" "$out" 'feature-new'
+assert_contains "TBD block mentions /sdlc:feature-new" "$out" '/sdlc:feature-new'
 
 # --- Feature branch, real requirement: approve and stage --------------------
 echo ""

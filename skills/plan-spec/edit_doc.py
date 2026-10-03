@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Apply a batch of exact-string edits to one file, all or nothing.
 
-    import sys; sys.path.insert(0, ".claude/skills/plan-spec")
+    import sys; sys.path.insert(0, "<this skill's base directory>")
     from edit_doc import apply_edits, apply_edits_multi
 
     apply_edits("docs/plan.md", [
