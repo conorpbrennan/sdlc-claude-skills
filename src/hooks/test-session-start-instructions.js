@@ -153,6 +153,30 @@ console.log('\nSentinels are stripped:');
     fs.rmSync(s.root, { recursive: true, force: true });
 }
 
+console.log('\nCRLF-encoded instructions give the same output as LF:');
+{
+    // Git for Windows (core.autocrlf=true) and a marketplace clone on Windows
+    // can check the files out with CRLF; the context must not carry the \r.
+    const lf = {};
+    for (const [name, text] of Object.entries(realFiles())) lf[name] = text.replace(/\r\n/g, '\n');
+    const crlf = {};
+    for (const [name, text] of Object.entries(lf)) crlf[name] = text.replace(/\n/g, '\r\n');
+    assert('the fixture is CRLF-encoded', Object.values(crlf).every(t => t.includes('\r\n')), true);
+    const sLf = scratch(lf);
+    const sCrlf = scratch(crlf);
+    const rLf = run(sLf.hook);
+    const rCrlf = run(sCrlf.hook);
+    assert('exits 0', rCrlf.status, 0);
+    const ctx = context(rCrlf);
+    assert('additionalContext contains no \\r', ctx.includes('\r'), false);
+    for (const [name, heading] of SECTIONS) {
+        assert(`contains ${heading} (${name})`, ctx.includes(heading + '\n'), true);
+    }
+    assert('output is byte-identical to the LF tree\'s', rCrlf.stdout, rLf.stdout);
+    fs.rmSync(sLf.root, { recursive: true, force: true });
+    fs.rmSync(sCrlf.root, { recursive: true, force: true });
+}
+
 // A settings.json hook block wiring one command, the shape a legacy install
 // merged in.
 function wired(command) {

@@ -14,6 +14,7 @@
 - .claude/agents/code-reviewer.md
 - .claude/claude-md-snippet.md
 - .claude/feature-workflow-snippet.md
+- .claude/hooks-config.json
 - .claude/hygiene-snippet.md
 - .claude/skills/code-review-implementer.md
 - .claude/skills/code-review-pre-commit.md
@@ -66,8 +67,11 @@
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-session-start-feature.sh
 - src/hooks/test-session-start-instructions.js
+- src/merge-claude-md.js
+- src/merge-hooks.js
 - src/test-install.sh
 - src/test-merge-claude-md.js
+- src/test-merge-hooks.js
 - src/test-plugin-layout.js
 - src/test-uninstall.sh
 - src/test-unmerge-claude-md.js
@@ -75,6 +79,29 @@
 - uninstall.sh
 
 ## History
+
+- 2026-10-03 `a01f383` — Retire install.sh; uninstall.sh is the migration; detect a doubled install
+  - .claude/hooks-config.json
+  - CLAUDE.md
+  - README.md
+  - docs/plans/marketplace-plugin.md
+  - install.sh
+  - instructions/tdd-mandate-snippet.md
+  - legacy/hooks-config.json
+  - legacy/merge-claude-md.js
+  - legacy/merge-hooks.js
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-session-start-instructions.js
+  - src/merge-claude-md.js
+  - src/merge-hooks.js
+  - src/test-install.sh
+  - src/test-merge-claude-md.js
+  - src/test-merge-hooks.js
+  - src/test-plugin-layout.js
+  - src/test-uninstall.sh
+  - src/test-unmerge-claude-md.js
+  - src/test-unmerge-hooks.js
+  - uninstall.sh
 
 - 2026-10-03 `9a14a9f` — Stop assuming the toolchain lives in ~/.claude
   - commands/review-timing.md
