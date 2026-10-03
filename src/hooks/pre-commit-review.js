@@ -125,7 +125,10 @@ function readStagedDiff(codeFiles, opts) {
     //
     // Returns { text, bytes, error }. On failure text is null, NOT '' -- an
     // unreadable diff must never be mistaken for an empty one. Gate 3b treats
-    // null as "cannot classify" and skips the fast path (fail closed).
+    // null as "cannot classify" and skips the fast path (fail closed). An
+    // empty read over a non-empty codeFiles list is also a failure: a path
+    // listed by --name-only always yields diff output, so '' means the
+    // pathspecs matched nothing (e.g. resolved against a subdirectory cwd).
     //
     // NB: the marker hash (Gate 3a) deliberately keeps hashing the FULL
     // staged diff; its job is to detect any change to the commit, not only
@@ -137,7 +140,11 @@ function readStagedDiff(codeFiles, opts) {
         const text = execFileSync('git', ['diff', '--cached', '-U0', '--', ...(codeFiles || [])], {
             encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer, cwd: o.cwd,
         });
-        return { text, bytes: Buffer.byteLength(text), error: null };
+        const bytes = Buffer.byteLength(text);
+        if (bytes === 0 && codeFiles && codeFiles.length > 0) {
+            return { text: null, bytes: 0, error: 'empty diff for ' + codeFiles.length + ' staged code file(s)' };
+        }
+        return { text, bytes, error: null };
     } catch (e) {
         const error = e && e.code === 'ENOBUFS'
             ? 'diff exceeded ' + maxBuffer + ' bytes'
@@ -624,7 +631,7 @@ function main() {
     // A read failure (null) is not an empty diff: skip the fast path and let
     // the review gates below decide. The note is carried into the default
     // block message so the developer can see why the fast path was skipped.
-    const diffRead = readStagedDiff(codeFiles);
+    const diffRead = readStagedDiff(codeFiles, { cwd: toplevel });
     timingLog.logEvent('staged_diff_read', {
         ...hookMeta, bytes: diffRead.bytes, ok: diffRead.text !== null, error: diffRead.error,
     });
