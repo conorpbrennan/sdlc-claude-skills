@@ -205,6 +205,62 @@ function readEditEvents(transcriptPath) {
     return events;
 }
 
+// ---------------------------------------------------------------------------
+// Does the staged test diff add test code?
+// ---------------------------------------------------------------------------
+// A test-named path in the diff is not a test: an empty `test_billing.py`, or a
+// blank line added to an unrelated test, satisfied the mandate by name. Presence
+// now means at least one ADDED line, in a test path, that is neither blank nor a
+// comment.
+//
+// Deliberately no test-shape matching. Shapes per language falsely blocked honest
+// tests (parametrize and table rows, a changed expected value, a repo's own
+// helpers), and the threat is an honest agent that forgot the test, not a faker:
+// `x = 1` in a test file satisfies this, and that is accepted. What must never
+// count is an empty or whitespace-only change, a comment, or a docstring. Where a
+// line is ambiguous, it counts as real.
+
+// Whole-line comments, matched against the trimmed line. Not comments: Rust/PHP
+// attributes `#[`, Swift macros `#expect`/`#require`, C preprocessor directives,
+// a Robot `***` section header, and `*p` (a pointer, where a comment continuation
+// is a bare `*` or `* ` or `*/`).
+const COMMENT_RE = /^(?:#(?!\[|(?:expect|require|include|define|undef|ifn?def|if|elif|else|endif|pragma|import)\b)|\/\/|\/\*|\*(?:$|\s|\/)|--|;|<!--)/;
+const DOCSTRING_RE = /^(?:[rRbBuU]{0,2})("""|''')/;
+
+// One line, with any open docstring carried in `state.doc` (the delimiter, or null).
+// Returns true when the line is neither blank, a comment, nor docstring text.
+function isNonCommentLine(line, state) {
+    const t = String(line).trim();
+    if (state.doc) {
+        if (t.includes(state.doc)) state.doc = null;
+        return false;
+    }
+    if (!t || COMMENT_RE.test(t)) return false;
+    const m = DOCSTRING_RE.exec(t);
+    if (m) {
+        // A delimiter line opens a docstring unless it also closes on the same line.
+        if (!t.slice(m[0].length).includes(m[1])) state.doc = m[1];
+        return false;
+    }
+    return true;
+}
+
+// Reads a `git diff -U0` of the test paths and answers whether any added line is
+// real: neither blank, a comment, nor docstring text. Only lines inside a hunk
+// count: the `+++ b/...` header is not an added line, and every hunk line starts
+// with `+`, `-`, ` ` or `\`, so a line beginning `diff --git ` is always the next
+// file's header. A docstring state never crosses a hunk or a file.
+function testDiffAddsTestCode(diffText) {
+    const state = { doc: null };
+    let inHunk = false;
+    for (const line of String(diffText).split('\n')) {
+        if (line.startsWith('diff --git ')) { inHunk = false; state.doc = null; continue; }
+        if (line.startsWith('@@')) { inHunk = true; state.doc = null; continue; }
+        if (inHunk && line.startsWith('+') && isNonCommentLine(line.slice(1), state)) return true;
+    }
+    return false;
+}
+
 function compareEvents(a, b) {
     // Prefer timestamp, fall back to encounter order.
     if (a.ts && b.ts && a.ts !== b.ts) return a.ts < b.ts ? -1 : 1;
@@ -219,6 +275,13 @@ function compareEvents(a, b) {
 // `commitPaths` are repo-relative paths (e.g. 'tests/test_a.py'). `events`
 // is the array from readEditEvents. Algorithm mirrors
 // _analyse_commit_scoped in tdd_order.py.
+//
+// `opts.testDiff` is the `git diff -U0` of the commit's test paths, read by the
+// hook. When the key is present, a test PATH is not enough: the diff must add
+// a non-comment line (testDiffAddsTestCode), or the verdict is `no_tests`, and a value
+// that is not a string -- a read that failed -- is `unreadable`, which blocks.
+// When the key is absent the verdict is from paths alone; that is for offline
+// analysis of the order metric, and the pre-commit hook always passes the key.
 function classifyFromEvents(commitPaths, events, opts) {
     const cleaned = (commitPaths || []).map(p => String(p || '').trim()).filter(Boolean);
     const testPaths = cleaned.filter(isTestFile);
@@ -230,6 +293,14 @@ function classifyFromEvents(commitPaths, events, opts) {
     }
     if (testPaths.length === 0) {
         return { status: 'no_tests', firstTestPath: '', firstImplPath: '' };
+    }
+    if (opts && Object.prototype.hasOwnProperty.call(opts, 'testDiff')) {
+        if (typeof opts.testDiff !== 'string') {
+            return { status: 'unreadable', firstTestPath: '', firstImplPath: '' };
+        }
+        if (!testDiffAddsTestCode(opts.testDiff)) {
+            return { status: 'no_tests', firstTestPath: '', firstImplPath: '' };
+        }
     }
 
     let firstTest = null;
@@ -337,9 +408,14 @@ function mandateInForce(repoPath, opts) {
 }
 
 // Convenience: read transcript + classify in one call.
-function classifyTddOrder({ stagedPaths, transcriptPath, configPath }) {
+// `testDiff` is forwarded only when the caller passed the key (see classifyFromEvents).
+function classifyTddOrder(args) {
+    const { stagedPaths, transcriptPath, configPath } = args;
     const events = readEditEvents(transcriptPath);
-    return classifyFromEvents(stagedPaths, events, configPath ? { configPath } : undefined);
+    const opts = {};
+    if (configPath) opts.configPath = configPath;
+    if (Object.prototype.hasOwnProperty.call(args, 'testDiff')) opts.testDiff = args.testDiff;
+    return classifyFromEvents(stagedPaths, events, opts);
 }
 
 module.exports = {
@@ -352,4 +428,7 @@ module.exports = {
     readEditEvents,
     classifyFromEvents,
     classifyTddOrder,
+    COMMENT_RE,
+    isNonCommentLine,
+    testDiffAddsTestCode,
 };
