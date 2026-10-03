@@ -34,6 +34,10 @@
 - docs/plans/marketplace-plugin.md
 - hooks/hooks.json
 - install.sh
+- instructions/claude-md-snippet.md
+- instructions/feature-workflow-snippet.md
+- instructions/hygiene-snippet.md
+- instructions/tdd-mandate-snippet.md
 - skills/code-review-implementer/SKILL.md
 - skills/code-review-pre-commit/SKILL.md
 - skills/plan-spec/SKILL.md
@@ -50,15 +54,42 @@
 - src/hooks/pre-commit-feature.js
 - src/hooks/pre-commit-review.js
 - src/hooks/session-start-feature.js
+- src/hooks/session-start-instructions.js
 - src/hooks/test-post-commit-feature.sh
 - src/hooks/test-pre-commit-feature.sh
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-session-start-feature.sh
+- src/hooks/test-session-start-instructions.js
 - src/test-install.sh
+- src/test-merge-claude-md.js
 - src/test-plugin-layout.js
+- src/test-unmerge-claude-md.js
 - uninstall.sh
 
 ## History
+
+- 2026-10-03 `921bf2c` — Namespace every invocable name as sdlc:<name> from one constant
+  - .claude/claude-md-snippet.md
+  - .claude/feature-workflow-snippet.md
+  - agents/code-reviewer-deep.md
+  - agents/code-reviewer.md
+  - commands/commit-prep.md
+  - commands/feature-new.md
+  - commands/feature.md
+  - docs/plans/marketplace-plugin.md
+  - skills/code-review-implementer/SKILL.md
+  - skills/code-review-pre-commit/SKILL.md
+  - src/hooks/enforce-review-implementer.js
+  - src/hooks/lib/plugin-names.js
+  - src/hooks/post-commit-feature.js
+  - src/hooks/pre-commit-feature.js
+  - src/hooks/pre-commit-review.js
+  - src/hooks/session-start-feature.js
+  - src/hooks/test-post-commit-feature.sh
+  - src/hooks/test-pre-commit-feature.sh
+  - src/hooks/test-pre-commit-review.js
+  - src/hooks/test-session-start-feature.sh
+  - src/test-plugin-layout.js
 
 - 2026-10-03 `34f4419` — Move skills and agents to the plugin layout
   - .claude/agents/code-reviewer-deep.md
