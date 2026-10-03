@@ -497,7 +497,14 @@ function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
     try {
         result = tddOrder.classifyTddOrder({ stagedPaths, transcriptPath });
     } catch (e) {
-        return { action: 'continue', reason: 'classifier-error:' + (e.message || 'unknown') };
+        // Fail closed: a classifier that throws gave no verdict, and no verdict
+        // is not a pass. `continue` here would open every fast path below with
+        // the mandate never checked.
+        return {
+            action: 'block',
+            status: 'classifier-error',
+            reason: 'classifier-error: ' + String((e && e.message) || e || 'unknown').split('\n')[0].slice(0, 200),
+        };
     }
     // Block both code_first (impl edited before test) and no_tests (impl touched,
     // no test file in the diff). Together they mean every substantive code change
@@ -674,13 +681,18 @@ function main() {
         reason: tddGate.reason,
     });
     if (tddGate.action === 'block') {
-        // No lock for an unreadable index: the retry must re-read.
-        if (tddGate.status !== 'unreadable') writeLock(LOCK_FILE, diffHash);
+        // No lock and no BLOCK marker when the gate reached no verdict (an
+        // unreadable index, a classifier that threw): the retry must re-check.
+        const noVerdict = tddGate.status === 'unreadable' || tddGate.status === 'classifier-error';
+        if (!noVerdict) writeLock(LOCK_FILE, diffHash);
         let reason;
         let remedy;
         if (tddGate.status === 'unreadable') {
             reason = 'TDD gate: staged file list could not be read, so the commit cannot be checked.';
             remedy = ' Retry; if it persists, check the repository state (index.lock, GIT_DIR, cwd).';
+        } else if (tddGate.status === 'classifier-error') {
+            reason = 'TDD gate: the TDD check failed (' + tddGate.reason + '), so the commit cannot be checked.';
+            remedy = ' Report this; the check is in lib/tdd-order.js.';
         } else if (tddGate.status === 'no_tests') {
             reason = 'TDD gate: no_tests commit blocked. Impl files were ' +
                 'touched but no test file is in the diff.';
@@ -694,7 +706,7 @@ function main() {
             remedy = ' Split the commit so the test edit goes in first, or amend ' +
                 'the test before the impl edit.';
         }
-        if (tddGate.status !== 'unreadable') {
+        if (!noVerdict) {
             writeBlockMarker(MARKER_FILE, diffHash, 'tdd-order: ' + tddGate.status);
         }
         timingLog.logEvent('review.requested', { ...hookMeta, via: 'tdd-order' });
