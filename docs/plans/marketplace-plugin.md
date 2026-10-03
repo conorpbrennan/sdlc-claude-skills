@@ -162,3 +162,26 @@ Cutover, by the owner after the merge to `main` (each command is outward-facing 
   3. Deleting `test-install.sh` left `uninstall.sh` untested.
   4. `LEGACY_SCRIPTS` named three scripts the legacy wiring never had, so the warning could fire when `uninstall.sh` cannot clear it.
   File set amended: NEW `src/test-uninstall.sh`, built on `legacy/merge-*.js`. Re-review on code-reviewer-deep, per the rounds policy after a CRITICAL.
+- 2026-10-03, step 6 committed `a01f383`. code-reviewer-deep round 1 FAIL (fixed: README paths and Update order, new `src/test-uninstall.sh`, `LEGACY_SCRIPTS` cut to the 10 legacy-wired scripts); round 2 PASS. Gate amendment: the `install.sh` grep gate also hits two comments in `src/test-uninstall.sh` that describe the installer as retired. That is the gate's intent satisfied, not a stale reference, and the pattern predates that file. Accepted without rewording, since rewording would have invalidated the reviewed index. Follow-ups noted: a `mktemp` guard in `src/test-uninstall.sh`; `snapshotStaged` in `test-pre-commit-review.js` misses rename sources.
+- Plan complete: steps 1-6 committed. Cutover per section 7 follows.
+
+## Inserted step (plan-spec §18.6; written after the Windows test, unreviewed by any plan round)
+
+**6a. Text files keep LF on every platform, and the instructions hook tolerates CRLF anyway**
+
+Found by the Windows test after cutover. With no `.gitattributes`, Git for Windows (`core.autocrlf=true`) checks the files out with CRLF, and so does a GitHub marketplace clone on Windows. `instructions/*.md` then reach Claude with stray `\r` (8,012 chars against 7,875 on Linux). 14 assertions in `src/hooks/test-session-start-instructions.js` fail (`^## Heading$` with a trailing `\r`), and 3 README checks in `src/test-plugin-layout.js` fail.
+
+NEW `.gitattributes`. EXTEND `src/hooks/session-start-instructions.js`, `src/hooks/test-session-start-instructions.js`, `src/test-plugin-layout.js`.
+IMPORTS: steps 1-6. MUST NOT TOUCH: the instruction files' wording.
+TESTS FIRST:
+- `test-session-start-instructions.js` runs the hook against a scratch `instructions/` tree whose four files are CRLF-encoded. It asserts that additionalContext contains no `\r`, contains each `## ` heading, and is byte-identical to the LF tree's output. Red today.
+- `test-plugin-layout.js` asserts that `.gitattributes` exists and sets `eol=lf` for `*.md`, `*.js`, `*.sh`, `*.json` and `*.py` (or `* text=auto eol=lf`). It also makes the README Update checks tolerate CRLF (normalise before matching). Red today.
+WHAT TO BUILD: `.gitattributes` with `* text=auto eol=lf`, plus explicit binary entries only if the repo holds binaries (check with `git ls-files`). The hook replaces `\r\n` with `\n` when it reads each instruction file. Run `git add --renormalize .` only if it changes nothing; the repo is LF today. If it does change anything, report it rather than staging it.
+GATE (commands, expected output):
+- `node src/hooks/test-session-start-instructions.js` gives `Results: N passed, 0 failed`.
+- `node src/test-plugin-layout.js` gives `Results: N passed, 0 failed`.
+- `claude plugin validate .` exits 0.
+- `git ls-files --eol | awk '{print $2}' | sort | uniq -c` shows only `w/lf` (and `w/-text` for binaries, if any).
+- Windows (orchestrator, after commit): on the EC2 box, a fresh clone of the branch has no CR in `instructions/*.md` (`grep -c $'\r'` gives 0), and both suites pass.
+REVIEW: 1. Does `.gitattributes` change how any tracked file is stored? (`git add --renormalize . && git status` in a scratch clone should show nothing.) 2. Is the normalisation applied before the sentinel strip and the heading join? FAIL if: CRLF input changes the output, or `.gitattributes` renormalises a tracked file.
+ROLLBACK: revert the commit.

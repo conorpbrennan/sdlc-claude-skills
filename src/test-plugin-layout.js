@@ -168,22 +168,48 @@ for (const doc of ['README.md', 'CLAUDE.md']) {
         .map(([n]) => `${doc}:${n}`);
     assert(`${doc} names hooks-config.json only as legacy/hooks-config.json`, stale, []);
 }
-// README's Update section gives both steps, in order, then the restart.
-{
-    let readme = '';
-    try {
-        readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
-    } catch (e) { /* readme stays empty; the assertions below report it */ }
-    const update = (/^### Update\n([\s\S]*?)^### /m.exec(readme) || [])[1] || '';
+// README's Update section gives both steps, in order, then the restart. The
+// text is normalised to LF first, so a CRLF checkout (Git for Windows) reads
+// the same; the CRLF copy below proves it on any platform.
+function updateChecks(readme) {
+    const update = (/^### Update\n([\s\S]*?)^### /m.exec(readme.replace(/\r\n/g, '\n')) || [])[1] || '';
+    const out = {};
     for (const [form, market, plugin] of [
         ['slash', '/plugin marketplace update sdlc-claude-skills', '/plugin update sdlc@sdlc-claude-skills'],
         ['shell', 'claude plugin marketplace update sdlc-claude-skills', 'claude plugin update sdlc@sdlc-claude-skills'],
     ]) {
         const m = update.indexOf(market);
         const p = update.indexOf(plugin);
-        assert(`Update (${form}): marketplace update, then plugin update`, m >= 0 && p > m, true);
+        out[`Update (${form}): marketplace update, then plugin update`] = m >= 0 && p > m;
     }
-    assert('Update: says to restart Claude Code', /restart Claude Code/i.test(update), true);
+    out['Update: says to restart Claude Code'] = /restart Claude Code/i.test(update);
+    return out;
+}
+{
+    let readme = '';
+    try {
+        readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf-8');
+    } catch (e) { /* readme stays empty; the assertions below report it */ }
+    const lfChecks = updateChecks(readme);
+    for (const [name, ok] of Object.entries(lfChecks)) assert(name, ok, true);
+    const crlfReadme = readme.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+    assert('Update checks read a CRLF README the same', updateChecks(crlfReadme), lfChecks);
+}
+// Text files are stored and checked out with LF on every platform, so a
+// Windows checkout does not carry \r into the instructions or the docs.
+{
+    let attrs = '';
+    try {
+        attrs = fs.readFileSync(path.join(ROOT, '.gitattributes'), 'utf-8');
+    } catch (e) { /* attrs stays empty; the assertion below reports it */ }
+    const rules = attrs.replace(/\r\n/g, '\n').split('\n')
+        .map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+        .map(l => l.split(/\s+/));
+    const lfFor = pattern => rules.some(([p, ...a]) => p === pattern && a.includes('eol=lf'));
+    const all = rules.some(([p, ...a]) => p === '*' && a.includes('text=auto') && a.includes('eol=lf'));
+    const missing = ['*.md', '*.js', '*.sh', '*.json', '*.py'].filter(p => !lfFor(p));
+    assert('.gitattributes sets eol=lf (* text=auto eol=lf, or each of *.md *.js *.sh *.json *.py)',
+        all || missing.length === 0, true);
 }
 const legacy = readJson('legacy/hooks-config.json', LEGACY_HOOKS);
 // Every script the legacy wiring names is one the plugin wires too, so the

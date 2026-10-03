@@ -114,9 +114,12 @@ function legacyWarning() {
         ${FIX}`);
 }
 
+// CRLF is normalised to LF first, before the sentinel strip and the join: a
+// Windows checkout (core.autocrlf=true) must give the same context as Linux.
 function readSection(name) {
     try {
         return fs.readFileSync(path.join(INSTRUCTIONS_DIR, name), 'utf-8')
+            .replace(/\r\n/g, '\n')
             .replace(SENTINEL, '')
             .trim();
     } catch (e) {
