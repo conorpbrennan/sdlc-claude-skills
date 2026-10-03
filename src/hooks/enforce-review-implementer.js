@@ -2,6 +2,7 @@
 // When user asks to implement/fix/apply code review findings, inject a
 // systemMessage directing Claude to use the skill with a Sonnet subagent.
 const fs = require('fs');
+const { skill } = require('./lib/plugin-names');
 
 // Read hook input from stdin (Claude Code pipes JSON to hooks via stdin)
 let hookData = {};
@@ -33,7 +34,8 @@ if (!hasReview || !hasImpl) {
 // Both conditions met -- inject enforcement message
 approve(
     'ENFORCE_REVIEW_IMPLEMENTER: The user is requesting implementation of code review findings. ' +
-    'You MUST use the code-review-implementer skill (invoke via Skill tool with skill: "code-review-implementer") ' +
+    'You MUST use the ' + skill('code-review-implementer') + ' skill (invoke via Skill tool with skill: "' +
+    skill('code-review-implementer') + '") ' +
     'to handle this. Do NOT implement the changes directly -- delegate to a Sonnet subagent as the skill requires. ' +
     'Pass the appropriate scope argument (all, critical, important, or item numbers) based on the user\'s request.'
 );

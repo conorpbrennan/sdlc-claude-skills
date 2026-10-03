@@ -10,10 +10,27 @@
 
 - .claude-plugin/marketplace.json
 - .claude-plugin/plugin.json
+- .claude/agents/code-reviewer-deep.md
+- .claude/agents/code-reviewer.md
+- .claude/claude-md-snippet.md
+- .claude/feature-workflow-snippet.md
+- .claude/skills/code-review-implementer.md
+- .claude/skills/code-review-pre-commit.md
+- .claude/skills/plan-spec/SKILL.md
+- .claude/skills/plan-spec/check_citations.py
+- .claude/skills/plan-spec/edit_doc.py
+- .claude/skills/plan-spec/fixtures/clean-plan.md
+- .claude/skills/plan-spec/fixtures/dirty-plan.md
+- .claude/skills/plan-spec/fixtures/shapes-plan.md
+- .claude/skills/plan-spec/fixtures/tests-first-plan.md
+- .claude/skills/plan-spec/reference.md
 - CLAUDE.md
 - README.md
 - agents/code-reviewer-deep.md
 - agents/code-reviewer.md
+- commands/commit-prep.md
+- commands/feature-new.md
+- commands/feature.md
 - docs/plans/marketplace-plugin.md
 - hooks/hooks.json
 - install.sh
@@ -27,11 +44,54 @@
 - skills/plan-spec/fixtures/shapes-plan.md
 - skills/plan-spec/fixtures/tests-first-plan.md
 - skills/plan-spec/reference.md
+- src/hooks/enforce-review-implementer.js
+- src/hooks/lib/plugin-names.js
+- src/hooks/post-commit-feature.js
+- src/hooks/pre-commit-feature.js
+- src/hooks/pre-commit-review.js
+- src/hooks/session-start-feature.js
+- src/hooks/test-post-commit-feature.sh
+- src/hooks/test-pre-commit-feature.sh
+- src/hooks/test-pre-commit-review.js
+- src/hooks/test-session-start-feature.sh
 - src/test-install.sh
 - src/test-plugin-layout.js
 - uninstall.sh
 
 ## History
+
+- 2026-10-03 `34f4419` — Move skills and agents to the plugin layout
+  - .claude/agents/code-reviewer-deep.md
+  - .claude/agents/code-reviewer.md
+  - .claude/skills/code-review-implementer.md
+  - .claude/skills/code-review-pre-commit.md
+  - .claude/skills/plan-spec/SKILL.md
+  - .claude/skills/plan-spec/check_citations.py
+  - .claude/skills/plan-spec/edit_doc.py
+  - .claude/skills/plan-spec/fixtures/clean-plan.md
+  - .claude/skills/plan-spec/fixtures/dirty-plan.md
+  - .claude/skills/plan-spec/fixtures/shapes-plan.md
+  - .claude/skills/plan-spec/fixtures/tests-first-plan.md
+  - .claude/skills/plan-spec/reference.md
+  - CLAUDE.md
+  - README.md
+  - agents/code-reviewer-deep.md
+  - agents/code-reviewer.md
+  - docs/plans/marketplace-plugin.md
+  - install.sh
+  - skills/code-review-implementer/SKILL.md
+  - skills/code-review-pre-commit/SKILL.md
+  - skills/plan-spec/SKILL.md
+  - skills/plan-spec/check_citations.py
+  - skills/plan-spec/edit_doc.py
+  - skills/plan-spec/fixtures/clean-plan.md
+  - skills/plan-spec/fixtures/dirty-plan.md
+  - skills/plan-spec/fixtures/shapes-plan.md
+  - skills/plan-spec/fixtures/tests-first-plan.md
+  - skills/plan-spec/reference.md
+  - src/test-install.sh
+  - src/test-plugin-layout.js
+  - uninstall.sh
 
 - 2026-10-03 `4803eb2` — Make the repository a valid plugin and same-repo marketplace
   - .claude-plugin/marketplace.json

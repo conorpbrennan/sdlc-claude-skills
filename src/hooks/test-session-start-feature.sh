@@ -139,7 +139,7 @@ echo ""
 echo "Existing stub with TBD"
 out=$(run_hook "$REPO2")
 assert_contains "existing-tbd -> nudges for requirement" "$out" "still"
-assert_contains "existing-tbd -> suggests /feature-new" "$out" "/feature-new add-user-auth"
+assert_contains "existing-tbd -> suggests /sdlc:feature-new" "$out" "/sdlc:feature-new add-user-auth"
 
 # --- Feature branch, stub filled ---
 echo ""

@@ -506,7 +506,7 @@ try {
     cleanAll();
     let r = runHook('git commit -m x');
     assert('blocks when no marker present', r.decision, 'block');
-    assertContains('block message tells user to run review', r.systemMessage || '', '/code-review-pre-commit');
+    assertContains('block message tells user to run review', r.systemMessage || '', '/sdlc:code-review-pre-commit');
 
     cleanLock();
     writeMarker('');
