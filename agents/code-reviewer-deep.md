@@ -1,6 +1,6 @@
 ---
 name: code-reviewer-deep
-description: Adversarial pre-commit reviewer on Opus. Same contract, criteria, constraints and trailer as code-reviewer, but spends its budget trying to break the change - security-sensitive or parser-shaped diffs (input validation, auth, secrets, shell or git command handling, gates that must fail closed). Selected by /code-review-pre-commit --deep, or for the rerun after a FAIL with a CRITICAL or a correctness finding in such a hunk.
+description: Adversarial pre-commit reviewer on Opus. Same contract, criteria, constraints and trailer as code-reviewer, but spends its budget trying to break the change - security-sensitive or parser-shaped diffs (input validation, auth, secrets, shell or git command handling, gates that must fail closed). Selected by /sdlc:code-review-pre-commit --deep, or for the rerun after a FAIL with a CRITICAL or a correctness finding in such a hunk.
 model: opus
 tools: Bash, Read, Grep, Glob
 ---

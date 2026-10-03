@@ -194,6 +194,222 @@ const staleRefs = walk(SKILLS_DIR).filter(rel => {
 });
 assert('no text under skills/ names a .claude/skills/ path', staleRefs, []);
 
+// The string literals in JavaScript source, as { line, value } with simple
+// escapes decoded. Comments and regex literals are skipped; a template's
+// ${...} code is lexed in turn, so a literal inside it is found too. `ok` is
+// false when the source ends inside a literal or comment, which means the
+// lexer misread the file and its result cannot be trusted.
+function jsStringLiterals(src) {
+    const out = [];
+    let i = 0;
+    let line = 1;
+    let prev = '';  // last significant code character, for regex detection
+    const decode = s => s.replace(/\\(.)/g, (m, c) =>
+        ({ n: '\n', t: '\t', r: '\r' }[c] !== undefined ? { n: '\n', t: '\t', r: '\r' }[c] : c));
+    const REGEX_AFTER = '(,=:[!&|?{};+-*%<>~^';
+
+    // Lex code until an unmatched `}` (inside a template) or the end.
+    function code(inTemplate) {
+        let depth = 0;
+        while (i < src.length) {
+            const c = src[i];
+            const n = src[i + 1];
+            if (c === '\n') { line++; i++; continue; }
+            if (/\s/.test(c)) { i++; continue; }
+            if (c === '/' && n === '/') {
+                while (i < src.length && src[i] !== '\n') i++;
+                continue;
+            }
+            if (c === '/' && n === '*') {
+                const end = src.indexOf('*/', i + 2);
+                if (end === -1) return false;
+                line += (src.slice(i, end).match(/\n/g) || []).length;
+                i = end + 2;
+                continue;
+            }
+            if (c === '\'' || c === '"') {
+                const start = line;
+                let j = i + 1;
+                while (j < src.length && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+                if (src[j] !== c) return false;
+                out.push({ line: start, value: decode(src.slice(i + 1, j)) });
+                i = j + 1;
+                prev = c;
+                continue;
+            }
+            if (c === '`') {
+                if (!template()) return false;
+                prev = '`';
+                continue;
+            }
+            if (c === '/' && (prev === '' || REGEX_AFTER.includes(prev) ||
+                /\b(return|typeof|case)$/.test(src.slice(Math.max(0, i - 12), i).trimEnd()))) {
+                let j = i + 1;
+                let inClass = false;
+                while (j < src.length && src[j] !== '\n') {
+                    if (src[j] === '\\') { j += 2; continue; }
+                    if (src[j] === '[') inClass = true;
+                    else if (src[j] === ']') inClass = false;
+                    else if (src[j] === '/' && !inClass) break;
+                    j++;
+                }
+                if (src[j] !== '/') return false;
+                i = j + 1;
+                prev = 'r';
+                continue;
+            }
+            if (inTemplate && c === '{') depth++;
+            if (inTemplate && c === '}') {
+                if (depth === 0) { i++; return true; }
+                depth--;
+            }
+            prev = c;
+            i++;
+        }
+        return !inTemplate;
+    }
+
+    // Lex a template literal starting at its backtick.
+    function template() {
+        const start = line;
+        let value = '';
+        i++;
+        while (i < src.length) {
+            const c = src[i];
+            if (c === '\\') { value += src.slice(i, i + 2); i += 2; continue; }
+            if (c === '`') { i++; out.push({ line: start, value: decode(value) }); return true; }
+            if (c === '$' && src[i + 1] === '{') {
+                i += 2;
+                if (!code(true)) return false;
+                value += '${}';
+                continue;
+            }
+            if (c === '\n') line++;
+            value += c;
+            i++;
+        }
+        return false;
+    }
+
+    const ok = code(false);
+    return { ok, literals: out };
+}
+
+console.log('\nThe literal scanner itself:');
+{
+    const sample = [
+        "// a comment's quote: '/feature'",
+        "const re = /['\"]/g; const half = a / 2; const b = c / d;",
+        "/* block 'x' */ const s = 'one' + \"two\\n\" + `t ${f('inner')} end`;",
+    ].join('\n');
+    const r = jsStringLiterals(sample);
+    assert('scanner lexes the sample to the end', r.ok, true);
+    assert('scanner finds literals, not comments or regexes',
+        r.literals.map(l => l.value), ['one', 'two\n', 'inner', 't ${} end']);
+    assert('scanner reports an unterminated literal', jsStringLiterals("x = 'open").ok, false);
+}
+
+console.log('\nOne owner for the plugin name:');
+let names = null;
+try {
+    names = require('./hooks/lib/plugin-names.js');
+    assert('src/hooks/lib/plugin-names.js loads', true, true);
+} catch (e) {
+    assert('src/hooks/lib/plugin-names.js loads', e.message, 'module present');
+}
+assert('PLUGIN matches plugin.json', names && names.PLUGIN, plugin && plugin.name);
+assert('cmd() builds a namespaced slash command', names && names.cmd('feature-new'), '/sdlc:feature-new');
+assert('agent() builds a namespaced agent name', names && names.agent('code-reviewer'), 'sdlc:code-reviewer');
+assert('skill() builds a namespaced skill name', names && names.skill && names.skill('code-review-implementer'),
+    'sdlc:code-review-implementer');
+
+// Hook source: every non-test script, and the libraries it loads.
+const HOOKS_DIR = path.join(ROOT, 'src', 'hooks');
+const hookSources = [
+    ...listDir(HOOKS_DIR).filter(e => e.isFile() && e.name.endsWith('.js') && !e.name.startsWith('test-'))
+        .map(e => path.join('src', 'hooks', e.name)),
+    ...listDir(path.join(HOOKS_DIR, 'lib')).filter(e => e.isFile() && e.name.endsWith('.js'))
+        .map(e => path.join('src', 'hooks', 'lib', e.name)),
+].sort();
+const hookLiterals = {};
+for (const rel of hookSources) {
+    const r = jsStringLiterals(fs.readFileSync(path.join(ROOT, rel), 'utf-8'));
+    assert(`scanner lexes ${rel} to the end`, r.ok, true);
+    hookLiterals[rel] = r.literals;
+}
+assert('scanner sees the review block message',
+    (hookLiterals[path.join('src', 'hooks', 'pre-commit-review.js')] || [])
+        .some(l => l.value.includes('PRE_COMMIT_REVIEW')), true);
+
+const spellsPlugin = hookSources
+    .filter(rel => rel !== path.join('src', 'hooks', 'lib', 'plugin-names.js'))
+    .flatMap(rel => hookLiterals[rel].filter(l => l.value.includes('sdlc:')).map(l => `${rel}:${l.line}`));
+assert('no hook literal outside plugin-names.js spells sdlc:', spellsPlugin, []);
+
+console.log('\nEvery name Claude is told to invoke is namespaced:');
+// A slash command or skill named bare: `/feature-new`, but not
+// `/sdlc:feature-new` or a path such as `skills/plan-spec/`.
+const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec)\b/m;
+const SUBAGENT_VALUE = /subagent_type:\s*"([^"]+)"/g;
+const SKILL_VALUE = /skill:\s*"([^"]+)"/g;
+const BUILT_IN_AGENTS = ['general-purpose'];
+// Fixtures quote bare names as input data, tests assert on hook output, and
+// check_citations.py names one as an example of a non-citation.
+const ALLOWLISTED_PREFIXES = ['skills/plan-spec/fixtures/', 'src/hooks/test-'];
+const ALLOWLISTED_LINES = [['skills/plan-spec/check_citations.py', 'slash commands (`/feature-new`)']];
+
+assert('BARE_INVOCATION catches a bare command', BARE_INVOCATION.test('run `/feature-new x`'), true);
+assert('BARE_INVOCATION passes a namespaced command', BARE_INVOCATION.test('run `/sdlc:feature-new x`'), false);
+assert('BARE_INVOCATION passes a path', BARE_INVOCATION.test('see skills/plan-spec/SKILL.md'), false);
+
+const invocable = new Set([
+    ...listDir(AGENTS_DIR).filter(e => e.isFile() && e.name.endsWith('.md')).map(e => e.name.slice(0, -3)),
+    ...listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name),
+    ...listDir(path.join(ROOT, 'commands')).filter(e => e.isFile() && e.name.endsWith('.md'))
+        .map(e => e.name.slice(0, -3)),
+]);
+const PLUGIN_NAME = (plugin && plugin.name) || 'sdlc';
+function dispatchOk(value) {
+    if (BUILT_IN_AGENTS.includes(value)) return true;
+    const prefix = PLUGIN_NAME + ':';
+    return value.startsWith(prefix) && invocable.has(value.slice(prefix.length));
+}
+const allowlisted = (rel, text) => ALLOWLISTED_PREFIXES.some(p => rel.startsWith(p)) ||
+    ALLOWLISTED_LINES.some(([file, needle]) => rel === file && text.includes(needle));
+
+const bareHits = [];
+const badDispatch = [];
+// One unit of scanned text: a hook literal, or a whole markdown/script file.
+function scanText(rel, firstLine, text) {
+    text.split('\n').forEach((lineText, k) => {
+        if (BARE_INVOCATION.test(lineText) && !allowlisted(rel, lineText)) {
+            bareHits.push(`${rel}:${firstLine + k}: ${lineText.trim().slice(0, 100)}`);
+        }
+    });
+    for (const re of [SUBAGENT_VALUE, SKILL_VALUE]) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const at = firstLine + (text.slice(0, m.index).match(/\n/g) || []).length;
+            if (!dispatchOk(m[1]) && !allowlisted(rel, m[0])) badDispatch.push(`${rel}:${at}: ${m[0]}`);
+        }
+    }
+}
+for (const rel of hookSources) {
+    for (const l of hookLiterals[rel]) scanText(rel, l.line, l.value);
+}
+const SNIPPETS = listDir(path.join(ROOT, '.claude'))
+    .filter(e => e.isFile() && e.name.endsWith('snippet.md')).map(e => path.join('.claude', e.name));
+assert('the snippets are found', SNIPPETS.length > 0, true);
+const textFiles = [
+    ...walk(SKILLS_DIR), ...walk(path.join(ROOT, 'commands')), ...walk(AGENTS_DIR), ...SNIPPETS,
+].filter(rel => !rel.split(path.sep).includes('__pycache__')).sort();
+for (const rel of textFiles) {
+    scanText(rel.split(path.sep).join('/'), 1, fs.readFileSync(path.join(ROOT, rel), 'utf-8'));
+}
+assert('no bare slash command or skill name outside the allowlist', bareHits, []);
+assert('every subagent_type and skill value is namespaced or built in', badDispatch, []);
+
 console.log(`\n===================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

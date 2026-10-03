@@ -168,7 +168,7 @@ TDD_GATE: PASS
 
 The trailer is the last line, nothing after it: `TDD_GATE: PASS` or
 `TDD_GATE: FAIL`. Any §6 failure or any CRITICAL finding forces FAIL.
-Number ACTIONABLE ITEMS from 1: `/code-review-implementer <n>` addresses
+Number ACTIONABLE ITEMS from 1: `/sdlc:code-review-implementer <n>` addresses
 them by that number.
 
 ## Stance

@@ -14,6 +14,7 @@ const gitRead = require('./lib/git-read');
 const timingLog = require('./timing-log');
 const ff = require('./lib/feature-file');
 const commitCommand = require('./lib/commit-command');
+const { cmd } = require('./lib/plugin-names');
 
 const BLOCKLIST_BRANCHES = ff.BLOCKLIST_BRANCHES;
 
@@ -203,7 +204,7 @@ function main() {
         process.stderr.write(
             '[feature] No features/' + slug + '.md stub found. '
             + 'Creation is handled at session start on a feature branch. '
-            + 'Run `/feature-new ' + slug + ' "<requirement>"` to seed it.\n'
+            + 'Run `' + cmd('feature-new') + ' ' + slug + ' "<requirement>"` to seed it.\n'
         );
         return;
     }

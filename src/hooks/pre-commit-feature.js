@@ -36,6 +36,7 @@ const timingLog = require('./timing-log');
 const ff = require('./lib/feature-file');
 const commitCommand = require('./lib/commit-command');
 const gitRead = require('./lib/git-read');
+const { cmd } = require('./lib/plugin-names');
 
 const hookTimer = timingLog.timer();
 const hookMeta = { hook: 'pre-commit-feature' };
@@ -182,7 +183,7 @@ if (ff.isGatedBranch(branch)) {
         + 'Create one — your staged changes carry over untouched:\n'
         + '  git checkout -b <slug>\n\n'
         + 'Then ask the user for a one-sentence requirement and run '
-        + '`/feature-new <slug> "<their answer>"` before retrying the commit.\n\n'
+        + '`' + cmd('feature-new') + ' <slug> "<their answer>"` before retrying the commit.\n\n'
         + 'If this repo should not be tracked: touch .claude/feature-tracking.disabled',
     );
 }
@@ -215,7 +216,7 @@ if (!fs.existsSync(featurePath)) {
         + (created ? ' — a stub was just created at `' + relPath + '`.' : '.')
         + '\n\nAsk the user: "What\'s the one-sentence requirement for `'
         + branch + '`?" Then run:\n'
-        + '  /feature-new ' + branch + ' "<their answer>"\n\n'
+        + '  ' + cmd('feature-new') + ' ' + branch + ' "<their answer>"\n\n'
         + 'Retry the commit once the requirement is captured.',
         { created_stub: created },
     );
@@ -236,7 +237,7 @@ if (ff.hasTbdRequirement(content)) {
         + 'this commit would record nothing useful.\n\n'
         + 'Ask the user: "What\'s the one-sentence requirement for `'
         + branch + '`?" Then run:\n'
-        + '  /feature-new ' + branch + ' "<their answer>"\n\n'
+        + '  ' + cmd('feature-new') + ' ' + branch + ' "<their answer>"\n\n'
         + 'Retry the commit once the requirement is captured.',
     );
 }

@@ -204,6 +204,7 @@ git -C "$REPO2" commit -q -m "add a.py"
 
 out=$(cd "$REPO2" && CLAUDE_TOOL_INPUT='git commit -m "add a.py"' node "$HOOK" 2>&1)
 assert_contains "skip-no-stub message" "$out" "No features/orphan-feature.md stub found"
+assert_contains "skip-no-stub names /sdlc:feature-new" "$out" "/sdlc:feature-new orphan-feature"
 
 if [ ! -f "$REPO2/features/orphan-feature.md" ]; then
     echo "  PASS: post-commit does NOT create stub"; PASS=$((PASS + 1))

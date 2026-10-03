@@ -63,6 +63,7 @@ const timingLog = require('./timing-log');
 const tddOrder = require('./lib/tdd-order');
 const commitCommand = require('./lib/commit-command');
 const gitRead = require('./lib/git-read');
+const { cmd, agent, skill } = require('./lib/plugin-names');
 
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const BLOCK_MARKER_MAX_AGE_MS = 30 * 1000;
@@ -237,11 +238,17 @@ function markerRecipe(markerPath, coveragePath, tag) {
 }
 
 // What every review-required block tells Claude, in one place: the rounds
-// policy and the marker recipe.
-const ROUNDS_POLICY = 'Round 1 is code-reviewer. Rerun with --deep (code-reviewer-deep) only after a ' +
+// policy and the marker recipe. The policy names the agents to dispatch, so
+// they are namespaced; the marker tag is a label and stays bare, which
+// TAG_NOTE says outright so a namespaced agent name does not leak into it.
+const REVIEW_CMD = cmd('code-review-pre-commit');
+const ROUNDS_POLICY = 'Round 1 is ' + agent('code-reviewer') + '. Rerun with --deep (' +
+    agent('code-reviewer-deep') + ') only after a ' +
     'FAIL with a CRITICAL or a correctness finding in a parser, gate or shell hunk; a pure scope/' +
-    'artefact/secret/churn FAIL reruns on code-reviewer. After two FAILs stop, show the open items, ' +
+    'artefact/secret/churn FAIL reruns on ' + agent('code-reviewer') + '. After two FAILs stop, show the open items, ' +
     'and ask the user to fix-and-rerun or to accept with the gap named in the commit message.';
+const TAG_NOTE = ' (replace code-reviewer:round1 with the bare agent name, code-reviewer or ' +
+    'code-reviewer-deep, and the round used)';
 
 function writeMarker(markerPath, diffHash, covHash, tag) {
     try {
@@ -621,7 +628,7 @@ function main() {
             block('review-in-flight', reason,
                 'PRE_COMMIT_REVIEW: ' + reason + '. Finish that review and, on ' +
                     'TDD_GATE: PASS, run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
-                    ' (replace code-reviewer:round1 with the agent and round used); or run `rm ' +
+                    TAG_NOTE + '; or run `rm ' +
                     shellQuote(LOCK_FILE) + '` to request a fresh review.');
         }
         try { fs.unlinkSync(LOCK_FILE); } catch (e) {}
@@ -782,7 +789,7 @@ function main() {
                     : 'coverage.xml is stale (older than staged files) and no hygiene cov check is configured';
                 const guidance = deferToHygiene
                     ? ' Wait for the hygiene hook to finish or check why it failed (ruff/pytest), then retry the commit.'
-                    : ' Regenerate manually: pytest --cov --cov-branch --cov-report=xml -q (or run /commit-prep).';
+                    : ' Regenerate manually: pytest --cov --cov-branch --cov-report=xml -q (or run ' + cmd('commit-prep') + ').';
                 block('coverage-stale', reason,
                     'PRE_COMMIT_REVIEW: ' + reason + '.' + guidance);
             }
@@ -851,7 +858,7 @@ function main() {
             block('coverage-gap-patch', 'Coverage thresholds not met',
                 'PRE_COMMIT_REVIEW: diff-cover reported uncovered lines.' + branchNote +
                     ' Dispatch ONE gap-patching sub-agent per the <gap-patching-mode> section of the ' +
-                    'code-review-pre-commit skill. Thresholds: diff-cover ' + policy.diff_cover_threshold +
+                    skill('code-review-pre-commit') + ' skill. Thresholds: diff-cover ' + policy.diff_cover_threshold +
                     '%, branch ' + policy.branch_cover_threshold + '%. Uncovered: ' + uncoveredSummary +
                     '. On success run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'gap-patch:round1:PASS') + '.');
         }
@@ -864,9 +871,9 @@ function main() {
     const fileList = codeFiles.map(sanitizePath).join(', ');
     let reason;
     if (markerFresh && markerBody === '') {
-        reason = 'Review marker is empty. Run /code-review-pre-commit --fresh and write the marker with the printf command below if the review passes.';
+        reason = 'Review marker is empty. Run ' + REVIEW_CMD + ' --fresh and write the marker with the printf command below if the review passes.';
     } else if (markerFresh && markerBody && markerBody.split('\n')[0] !== 'PASS') {
-        reason = 'Last review did not pass the review gate (marker body: ' + markerBody.split('\n')[0] + '). Fix the failing items and rerun /code-review-pre-commit --fresh.';
+        reason = 'Last review did not pass the review gate (marker body: ' + markerBody.split('\n')[0] + '). Fix the failing items and rerun ' + REVIEW_CMD + ' --fresh.';
     } else if (markerFresh && markerBody && markerBody.split('\n').length < 3) {
         reason = 'Review marker has no hashes (a legacy one-line PASS no longer approves). Rerun the review and write the marker with the printf command below.';
     } else {
@@ -875,10 +882,10 @@ function main() {
     reason = fastPathSkipNote + reason;
     writeBlockMarker(MARKER_FILE, diffHash, 'review-required: ' + reason.split('\n')[0].slice(0, 120));
     block('review-required', reason,
-        'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run /code-review-pre-commit --fresh on the ' +
+        'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run ' + REVIEW_CMD + ' --fresh on the ' +
         'staged files: ' + fileList + semanticNote + '. ' + ROUNDS_POLICY +
         ' On TDD_GATE: PASS run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
-        ' (replace code-reviewer:round1 with the agent and round used). On TDD_GATE: FAIL do not write the marker.');
+        TAG_NOTE + '. On TDD_GATE: FAIL do not write the marker.');
 }
 
 if (require.main === module) {

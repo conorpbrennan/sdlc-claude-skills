@@ -19,24 +19,25 @@ When the hook does block, the `systemMessage` carries one of two shapes:
 
 - **Gap-patching** (thresholds failed, `coverage.xml` present): dispatch ONE
   sub-agent using the `<gap-patching-mode>` prompt in
-  `code-review-pre-commit`, with the thresholds, uncovered lines and
+  `sdlc:code-review-pre-commit`, with the thresholds, uncovered lines and
   marker command from the message. No scope review alongside.
-- **Scope review** (everything else): run `/code-review-pre-commit --fresh`.
-  ONE `code-reviewer` sub-agent (Sonnet) on the staged diff. `--deep`
-  selects `code-reviewer-deep` (Opus) for security-sensitive or
+- **Scope review** (everything else): run `/sdlc:code-review-pre-commit --fresh`.
+  ONE `sdlc:code-reviewer` sub-agent (Sonnet) on the staged diff. `--deep`
+  selects `sdlc:code-reviewer-deep` (Opus) for security-sensitive or
   parser-shaped changes and when the rounds policy says so.
 
 Both reports end with `TDD_GATE: PASS` or `TDD_GATE: FAIL` on the last line.
 
 On **PASS**, run the `printf` command from the block message verbatim,
-replacing `code-reviewer:round1` with the agent and round used. It
+replacing `code-reviewer:round1` with the bare agent name (`code-reviewer`
+or `code-reviewer-deep`, no `sdlc:` prefix) and the round used. It
 recomputes both hashes at write time; do not compose a marker command by
 hand.
 
 On **FAIL**, do NOT write the marker. Surface the failing items and fix
-with user permission. Rerun on `code-reviewer-deep` only after a CRITICAL
+with user permission. Rerun on `sdlc:code-reviewer-deep` only after a CRITICAL
 or a correctness finding in a parser, gate or shell hunk; otherwise on
-`code-reviewer`. After two FAILs stop and ask the user to fix-and-rerun or
+`sdlc:code-reviewer`. After two FAILs stop and ask the user to fix-and-rerun or
 to accept with the gap named in the commit message.
 
 **Stop after the marker is written.** Completing a review does not grant
