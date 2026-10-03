@@ -1172,6 +1172,69 @@ try {
     assertFalse('...and no trivial-diff tag', (readMarker() || '').includes('trivial-diff'));
     unstageTracked();
 
+    // A crash in the TDD check is no verdict, and no verdict is not a pass: the
+    // same comment-only change must be blocked, naming the error, never approved
+    // trivial-diff. The crash is simulated without touching lib/tdd-order.js: a
+    // --require preload replaces classifyTddOrder on the module's shared exports
+    // object, which is the object the hook's own require() returns.
+    console.log('\n[INT] A crash in the TDD check blocks, and opens no fast path:');
+    const TDD_CRASH_PRELOAD = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-crash.js');
+    fs.writeFileSync(TDD_CRASH_PRELOAD,
+        'const m = require(' + JSON.stringify(path.join(__dirname, 'lib', 'tdd-order.js')) + ');\n' +
+        'm.classifyTddOrder = () => { throw new Error("simulated tdd-order crash"); };\n', 'utf-8');
+    cleanAll();
+    unstageDummy();
+    stageTrackedAppend('# just a note\n');
+    r = runHook('git commit -m x',
+        { TDD_MANDATE_CONFIG: NO_MANDATE_CFG, NODE_OPTIONS: '--require ' + JSON.stringify(TDD_CRASH_PRELOAD) },
+        { realMandate: true, input: { transcript_path: '' } });
+    assert('comment-only, TDD check crashes, mandate on: blocked', r.decision, 'block');
+    assertContains('...naming the TDD check error', r.systemMessage || '', 'simulated tdd-order crash');
+    assertFalse('...with no PASS marker', (readMarker() || '').startsWith('PASS'));
+    assertFalse('...and no trivial-diff tag', (readMarker() || '').includes('trivial-diff'));
+    // Like an unreadable index: no lock and no BLOCK marker, so the retry
+    // re-runs the check rather than replaying a cached block.
+    assertFalse('...writes no marker', fs.existsSync(MARKER));
+    assertFalse('...writes no lock', fs.existsSync(LOCK));
+    unstageTracked();
+    try { fs.unlinkSync(TDD_CRASH_PRELOAD); } catch (e) {}
+    cleanAll();
+
+    console.log('\n[UNIT] evaluateTddOrderGate on a throwing classifier blocks:');
+    {
+        const tddOrderMod = require(path.join(__dirname, 'lib', 'tdd-order.js'));
+        const realClassify = tddOrderMod.classifyTddOrder;
+        const savedMandateCfg = process.env.TDD_MANDATE_CONFIG;
+        process.env.TDD_MANDATE_CONFIG = NO_MANDATE_CFG;
+        stageTrackedAppend('# just a note\n');
+        tddOrderMod.classifyTddOrder = () => { throw new Error('simulated tdd-order crash'); };
+        try {
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '');
+            assert('throwing classifier: gate blocks', gate.action, 'block');
+            assert('throwing classifier: status is classifier-error', gate.status, 'classifier-error');
+            assertContains('throwing classifier: reason names the error', gate.reason || '', 'simulated tdd-order crash');
+        } finally {
+            tddOrderMod.classifyTddOrder = realClassify;
+            if (savedMandateCfg === undefined) delete process.env.TDD_MANDATE_CONFIG;
+            else process.env.TDD_MANDATE_CONFIG = savedMandateCfg;
+            unstageTracked();
+        }
+        // A throw that carries no message still blocks, with a reason.
+        tddOrderMod.classifyTddOrder = () => { throw undefined; };   // eslint-disable-line no-throw-literal
+        process.env.TDD_MANDATE_CONFIG = NO_MANDATE_CFG;
+        stageTrackedAppend('# just a note\n');
+        try {
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '');
+            assert('messageless throw: gate blocks', gate.action, 'block');
+            assertContains('messageless throw: reason still set', gate.reason || '', 'classifier-error');
+        } finally {
+            tddOrderMod.classifyTddOrder = realClassify;
+            if (savedMandateCfg === undefined) delete process.env.TDD_MANDATE_CONFIG;
+            else process.env.TDD_MANDATE_CONFIG = savedMandateCfg;
+            unstageTracked();
+        }
+    }
+
     console.log('\n[INT] Presentational path (Q1: opt-in, counts non-trivial lines):');
     const POLICY_KEY = REPO_ROOT.replace(/\\/g, '/');
     cleanAll();
