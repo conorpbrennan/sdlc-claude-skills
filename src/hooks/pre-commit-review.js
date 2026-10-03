@@ -19,13 +19,15 @@
 //                         no marker matched: a review was requested and has
 //                         not passed. The lock never approves. A lock for a
 //                         different diff is stale and removed.
-//   classifier         -> approve a diff with no semantic change (or a small
-//                         change confined to presentational paths); writes
-//                         the marker.
 //   tdd mandate        -> on by default everywhere: block impl edited before
 //                         its test, or impl with no test in the diff. Order
 //                         comes from the session transcript; when it cannot
-//                         be known, a test must still be present.
+//                         be known, a test must still be present. Runs before
+//                         every fast path, and only a `continue` verdict lets
+//                         one approve.
+//   classifier         -> approve a diff whose every changed line is blank or
+//                         a whole comment (or, opt-in, a few non-trivial lines
+//                         confined to presentational paths); writes the marker.
 //   coverage           -> Python repos with coverage.xml: approve when
 //                         diff-cover and branch thresholds are met; block
 //                         with a gap-patching message when they are not;
@@ -138,8 +140,24 @@ function readStagedDiff(codeFiles, opts) {
     const maxBuffer = o.maxBuffer ||
         parseInt(process.env.REVIEW_DIFF_MAX_BUFFER || '', 10) || DIFF_MAX_BUFFER_BYTES;
     try {
-        const text = execFileSync('git', ['diff', '--cached', '-U0', '--', ...(codeFiles || [])], {
-            encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer, cwd: o.cwd,
+        // -U1: one line of context gives each changed line its predecessor, so the
+        // classifier can see a line continued from the one before it.
+        // --text: a NUL byte or a `-diff`/`binary` attribute (an untracked
+        // .gitattributes is enough) would otherwise print `Binary files ...
+        // differ` with no +/- lines. --no-ext-diff, --no-textconv: a configured
+        // driver or filter could rewrite the lines the classifier reads.
+        // --no-color: `color.ui=always` (user or repo config, or GIT_CONFIG_COUNT)
+        // wraps every header in ANSI codes, and no section would be recognised.
+        // --submodule=short: `diff.submodule=log|diff` prints a gitlink bump as bare
+        // `Submodule ...` lines with no `diff --git` header, index line or hunk.
+        // The env drops GIT_DIFF_OPTS (`--unified=0` there overrides -U1 and
+        // hides a continued line's predecessor) and GIT_EXTERNAL_DIFF.
+        const env = { ...process.env };
+        delete env.GIT_DIFF_OPTS;
+        delete env.GIT_EXTERNAL_DIFF;
+        const text = execFileSync('git', ['diff', '--cached', '--text', '--no-ext-diff', '--no-textconv',
+            '--no-color', '--submodule=short', '-U1', '--', ...(codeFiles || [])], {
+            encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer, cwd: o.cwd, env,
         });
         const bytes = Buffer.byteLength(text);
         if (bytes === 0 && codeFiles && codeFiles.length > 0) {
@@ -640,56 +658,14 @@ function main() {
         try { fs.unlinkSync(LOCK_FILE); } catch (e) {}
     }
 
-    // Classifier: trivial-diff fast path over the staged CODE files only.
-    // A read failure (null) is not an empty diff: skip the fast path and let
-    // the review gates below decide. The note is carried into the default
-    // block message so the developer can see why the fast path was skipped.
-    const diffRead = readStagedDiff(codeFiles, { cwd: toplevel });
-    timingLog.logEvent('staged_diff_read', {
-        ...hookMeta, bytes: diffRead.bytes, ok: diffRead.text !== null, error: diffRead.error,
-    });
-    // Why no fast path applied, prepended to the review-required message. Three
-    // reasons reach it: the diff could not be read, it holds a language the
-    // classifier cannot model, or coverage passed but does not cover everything
-    // staged.
-    let fastPathSkipNote = '';
-    let semanticNote = '';
-    if (diffRead.text === null) {
-        fastPathSkipNote = 'Staged diff could not be read (' + diffRead.error + '), so the trivial-diff fast path was skipped. ';
-    } else if (!codeFiles.every(classifierUnderstands)) {
-        // Fail closed on a language the classifier does not model. Scoring every
-        // shell line as non-semantic would otherwise make any shell diff look
-        // trivial and take a fast path.
-        const unreadable = codeFiles.filter(f => !classifierUnderstands(f));
-        fastPathSkipNote = 'Staged diff includes ' + unreadable.length + ' file(s) the ' +
-            'classifier cannot read (' + unreadable.slice(0, 3).map(sanitizePath).join(', ') +
-            (unreadable.length > 3 ? ', ...' : '') + '), so both fast paths were skipped. ';
-    } else {
-        const classification = classifyDiff(diffRead.text);
-        semanticNote = ' (' + classification.semanticAdded + ' semantic lines added, ' +
-            classification.semanticRemoved + ' removed)';
-        let fastPathReason = null;
-        if (classification.semanticAdded === 0 && classification.semanticRemoved === 0) {
-            fastPathReason = 'trivial-diff';
-        } else if (
-            classification.semanticAdded <= policy.trivial_line_threshold &&
-            classification.semanticRemoved === 0 &&
-            policy.presentational_paths.length > 0 &&
-            codeFiles.every(f => matchesAnyGlob(f, policy.presentational_paths))
-        ) {
-            fastPathReason = 'presentational';
-        }
-        if (fastPathReason) {
-            writeMarker(MARKER_FILE, diffHash, covHash, fastPathReason);
-            appendFastPassLog(gitDir, fastPathReason, (diffHash || '').slice(0, 8), codeFiles.length);
-            endHook('approve', { via: 'classifier-' + fastPathReason });
-            approve();
-        }
-    }
-
     // The TDD mandate, on by default in every repository. See
     // evaluateTddOrderGate and lib/tdd-order.js `mandateInForce` for the rule and
     // the two ways out.
+    //
+    // It runs BEFORE every fast path. It used to run after the classifier, so a
+    // diff the classifier called trivial was approved -- and given a PASS marker --
+    // without the mandate ever being asked. No approval below this point may skip
+    // it: every fast path also checks that the verdict is `continue`.
     const tddGate = evaluateTddOrderGate(toplevel, hookData.transcript_path, !!shape.amend);
     timingLog.logEvent('tdd_order_gate', {
         ...hookMeta,
@@ -726,6 +702,58 @@ function main() {
             'PRE_COMMIT_REVIEW: ' + reason + remedy +
                 ' To exempt this repository: touch .claude/tdd-mandate.disabled, or add it' +
                 ' to exempt_repos in ~/.claude/tdd-mandate.json.');
+    }
+    const tddAllowsFastPath = tddGate.action === 'continue';
+
+    // Classifier: trivial-diff fast path over the staged CODE files only.
+    // A read failure (null) is not an empty diff: skip the fast path and let
+    // the review gates below decide. The note is carried into the default
+    // block message so the developer can see why the fast path was skipped.
+    const diffRead = readStagedDiff(codeFiles, { cwd: toplevel });
+    timingLog.logEvent('staged_diff_read', {
+        ...hookMeta, bytes: diffRead.bytes, ok: diffRead.text !== null, error: diffRead.error,
+    });
+    // Why no fast path applied, prepended to the review-required message. Three
+    // reasons reach it: the diff could not be read, it holds a language the
+    // classifier cannot model, or coverage passed but does not cover everything
+    // staged.
+    let fastPathSkipNote = '';
+    let semanticNote = '';
+    if (diffRead.text === null) {
+        fastPathSkipNote = 'Staged diff could not be read (' + diffRead.error + '), so the trivial-diff fast path was skipped. ';
+    } else if (!codeFiles.every(classifierUnderstands)) {
+        // Fail closed on a language the classifier has no comment syntax for. A
+        // shell diff has no line it could prove trivial, and must not reach a
+        // fast path through a language table that does not describe it.
+        const unreadable = codeFiles.filter(f => !classifierUnderstands(f));
+        fastPathSkipNote = 'Staged diff includes ' + unreadable.length + ' file(s) the ' +
+            'classifier cannot read (' + unreadable.slice(0, 3).map(sanitizePath).join(', ') +
+            (unreadable.length > 3 ? ', ...' : '') + '), so both fast paths were skipped. ';
+    } else {
+        // Counts NON-TRIVIAL lines: anything but blank lines and whole comments.
+        const classification = classifyDiff(diffRead.text);
+        semanticNote = ' (' + classification.semanticAdded + ' non-trivial lines added, ' +
+            classification.semanticRemoved + ' removed)';
+        let fastPathReason = null;
+        if (classification.semanticAdded === 0 && classification.semanticRemoved === 0) {
+            fastPathReason = 'trivial-diff';
+        } else if (
+            // Presentational (Q1: kept, opt-in, off by default): at most
+            // trivial_line_threshold non-trivial added lines, none removed, and
+            // every staged code file inside a configured presentational_paths glob.
+            classification.semanticAdded <= policy.trivial_line_threshold &&
+            classification.semanticRemoved === 0 &&
+            policy.presentational_paths.length > 0 &&
+            codeFiles.every(f => matchesAnyGlob(f, policy.presentational_paths))
+        ) {
+            fastPathReason = 'presentational';
+        }
+        if (fastPathReason && tddAllowsFastPath) {
+            writeMarker(MARKER_FILE, diffHash, covHash, fastPathReason);
+            appendFastPassLog(gitDir, fastPathReason, (diffHash || '').slice(0, 8), codeFiles.length);
+            endHook('approve', { via: 'classifier-' + fastPathReason });
+            approve();
+        }
     }
 
     // Coverage: hook-level threshold check (Python only, coverage.xml must exist).
@@ -833,7 +861,7 @@ function main() {
         // Only the APPROVAL is withheld. The gap-block below stays unconditional:
         // a coverage gap is still a gap whatever else is staged.
         const allCoverable = codeFiles.every(coverageMeasurable);
-        if (dcRan && !haveActionableGap && allCoverable) {
+        if (dcRan && !haveActionableGap && allCoverable && tddAllowsFastPath) {
             const tag = dcOk ? 'thresholds-met' : 'thresholds-met-empty-gap';
             writeMarker(MARKER_FILE, diffHash, effectiveCovHash, tag);
             appendFastPassLog(gitDir, tag, (diffHash || '').slice(0, 8), codeFiles.length);
