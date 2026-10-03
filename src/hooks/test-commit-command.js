@@ -285,6 +285,95 @@ ok('add && commit reports hasCommit', classifyCommitCommand('git add x && git co
 ok('non-commit reports no commit', classifyCommitCommand('git status').hasCommit === false);
 ok('wrapped commit reports no top-level commit', classifyCommitCommand('bash -c "git commit -m y"').hasCommit === false);
 
+console.log('\n[UNIT] commit-producing commands are refused in their committing form');
+{
+    const kind = (cmd, opts) => classifyCommitCommand(cmd, opts).kind;
+    const refused = (name, cmd, needle, opts) => {
+        const r = classifyCommitCommand(cmd, opts);
+        ok(name, r.kind === 'unreliable' && typeof r.reason === 'string' && (!needle || r.reason.includes(needle)), r);
+    };
+    const passes = (name, cmd, opts) => ok(name, kind(cmd, opts) === 'not-a-commit', classifyCommitCommand(cmd, opts));
+    refused('commit-tree', 'git commit-tree 4b825dc -p HEAD -m x', 'commit-tree');
+    refused('cherry-pick names -n', 'git cherry-pick abc123', '-n');
+    refused('revert names --no-commit', 'git revert abc123', '--no-commit');
+    refused('merge names --no-commit', 'git merge feature', '--no-commit');
+    refused('am', 'git am p.mbox', 'git am');
+    refused('rebase', 'git rebase main', 'git rebase');
+    refused('pull names --ff-only', 'git pull', '--ff-only');
+    refused('pull with remote', 'git pull origin main', '--ff-only');
+    refused('cherry-pick --continue commits', 'git cherry-pick --continue', 'cherry-pick');
+    refused('rebase --continue commits', 'git rebase --continue', 'rebase');
+    refused('merge --continue commits', 'git merge --continue', 'merge');
+    refused('am --continue commits', 'git am --continue', 'git am');
+    refused('revert --continue commits', 'git revert --continue', 'revert');
+    refused('merge -n is --no-stat, still commits', 'git merge -n feature', 'merge');
+    refused('behind global options', 'git -C . cherry-pick abc', 'cherry-pick');
+    passes('merge --ff-only', 'git merge --ff-only x');
+    passes('pull --ff-only', 'git pull --ff-only');
+    passes('cherry-pick -n', 'git cherry-pick -n x');
+    passes('cherry-pick --no-commit', 'git cherry-pick --no-commit x');
+    passes('revert --no-commit', 'git revert --no-commit x');
+    passes('revert -n', 'git revert -n x');
+    passes('merge --squash', 'git merge --squash x');
+    passes('merge --no-commit', 'git merge --no-commit x');
+    for (const sub of ['cherry-pick', 'revert', 'merge', 'rebase', 'am']) {
+        passes(sub + ' --abort', 'git ' + sub + ' --abort');
+        passes(sub + ' --quit', 'git ' + sub + ' --quit');
+    }
+    refused('cherry-pick -n then commit still stages in the same command',
+        'git cherry-pick -n x && git commit -m y', 'cherry-pick');
+
+    console.log('\n[UNIT] git-<sub> executables');
+    ok('/usr/lib/git-core/git-commit is a commit', kind('/usr/lib/git-core/git-commit -m x') === 'commit',
+        classifyCommitCommand('/usr/lib/git-core/git-commit -m x'));
+    ok('git-commit reports hasCommit', classifyCommitCommand('git-commit -m x').hasCommit === true);
+    refused('git-commit -a is unreliable', 'git-commit -a -m x', '-a');
+    refused('git-cherry-pick is refused', 'git-cherry-pick abc', '-n');
+    refused('git-add && git commit stages', 'git-add x && git commit -m y', 'git add');
+    passes('a git-named script is not git', 'python git-tool.py');
+
+    console.log('\n[UNIT] persisted aliases');
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-alias-'));
+    const g = (...a) => execFileSync('git', a, { cwd: repo, stdio: 'pipe' });
+    g('init', '-q');
+    g('config', 'alias.ci', 'commit');
+    g('config', 'alias.cia', 'commit -a');
+    g('config', 'alias.cp', 'cherry-pick -n');
+    g('config', 'alias.pick', 'cherry-pick');
+    g('config', 'alias.x', '!sh -c "git add . && git commit -m y"');
+    g('config', 'alias.st', 'status');
+    g('config', 'alias.c2', 'ci');
+    g('config', 'alias.unstage', 'reset HEAD --');
+    const o = { cwd: repo };
+    ok('git ci (alias.ci=commit) is a commit', kind('git ci -m y', o) === 'commit', classifyCommitCommand('git ci -m y', o));
+    ok('git ci reports hasCommit', classifyCommitCommand('git ci -m y', o).hasCommit === true);
+    ok('git c2 (alias of an alias) is a commit', kind('git c2 -m y', o) === 'commit', classifyCommitCommand('git c2 -m y', o));
+    refused('git x (shell alias) is unreliable', 'git x', 'alias', o);
+    refused('git cia (alias.cia=commit -a) names -a', 'git cia -m y', '-a', o);
+    passes('git cp (alias.cp=cherry-pick -n) x', 'git cp x', o);
+    refused('git pick (alias.pick=cherry-pick) x', 'git pick x', '-n', o);
+    passes('git st (alias.st=status)', 'git st', o);
+    passes('git status (no alias)', 'git status', o);
+    passes('git nope (no such alias)', 'git nope', o);
+    refused('alias that unstages, then commit', 'git unstage a.py && git commit -m y', 'git reset', o);
+
+    // The default resolver reads `alias.<sub>` once per unknown subcommand.
+    const calls = [];
+    const counting = { resolveAlias: sub => { calls.push(sub); return ''; } };
+    ok('absent alias: not-a-commit', kind('git status', counting) === 'not-a-commit');
+    ok('absent alias costs exactly one read', calls.length === 1 && calls[0] === 'status', calls);
+    calls.length = 0;
+    kind('git commit -m y && git log -1', counting);
+    ok('commit costs no read, log costs one', calls.length === 1 && calls[0] === 'log', calls);
+    ok('a failed read is unreliable', kind('git ci -m y', { resolveAlias: () => null }) === 'unreliable');
+
+    const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-alias-broken-'));
+    execFileSync('git', ['init', '-q'], { cwd: broken, stdio: 'pipe' });
+    fs.writeFileSync(path.join(broken, '.git', 'config'), '[core\n\tbare = = =\n[[[\n');
+    refused('unreadable config is unreliable', 'git ci -m y', 'alias', { cwd: broken });
+    for (const d of [repo, broken]) fs.rmSync(d, { recursive: true, force: true });
+}
+
 console.log('\n[UNIT] splitSegments');
 const segs = splitSegments('cd x && git add a b; git commit -m "a && b"');
 ok('three segments', segs.length === 3, segs);

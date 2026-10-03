@@ -75,11 +75,11 @@ Iterate until one of two conditions, then dispatch step one.
 the fix that closes it is new text no round has read, and a correction flag
 makes it look more checked, not less.
 
-- Run `python3 .claude/skills/plan-spec/check_citations.py <plan> <branch>`
-  before every round and before dispatch — it is a gate, not a criterion. A
+- Run `check_citations.py` in this skill's base directory, as
+  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. A
   `NEW` file set exempts paths and symbols; a `TESTS FIRST` field exempts
   symbols only, so the test's file must still resolve.
-- Apply a batch of edits with `.claude/skills/plan-spec/edit_doc.py` — `apply_edits` for one file,
+- Apply a batch of edits with `edit_doc.py` in this skill's base directory — `apply_edits` for one file,
   `apply_edits_multi` across several — never a read-substitute-write loop: a
   loop leaves earlier edits on disk when a later anchor misses and reports
   only the miss (§20.2).

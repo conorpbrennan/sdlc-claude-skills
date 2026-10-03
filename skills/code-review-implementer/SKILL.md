@@ -8,7 +8,7 @@ arg_spec: "[all|critical|important|advisory|<item-numbers>]"
 # Code review implementer
 
 Turns a review report's `ACTIONABLE ITEMS` into fixes. The report is the
-one produced by `/code-review-pre-commit` (its items are numbered from 1
+one produced by `/sdlc:code-review-pre-commit` (its items are numbered from 1
 for exactly this purpose); the fixes are made by one fresh sub-agent so
 the change stays minimal and isolated from the conversation that wrote the
 code.
@@ -16,11 +16,11 @@ code.
 ## Usage
 
 ```
-/code-review-implementer              # every actionable item
-/code-review-implementer critical     # CRITICAL only
-/code-review-implementer important    # CRITICAL and IMPORTANT
-/code-review-implementer advisory     # everything, ADVISORY included
-/code-review-implementer 1 3 5        # items 1, 3 and 5 by number
+/sdlc:code-review-implementer              # every actionable item
+/sdlc:code-review-implementer critical     # CRITICAL only
+/sdlc:code-review-implementer important    # CRITICAL and IMPORTANT
+/sdlc:code-review-implementer advisory     # everything, ADVISORY included
+/sdlc:code-review-implementer 1 3 5        # items 1, 3 and 5 by number
 ```
 
 <protocol>
@@ -29,7 +29,7 @@ code.
 A review report must be in this conversation: `## FINDINGS` and
 `## ACTIONABLE ITEMS` with `file:line` references, ending in a
 `TDD_GATE:` trailer. If there is none, say so and point at
-`/code-review-pre-commit --fresh`. Stop.
+`/sdlc:code-review-pre-commit --fresh`. Stop.
 </prerequisite>
 
 <scope>
@@ -72,9 +72,9 @@ RULES:
 
 <after>
 Relay the sub-agent's per-item outcome and the test result. Then rerun
-the review per the rounds policy in `code-review-pre-commit`: on
-`code-reviewer-deep` if the FAIL carried a CRITICAL or a correctness
-finding in a parser, gate or shell hunk, otherwise on `code-reviewer`.
+the review per the rounds policy in `sdlc:code-review-pre-commit`: on
+`sdlc:code-reviewer-deep` if the FAIL carried a CRITICAL or a correctness
+finding in a parser, gate or shell hunk, otherwise on `sdlc:code-reviewer`.
 Do not stage or commit; that is the user's call.
 </after>
 

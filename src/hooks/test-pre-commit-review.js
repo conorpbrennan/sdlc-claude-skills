@@ -1,8 +1,8 @@
 // Tests for pre-commit-review.js PreToolUse hook.
 // Two suites:
-//   1. Unit tests for the exported classifier (classifyDiff, isLineSemantic).
+//   1. Unit tests for the exported classifier (classifyDiff, isLineTrivial).
 //   2. Integration tests via spawnSync (original suite plus new-gate cases).
-const { spawnSync, execSync } = require('child_process');
+const { spawnSync, execSync, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -21,12 +21,29 @@ const COV_XML = path.resolve(TMP_DIR, 'pre-commit-hook-test-coverage.xml');
 const POLICY_PATH = path.resolve(TMP_DIR, 'pre-commit-hook-test-policy.json');
 const DIFF_COVER_STUB = path.resolve(TMP_DIR, 'mock-diff-cover.js');
 
+// Gate isolation. The integration cases stage a lone dummy .py with no test
+// beside it, so under the TDD mandate (on by default) its no_tests block fires
+// first and the coverage gate, the review-required block and its message
+// never run. Every case that targets a
+// gate other than the TDD gate therefore runs with the mandate exempting this
+// repository, through a scratch config (the same pattern the subdir empty-read
+// case uses). Cases that target the TDD gate pass `realMandate: true` and run
+// under the mandate as installed; an explicit TDD_MANDATE_CONFIG in extraEnv
+// also wins.
+const TDD_EXEMPT_CFG = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-exempt.json');
+function writeTddExemptCfg() {
+    fs.mkdirSync(TMP_DIR, { recursive: true });
+    fs.writeFileSync(TDD_EXEMPT_CFG, JSON.stringify({ exempt_repos: [REPO_ROOT] }), 'utf-8');
+}
+function cleanTddExemptCfg() { try { fs.unlinkSync(TDD_EXEMPT_CFG); } catch (e) {} }
+
 function runHook(command, extraEnv = {}, opts = {}) {
+    const isolation = opts.realMandate ? {} : { TDD_MANDATE_CONFIG: TDD_EXEMPT_CFG };
     const result = spawnSync('node', [HOOK_PATH], {
         input: JSON.stringify({ tool_input: { command }, ...(opts.input || {}) }),
         encoding: 'utf-8',
         cwd: opts.cwd || REPO_ROOT,
-        env: { ...process.env, ...extraEnv },
+        env: { ...process.env, ...isolation, ...extraEnv },
     });
     if (!result.stdout.trim()) return { decision: 'silent' };
     return JSON.parse(result.stdout.trim());
@@ -46,6 +63,23 @@ function stageDummyContent(content) {
 function unstageDummy() {
     try { execSync(`git reset HEAD "${DUMMY}"`, { cwd: REPO_ROOT, stdio: 'pipe' }); } catch (e) {}
     try { fs.unlinkSync(DUMMY); } catch (e) {}
+}
+
+// A NEW file is never trivial (round 2, item 3), and nothing under tmp/ is
+// tracked, so a case that needs a fast-path-eligible change appends `extra` to a
+// tracked code file, straight into the index (the working tree is never touched),
+// keeping its HEAD mode. unstageTracked() puts the index entry back.
+const TRACKED_REL = 'tools/analyze-review-timing.py';
+function stageTrackedAppend(extra) {
+    const mode = execFileSync('git', ['ls-tree', 'HEAD', '--', TRACKED_REL],
+        { cwd: REPO_ROOT, encoding: 'utf-8' }).split(' ')[0];
+    const head = execFileSync('git', ['show', 'HEAD:' + TRACKED_REL], { cwd: REPO_ROOT, encoding: 'utf-8' });
+    const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
+        { cwd: REPO_ROOT, encoding: 'utf-8', input: head + extra }).trim();
+    execFileSync('git', ['update-index', '--cacheinfo', mode + ',' + blob + ',' + TRACKED_REL], { cwd: REPO_ROOT });
+}
+function unstageTracked() {
+    try { execFileSync('git', ['reset', '-q', 'HEAD', '--', TRACKED_REL], { cwd: REPO_ROOT }); } catch (e) {}
 }
 
 const FIXTURE_XML = path.resolve(TMP_DIR, 'pre-commit-hook-test-fixture.xml');
@@ -88,6 +122,24 @@ function writeGitShim(failArg = 'diff', fromCall = 1) {
     return GIT_SHIM_DIR + path.delimiter + process.env.PATH;
 }
 function cleanGitShim() { try { fs.rmSync(GIT_SHIM_DIR, { recursive: true, force: true }); } catch (e) {} }
+// A git shim on PATH that makes any invocation whose argv contains `emptyArg`
+// print nothing and exit 0, and passes everything else to the real git.
+// Simulates a read that "succeeds" with an empty diff. Shares GIT_SHIM_DIR, so
+// cleanGitShim removes it.
+function writeGitEmptyShim(emptyArg = '-U1') {
+    const realGit = execSync('command -v git', { encoding: 'utf-8', shell: '/bin/bash' }).trim();
+    fs.mkdirSync(GIT_SHIM_DIR, { recursive: true });
+    const shim = path.resolve(GIT_SHIM_DIR, 'git');
+    fs.writeFileSync(shim, [
+        '#!/bin/bash',
+        'for a in "$@"; do',
+        '  if [ "$a" = ' + JSON.stringify(emptyArg) + ' ]; then exit 0; fi',
+        'done',
+        'exec ' + JSON.stringify(realGit) + ' "$@"',
+        '',
+    ].join('\n'), { mode: 0o755 });
+    return GIT_SHIM_DIR + path.delimiter + process.env.PATH;
+}
 
 // A directory that is guaranteed not to be inside this repository.
 const NON_REPO_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-nonrepo-'));
@@ -101,7 +153,7 @@ function fastPassLogLines() {
 
 // The hash the hook uses: the staged diff with feature records excluded.
 function stagedDiffHash() {
-    return execSync("git diff --cached -- ':(top,exclude)features/*.md' | git hash-object --stdin", {
+    return execSync(require(path.join(__dirname, 'lib', 'git-read.js')).HASH_PIPELINE, {
         encoding: 'utf-8', cwd: REPO_ROOT, shell: true,
     }).trim();
 }
@@ -249,44 +301,123 @@ console.log('\n[UNIT] isSourcePath / SOURCE_EXTENSIONS');
     assertTrue('the list carries .ps1', m.SOURCE_EXTENSIONS.includes('.ps1'));
 }
 
-console.log('\n[UNIT] Classifier: isLineSemantic');
+console.log('\n[UNIT] Classifier: isLineTrivial');
 const mod = require(HOOK_PATH);
-const { isLineSemantic, classifyDiff, readBranchCoverage,
+const { classifyDiff, readBranchCoverage,
     pollForFreshCoverage, hygieneHasCovCheck, isCovCheck, extractUncovered } = mod;
 
-// Trivial lines
-assertFalse('blank line is trivial', isLineSemantic(''));
-assertFalse('whitespace-only is trivial', isLineSemantic('    '));
-assertFalse('python # comment is trivial', isLineSemantic('# just a note'));
-assertFalse('indented # comment is trivial', isLineSemantic('    # indented'));
-assertFalse('js // comment is trivial', isLineSemantic('// a remark'));
-assertFalse('pure literal string assignment is trivial', isLineSemantic('x = "foo"'));
-assertFalse('pure literal number assignment is trivial', isLineSemantic('count = 42'));
-assertFalse('pure literal list is trivial', isLineSemantic('items = [1, 2, 3]'));
-assertFalse('pure literal dict is trivial', isLineSemantic('cfg = {"a": 1}'));
-assertFalse('None assignment is trivial', isLineSemantic('x = None'));
-
-// Semantic: keyword-bearing
-assertTrue('def line is semantic', isLineSemantic('def foo():'));
-assertTrue('async def is semantic', isLineSemantic('async def foo():'));
-assertTrue('class line is semantic', isLineSemantic('class Bar:'));
-assertTrue('if line is semantic', isLineSemantic('if x > 0:'));
-assertTrue('for line is semantic', isLineSemantic('for i in range(10):'));
-assertTrue('raise line is semantic', isLineSemantic('raise ValueError("bad")'));
-assertTrue('return line is semantic', isLineSemantic('return x + 1'));
-assertTrue('import line is semantic', isLineSemantic('import os'));
-assertTrue('from ... import is semantic', isLineSemantic('from pathlib import Path'));
-
-// Semantic: bare call (no =, no keyword)
-assertTrue('bare method call is semantic', isLineSemantic('obj.method_that_raises()'));
-assertTrue('bare function call is semantic', isLineSemantic('do_work(42)'));
-
-// Semantic: assignment with non-literal RHS
-assertTrue('assignment with call RHS is semantic', isLineSemantic('y = foo()'));
-assertTrue('assignment with expression RHS is semantic', isLineSemantic('total = a + b'));
-
-// Edge: == is not assignment
-assertFalse('equality comparison alone is trivial', isLineSemantic('# x == 1'));
+// The classifier is inverted: a line is trivial only when it is blank, wholly a
+// comment for its file's language, or wholly one block comment. Everything else
+// counts, so a line the classifier does not understand is never waved through.
+// `missing` keeps the table readable (and red, not crashed) before the export exists.
+function trivial(line, ext) {
+    return typeof mod.isLineTrivial === 'function' ? mod.isLineTrivial(line, ext) : 'missing';
+}
+{
+    const ALL = ['.py', '.rb', '.php', '.js', '.ts', '.tsx', '.jsx', '.java', '.c', '.cpp',
+        '.h', '.hpp', '.cs', '.go', '.rs', '.swift', '.kt', '.scala', '.sql', '.sh', '.ps1', ''];
+    const C_STYLE = ['.js', '.ts', '.tsx', '.jsx', '.java', '.c', '.cpp', '.h', '.hpp', '.cs',
+        '.go', '.rs', '.swift', '.kt', '.scala', '.php'];
+    const HASH = ['.py', '.rb', '.php'];
+    const BLOCK = [...C_STYLE, '.sql'];
+    const SQL = ['.sql'];
+    const not = (langs) => ALL.filter(e => !langs.includes(e));
+    // [line, exts where it is trivial]. Every other extension in ALL must score it
+    // non-trivial: a marker not listed for a language is never a comment in it.
+    const TABLE = [
+        // The verified-facts lines (plan section 1): the old classifier scored
+        // every one of these as trivial.
+        ['assert user.is_admin', []],
+        ['is_admin = True', []],
+        ['ALLOWED = ["*"]', []],
+        ['os.system(', []],
+        ['@admin_required', []],
+        ['counter++;', []],
+        ['throw err;', []],
+        ['del x', []],
+        // Round-1 F4: a preprocessor directive, a pointer write, a leading comment.
+        ['#define X 1', ['.py', '.rb', '.php']],
+        ['*flag = 1;', []],
+        ['/* note */ run();', []],
+        // A block-comment continuation cannot be told from a dereference in a hunk.
+        [' * x', []],
+        ['*/', []],
+        ['/*', []],
+        // Literals are code: they are what the old literal-RHS rule waved through.
+        ['x = "foo"', []],
+        ['count = 42', []],
+        ['"""A docstring."""', []],
+        ["'// not a comment'", []],
+        ['x = "# not a comment"', []],
+        // Trivial forms, each only for its own languages.
+        ['', ALL],
+        ['    ', ALL],
+        ['\t', ALL],
+        ['# x', HASH],
+        ['    # indented', HASH],
+        ['// x', C_STYLE],
+        ['    // indented', C_STYLE],
+        ['/* x */', BLOCK],
+        ['  /** doc */  ', BLOCK],
+        ['-- x', SQL],
+        // `--` is a decrement outside SQL, and no language here comments with `;`.
+        ['--x', []],
+        ['; x', []],
+        // Comments that change what runs.
+        ['// note \\', []],                         // C splices the next line into the comment
+        ['# note \\', []],
+        ['// \\u000a run();', []],                  // Java decodes \u000a before lexing
+        ['// x ??/', []],                           // trigraph backslash
+        ['/* a /* b */', []],                       // opens two levels in Rust/Swift/Kotlin/Scala
+        ['// closes */ early', []],
+        ['#[Route("/admin")]', []],                 // PHP 8 attribute, not a comment
+        ['// x ?> <?php run(); ?>', []],            // PHP leaves code mode at ?>
+        ['#!/usr/bin/env python', []],
+        ['# -*- coding: latin-1 -*-', []],          // PEP 263 source encoding
+        ['# frozen_string_literal: true', []],      // Ruby magic comment
+        ['//go:build linux', []],
+        ['//go:linkname f runtime.f', []],
+        ['// +build linux', []],
+        ['//export Add', []],                       // cgo export
+        // cgo preamble C in Go; elsewhere `// #123` is an issue reference.
+        ['// #include <stdlib.h>', C_STYLE.filter(e => e !== '.go')],
+        ['/// <reference path="x.d.ts" />', []],    // TypeScript triple-slash directive
+        ['/*!50000 DROP TABLE users */', []],       // MySQL executable comment
+        ['/*+ INDEX(t) */', []],                    // optimizer hint
+        // Review C1: a line terminator the language honours but git does not split
+        // on ends the comment, and the code after it runs. Proven end to end: the
+        // hook approved `// x\rrequire("child_process").execSync("id")` in app.js.
+        ['# x\rimport os; os.system("id")', []],
+        ["// x require('child_process').execSync('id')", []],
+        ['// x\rRuntime.getRuntime().exec("id");', []],
+        ['// x\rsystem("id");', []],
+        ['// x\u0085System.Environment.Exit(1);', []],
+        ['// x run();', []],
+        ['# x import os', []],
+        ['// x\r\r', []],                           // only ONE trailing CR is a CRLF ending
+        // Review A1: only space and tab are trimmed; NBSP and a BOM are not blanks.
+        [' # x', []],
+        ['﻿// x', []],
+        [' ', []],
+    ];
+    // Directives are checked in every language, not only the one they bind in:
+    // a directive-shaped comment elsewhere costs a review, the fail-closed side.
+    for (const [line, trivialIn] of TABLE) {
+        const expectTrivial = new Set(trivialIn);
+        const wrong = ALL.filter(ext => trivial(line, ext) !== expectTrivial.has(ext));
+        assert('isLineTrivial ' + JSON.stringify(line) + ' is trivial exactly in [' +
+            trivialIn.join(' ') + ']', wrong.join(' '), '');
+    }
+    assert('extension case does not matter', trivial('// x', '.JS'), true);
+    assert('an unknown extension knows only blank lines', trivial('// x', '.zz'), false);
+    assert('an unknown extension still reads blank as trivial', trivial('   ', '.zz'), true);
+    assert('a CRLF line ending does not change the verdict', trivial('// x\r', '.js'), true);
+    assert('a CRLF line ending on code stays non-trivial', trivial('run();\r', '.js'), false);
+    // The per-line Python spawn is gone with the literal-RHS rule.
+    assert('resolvePythonCmd is no longer exported', typeof mod.resolvePythonCmd, 'undefined');
+    assert('isPureLiteralRHS is no longer exported', typeof mod.isPureLiteralRHS, 'undefined');
+    assert('isLineSemantic is no longer exported', typeof mod.isLineSemantic, 'undefined');
+}
 
 console.log('\n[UNIT] Classifier: classifyDiff');
 
@@ -297,11 +428,160 @@ const trivialDiff = [
     '+++ b/foo.py',
     '@@ -0,0 +1,2 @@',
     '+# a new comment',
-    '+x = "hello"',
+    '+',
 ].join('\n');
 const tc1 = classifyDiff(trivialDiff);
 assert('trivial diff: semanticAdded == 0', tc1.semanticAdded, 0);
 assert('trivial diff: semanticRemoved == 0', tc1.semanticRemoved, 0);
+
+// Review C2/I3: a file section git shows with no hunk (binary, mode-only, or any
+// shape the classifier cannot see into) is unknown content, so it counts on both
+// sides: neither the trivial-diff nor the presentational path may take it.
+const binaryDiff = [
+    'diff --git a/app.js b/app.js',
+    'new file mode 100644',
+    'index 0000000..1234567',
+    'Binary files /dev/null and b/app.js differ',
+].join('\n');
+const tb = classifyDiff(binaryDiff);
+assert('a Binary files section counts as added', tb.semanticAdded, 1);
+assert('a Binary files section counts as removed', tb.semanticRemoved, 1);
+const modeOnlyDiff = [
+    'diff --git a/app.js b/app.js',
+    'old mode 100644',
+    'new mode 100755',
+].join('\n');
+const tm = classifyDiff(modeOnlyDiff);
+assert('a mode-only section counts as added', tm.semanticAdded, 1);
+assert('a mode-only section counts as removed', tm.semanticRemoved, 1);
+// A hunk-less section followed by a trivial one, and the other way round: each
+// section is judged on its own.
+assert('a hunk-less section before a trivial one still counts',
+    classifyDiff(modeOnlyDiff + '\n' + trivialDiff).semanticAdded, 1);
+assert('a hunk-less section after a trivial one still counts',
+    classifyDiff(trivialDiff + '\n' + modeOnlyDiff).semanticAdded, 1);
+assert('a Binary files line after a hunk still counts',
+    classifyDiff(trivialDiff + '\nBinary files a/foo.py and b/foo.py differ').semanticAdded, 1);
+assert('an empty diff is still trivial', classifyDiff('').semanticAdded, 0);
+
+// `semanticAdded` / `semanticRemoved` now count NON-TRIVIAL lines, so a literal
+// assignment counts.
+const literalDiff = [
+    'diff --git a/foo.py b/foo.py',
+    '--- a/foo.py',
+    '+++ b/foo.py',
+    '@@ -0,0 +1 @@',
+    '+x = "hello"',
+].join('\n');
+assert('a literal assignment counts as non-trivial', classifyDiff(literalDiff).semanticAdded, 1);
+
+// The source-files.js incident shape: deleting two list entries changes what the
+// gates call code, and the old classifier saw no keyword, call or assignment.
+const listEntryDiff = [
+    'diff --git a/src/hooks/lib/source-files.js b/src/hooks/lib/source-files.js',
+    '--- a/src/hooks/lib/source-files.js',
+    '+++ b/src/hooks/lib/source-files.js',
+    '@@ -26 +25,0 @@',
+    "-    '.sh', '.ps1',",
+].join('\n');
+assert('deleting a list entry counts as a removed non-trivial line',
+    classifyDiff(listEntryDiff).semanticRemoved, 1);
+
+// The language comes from each file's own header: `#` is a comment in a.py and a
+// directive in b.c, in the same diff.
+const twoLangDiff = [
+    'diff --git a/a.py b/a.py',
+    '--- a/a.py',
+    '+++ b/a.py',
+    '@@ -0,0 +1 @@',
+    '+# note',
+    'diff --git a/b.c b/b.c',
+    '--- a/b.c',
+    '+++ b/b.c',
+    '@@ -0,0 +1 @@',
+    '+#define X 1',
+].join('\n');
+const tl = classifyDiff(twoLangDiff);
+assert('per-file language: only the .c directive counts', tl.semanticAdded, 1);
+assert('per-file language: attributed to b.c', JSON.stringify(tl.perFileAdded), '{"b.c":1}');
+
+// A deleted file's `+++` is /dev/null: the path comes from `--- a/`. Deleting a
+// whole file is never trivial (round 2, item 3), so its one opaque count lands on
+// gone.py.
+const deletedDiff = [
+    'diff --git a/gone.py b/gone.py',
+    'deleted file mode 100644',
+    '--- a/gone.py',
+    '+++ /dev/null',
+    '@@ -1 +0,0 @@',
+    '-# only a comment',
+].join('\n');
+const td = classifyDiff(deletedDiff);
+assert('a deleted comment-only file counts as removed', td.semanticRemoved, 1);
+assert('...attributed to its `--- a/` path', JSON.stringify(td.perFileRemoved), '{"gone.py":1}');
+
+// Inside a hunk a removed `-- x` is `--- x` and an added `++ x` is `+++ x`: they
+// are content lines, not file headers.
+const headerLookalikeDiff = [
+    'diff --git a/q.js b/q.js',
+    '--- a/q.js',
+    '+++ b/q.js',
+    '@@ -1 +1 @@',
+    '--- x;',
+    '+++ y;',
+].join('\n');
+const hl = classifyDiff(headerLookalikeDiff);
+assert('a removed `-- x;` in JS is a content line, counted', hl.semanticRemoved, 1);
+assert('an added `++ y;` in JS is a content line, counted', hl.semanticAdded, 1);
+
+// Line continuation: with a line of context (-U1), a line that follows one ending
+// in a backslash is part of that line, so it is never trivial on its own. In C a
+// comment or blank line inside a macro body ends or rewrites the macro.
+const continuationDiff = [
+    'diff --git a/m.c b/m.c',
+    '--- a/m.c',
+    '+++ b/m.c',
+    '@@ -1,2 +1,3 @@',
+    ' #define CHECK(x) \\',
+    '+// note',
+    '     abort();',
+].join('\n');
+assert('a comment after a continued line counts', classifyDiff(continuationDiff).semanticAdded, 1);
+const continuationBlankRemoved = [
+    'diff --git a/m.c b/m.c',
+    '--- a/m.c',
+    '+++ b/m.c',
+    '@@ -1,3 +1,2 @@',
+    ' #define CHECK(x) \\',
+    '-',
+    ' abort();',
+].join('\n');
+assert('removing a blank line after a continued line counts',
+    classifyDiff(continuationBlankRemoved).semanticRemoved, 1);
+const contextOnlyComment = [
+    'diff --git a/m.c b/m.c',
+    '--- a/m.c',
+    '+++ b/m.c',
+    '@@ -1,2 +1,3 @@',
+    ' int x;',
+    '+// note',
+    ' int y;',
+].join('\n');
+assert('a comment after an ordinary context line stays trivial',
+    classifyDiff(contextOnlyComment).semanticAdded, 0);
+assert('a "no newline" marker is not a content line',
+    classifyDiff(trivialDiff + '\n\\ No newline at end of file').semanticAdded, 0);
+// An unquotable path (git quotes it) yields no known extension: blank lines only.
+const quotedDiff = [
+    'diff --git "a/sp\\303\\251c.py" "b/sp\\303\\251c.py"',
+    '--- "a/sp\\303\\251c.py"',
+    '+++ "b/sp\\303\\251c.py"',
+    '@@ -0,0 +1,2 @@',
+    '+# note',
+    '+',
+].join('\n');
+assert('a quoted path falls back to blank-only: the comment counts',
+    classifyDiff(quotedDiff).semanticAdded, 1);
 
 const semanticDiff = [
     'diff --git a/foo.py b/foo.py',
@@ -325,6 +605,205 @@ const removeSemanticDiff = [
 ].join('\n');
 const tc3 = classifyDiff(removeSemanticDiff);
 assertTrue('diff removing a raise: semanticRemoved >= 1', tc3.semanticRemoved >= 1);
+
+// Round 2, item 1: colour codes. A diff read with colour forced on has no line
+// starting `diff --git`, so the classifier would never enter a section. Any ESC
+// byte, or a non-empty read with no section header, fails closed.
+const ESC = '\x1b';
+const ansiDiff = [
+    ESC + '[1mdiff --git a/app.js b/app.js' + ESC + '[m',
+    ESC + '[1m--- a/app.js' + ESC + '[m',
+    ESC + '[1m+++ b/app.js' + ESC + '[m',
+    ESC + '[36m@@ -1 +1,2 @@' + ESC + '[m',
+    ' let a = 1;',
+    ESC + '[32m+require("child_process").execSync("id");' + ESC + '[m',
+].join('\n');
+const ta = classifyDiff(ansiDiff);
+assertTrue('an ANSI-coloured diff counts a non-trivial added line', ta.semanticAdded >= 1);
+assertTrue('...and a removed one', ta.semanticRemoved >= 1);
+assertTrue('an ESC byte inside an otherwise trivial diff counts',
+    classifyDiff(trivialDiff.replace('# a new comment', '# a ' + ESC + '[m comment')).semanticAdded >= 1);
+assertTrue('a non-empty read with no `diff --git` line counts',
+    classifyDiff('--- a/app.js\n+++ b/app.js\n@@ -0,0 +1 @@\n+// x\n').semanticAdded >= 1);
+
+// Round 2, item 2: a symlink's hunk is its target and a gitlink's is a commit id,
+// so neither reads as source: a symlink to `//tmp/evil.js` is not a `//` comment.
+// Any header naming mode 120000 or 160000 makes the section opaque, whatever its
+// hunk shows.
+const linkSection = (headers, minus, plus) => [
+    'diff --git a/src/plugin.js b/src/plugin.js', ...headers,
+    '--- a/src/plugin.js', '+++ b/src/plugin.js', '@@ -1 +1 @@',
+    '-' + minus, '\\ No newline at end of file',
+    '+' + plus, '\\ No newline at end of file',
+].join('\n');
+for (const [label, headers] of [
+    ['index line 120000 (symlink retarget)', ['index 1111111..2222222 120000']],
+    ['index line 160000 (gitlink update)', ['index 1111111..2222222 160000']],
+    ['old/new mode into 120000', ['old mode 100644', 'new mode 120000', 'index 1111111..2222222']],
+    ['old/new mode out of 160000', ['old mode 160000', 'new mode 100644', 'index 1111111..2222222']],
+]) {
+    const t = classifyDiff(linkSection(headers, '//opt/good/plugin.js', '//tmp/evil.js'));
+    assert('a section with ' + label + ' counts as added', t.semanticAdded, 1);
+    assert('a section with ' + label + ' counts as removed', t.semanticRemoved, 1);
+}
+const newLink = [
+    'diff --git a/src/plugin.js b/src/plugin.js', 'new file mode 120000', 'index 0000000..2222222',
+    '--- /dev/null', '+++ b/src/plugin.js', '@@ -0,0 +1 @@', '+//tmp/evil.js',
+    '\\ No newline at end of file',
+].join('\n');
+assert('a new symlink counts as added', classifyDiff(newLink).semanticAdded, 1);
+const newGitlink = [
+    'diff --git a/vendor/lib.js b/vendor/lib.js', 'new file mode 160000', 'index 0000000..2222222',
+    '--- /dev/null', '+++ b/vendor/lib.js', '@@ -0,0 +1 @@', '+// x',
+].join('\n');
+const tg = classifyDiff(newGitlink);
+assert('a new gitlink counts as added', tg.semanticAdded, 1);
+assert('a new gitlink counts as removed', tg.semanticRemoved, 1);
+// The mode must be the whole field: 100644 is not a link.
+assert('an ordinary index line leaves a comment trivial',
+    classifyDiff(linkSection(['index 1111111..2222222 100644'], '// a', '// b')).semanticAdded, 0);
+
+// Round 2, item 3: adding or deleting a whole file is never trivial. A new
+// comment-only auth.js shadows auth/index.js; deleting a required file breaks it.
+const newCommentFile = [
+    'diff --git a/auth.js b/auth.js', 'new file mode 100644', 'index 0000000..2222222',
+    '--- /dev/null', '+++ b/auth.js', '@@ -0,0 +1 @@', '+// placeholder',
+].join('\n');
+const tn = classifyDiff(newCommentFile);
+assert('a new comment-only file counts as added', tn.semanticAdded, 1);
+assert('a new comment-only file counts as removed', tn.semanticRemoved, 1);
+assert('...attributed to its path', JSON.stringify(tn.perFileAdded), '{"auth.js":1}');
+const newEmptyFile = ['diff --git a/a.js b/a.js', 'new file mode 100644', 'index 0000000..e69de29'].join('\n');
+assert('a new empty file counts once, not twice', classifyDiff(newEmptyFile).semanticAdded, 1);
+
+// Round 2, item 5: removing a whole-line block comment can change what an
+// enclosing comment covers. Here `/* note */` ends the `/* legacy` comment; without
+// it, `require_auth();` is commented out.
+const blockStateDiff = [
+    'diff --git a/a.js b/a.js', '--- a/a.js', '+++ b/a.js', '@@ -1,4 +1,3 @@',
+    ' /* legacy',
+    '-/* note */',
+    ' require_auth();',
+    ' /* end */',
+].join('\n');
+assertTrue('removing a whole-line block comment counts as removed',
+    classifyDiff(blockStateDiff).semanticRemoved >= 1);
+const blockAdded = [
+    'diff --git a/a.js b/a.js', '--- a/a.js', '+++ b/a.js', '@@ -1,2 +1,3 @@',
+    ' let a = 1;', '+/* note */', ' let b = 2;',
+].join('\n');
+assert('adding a whole-line block comment stays trivial', classifyDiff(blockAdded).semanticAdded, 0);
+const lineCommentRemoved = [
+    'diff --git a/a.js b/a.js', '--- a/a.js', '+++ b/a.js', '@@ -1,3 +1,2 @@',
+    ' let a = 1;', '-// note', ' let b = 2;',
+].join('\n');
+assert('removing a line comment stays trivial', classifyDiff(lineCommentRemoved).semanticRemoved, 0);
+
+// Round 3: `diff.submodule=log` or `diff` prints a gitlink bump as bare
+// `Submodule ...` lines (and `  > msg` lines for `diff`), with no `diff --git`
+// header and no hunk. Structure the classifier does not recognise is opaque:
+// outside a section any non-empty line, inside a hunk any line not starting
+// with ' ', '+', '-' or '\\' (or empty), and in a header window any line that is
+// not a git extended header.
+const SUBMODULE_SHORT = 'Submodule lib.js 38d3c01...95b1963 (commits not present)';
+const commentSection = [
+    'diff --git a/src/app.js b/src/app.js', 'index 1111111..2222222 100644',
+    '--- a/src/app.js', '+++ b/src/app.js', '@@ -1 +1,2 @@', ' const x = 1;', '+// ok',
+].join('\n');
+assert('the comment-only section alone is trivial', classifyDiff(commentSection).semanticAdded, 0);
+{
+    const before = classifyDiff(SUBMODULE_SHORT + '\n' + commentSection);
+    assertTrue('a Submodule line before a comment-only section counts as added', before.semanticAdded >= 1);
+    assertTrue('...and as removed', before.semanticRemoved >= 1);
+    const inside = classifyDiff(commentSection + '\n' + SUBMODULE_SHORT + '\n');
+    assertTrue('a Submodule line inside a hunk counts as added', inside.semanticAdded >= 1);
+    assertTrue('...and as removed', inside.semanticRemoved >= 1);
+    const logLines = classifyDiff(commentSection + '\n  > bump the vendored lib\n');
+    assertTrue('a `  > msg` line inside a hunk counts as added', logLines.semanticAdded >= 1);
+    assertTrue('...and as removed', logLines.semanticRemoved >= 1);
+    const window = classifyDiff(commentSection.replace('index 1111111..2222222 100644',
+        'index 1111111..2222222 100644\n' + SUBMODULE_SHORT));
+    assertTrue('an unknown line in a header window counts as added', window.semanticAdded >= 1);
+    assertTrue('...and as removed', window.semanticRemoved >= 1);
+    // diff.suppressBlankEmpty prints an empty context line as '' rather than ' '.
+    assert('an empty line inside a hunk stays trivial',
+        classifyDiff(commentSection.replace('@@ -1 +1,2 @@\n const x = 1;',
+            '@@ -1,2 +1,3 @@\n const x = 1;\n')).semanticAdded, 0);
+    // The hunk header's counts bound the hunk: a missing or an extra line is a
+    // format this function does not know.
+    assertTrue('a hunk with an extra context line counts',
+        classifyDiff(commentSection + '\n const y = 2;').semanticAdded >= 1);
+    assertTrue('a hunk cut short counts',
+        classifyDiff(commentSection.replace('@@ -1 +1,2 @@', '@@ -1,2 +1,3 @@')).semanticAdded >= 1);
+    assertTrue('an unparseable hunk header counts',
+        classifyDiff(commentSection.replace('@@ -1 +1,2 @@', '@@ junk @@')).semanticAdded >= 1);
+}
+// Every extended header git emits between `diff --git` and the first `@@`, taken
+// from real `git diff --cached -C -C -B --binary` output: none of them may trip
+// the structural check. The binary-patch section is opaque on its own (1 and 1);
+// everything else is trivial, so the totals and per-file maps are exactly what the
+// classifier gave before the check existed.
+const everyHeaderDiff = [
+    'diff --git a/b.bin b/b.bin',
+    'index 677273046bce3115f56c248238f3b83f77cfc239..2644ae276b0d4cc2a5d84751622ca22642c2120d 100644',
+    'GIT binary patch',
+    'literal 7',
+    'OcmZQzWlPG;GXekv6ajYt',
+    '',
+    'literal 6',
+    'NcmZQzWJ=1+0{{Yf0X+Z!',
+    '',
+    'diff --git a/a.js b/copied.js',
+    'similarity index 88%',
+    'copy from a.js',
+    'copy to copied.js',
+    'index b1a5077..9daf094 100644',
+    '--- a/a.js',
+    '+++ b/copied.js',
+    '@@ -6 +6,2 @@ line5',
+    ' // end',
+    '+// c',
+    'diff --git a/m.js b/m.js',
+    'old mode 100644',
+    'new mode 100755',
+    'index 587be6b..226dc81',
+    '--- a/m.js',
+    '+++ b/m.js',
+    '@@ -1 +1,2 @@',
+    ' x',
+    '+// m',
+    'diff --git a/a.js b/renamed.js',
+    'similarity index 82%',
+    'rename from a.js',
+    'rename to renamed.js',
+    'index b1a5077..16b58be 100644',
+    '--- a/a.js',
+    '+++ b/renamed.js',
+    '@@ -6 +6,2 @@ line5',
+    ' // end',
+    '+// more',
+    'diff --git a/big.js b/big.js',
+    'dissimilarity index 72%',
+    'index e8823e1..26e04c7 100644',
+    '--- a/big.js',
+    '+++ b/big.js',
+    '@@ -1,2 +1,2 @@',
+    '-// one',
+    '+// two',
+    ' // three',
+    'diff --git "a/sp ace.js" "b/sp ace.js"',
+    'index 1111111..2222222 100644',
+    '--- "a/sp ace.js"',
+    '+++ "b/sp ace.js"',
+    '@@ -1 +1,2 @@',
+    ' x',
+    '+',
+    '\\ No newline at end of file',
+    '',
+].join('\n');
+assert('every legitimate header type: classification unchanged',
+    JSON.stringify(classifyDiff(everyHeaderDiff)),
+    JSON.stringify({ semanticAdded: 1, semanticRemoved: 1, perFileAdded: {}, perFileRemoved: {} }));
 
 console.log('\n[UNIT] git-read');
 const gitReadLib = require(path.join(__dirname, 'lib', 'git-read.js'));
@@ -367,9 +846,6 @@ const gitReadLib = require(path.join(__dirname, 'lib', 'git-read.js'));
         if (savedGitDir === undefined) delete process.env.GIT_DIR; else process.env.GIT_DIR = savedGitDir;
     }
 }
-
-console.log('\n[UNIT] resolvePythonCmd');
-assertTrue('a python interpreter is resolved on this host', !!mod.resolvePythonCmd());
 
 console.log('\n[UNIT] readBranchCoverage');
 
@@ -447,6 +923,7 @@ assert('extractUncovered: file name preserved', ex[0].file, 'a.py');
 // =========================================================================
 // Suite 2: Integration tests -- original gate precedence
 // =========================================================================
+writeTddExemptCfg();
 console.log('\n[INT] Ignored commands (silent exit):');
 cleanAll();
 assert('silent on git status', runHook('git status').decision, 'silent');
@@ -463,8 +940,9 @@ try {
     console.log('\n[INT] Gate 0 (index unreliable at hook time):');
     cleanAll();
     // Trivial staged content: every later gate would fast-path approve this,
-    // so a block here can only come from Gate 0.
-    stageDummyContent('# comment only\n');
+    // so a block here can only come from Gate 0. A comment appended to a tracked
+    // file, since a new file is never trivial (round 2, item 3).
+    stageTrackedAppend('# comment only\n');
     let r0 = runHook('git add tmp/other.py && git commit -m x');
     assert('git add && git commit blocks', r0.decision, 'block');
     assertContains('gate0 message names the staging command', r0.systemMessage || '', 'git add');
@@ -479,7 +957,7 @@ try {
     assert('plain commit whose message mentions git add still fast-paths',
         runHook('git commit -m "handle git add correctly"').decision, 'approve');
     assert('git log --grep commit is silent', runHook('git log --grep commit').decision, 'silent');
-    unstageDummy();
+    unstageTracked();
     cleanAll();
 
     // Use semantic content so classifier does not fast-path; we exercise Gate 4.
@@ -488,7 +966,13 @@ try {
     cleanAll();
     let r = runHook('git commit -m x');
     assert('blocks when no marker present', r.decision, 'block');
-    assertContains('block message tells user to run review', r.systemMessage || '', '/code-review-pre-commit');
+    assertContains('block message tells user to run review', r.systemMessage || '', '/sdlc:code-review-pre-commit');
+    // The timing-log path comes from the hook's own location, so it is right
+    // wherever the toolchain is installed (plugin cache, source checkout).
+    assertContains('block message carries the timing-log command at the hook\'s own path',
+        r.systemMessage || '', 'node "' + path.join(__dirname, 'timing-log.js') + '" review.completed');
+    assertFalse('block message does not assume ~/.claude/hooks',
+        /(\$HOME|~)\/\.claude\/hooks/.test(r.systemMessage || ''));
 
     cleanLock();
     writeMarker('');
@@ -559,11 +1043,19 @@ try {
     assertContains('recipe uses printf', r.systemMessage || '', "printf 'PASS");
     assertContains('recipe writes the absolute marker path', r.systemMessage || '', MARKER);
     assertContains('message states the rounds policy', r.systemMessage || '', 'After two FAILs stop');
-    assertContains('message reports semantic line counts', r.systemMessage || '', 'semantic lines added');
+    // The dummy is a new file: its two lines plus one opaque count on each side
+    // for the whole-file add (round 2, item 3).
+    assertContains('message reports non-trivial line counts', r.systemMessage || '', '(3 non-trivial lines added, 1 removed)');
     // Executing the recipe verbatim must produce a marker the hook accepts.
     {
         const m = (r.systemMessage || '').match(/run exactly: (printf .*?) \(replace/);
         assertTrue('recipe is extractable from the message', !!m);
+        // The policy names agents namespaced; the marker tag is a label and
+        // stays bare, and TAG_NOTE says so outright.
+        assertContains('recipe tag is the bare agent name', (m && m[1]) || '',
+            " 'code-reviewer:round1:PASS' > ");
+        assertFalse('recipe carries no namespaced name', /sdlc:/.test((m && m[1]) || 'sdlc:'));
+        assertContains('TAG_NOTE says "bare agent name"', r.systemMessage || '', 'bare agent name');
         if (m) {
             const res = spawnSync('bash', ['-c', m[1]], { cwd: REPO_ROOT, encoding: 'utf-8' });
             assert('recipe runs cleanly', res.status, 0);
@@ -624,23 +1116,205 @@ try {
     cleanAll();
     unstageDummy();
 
-    // whitespace-only additions (new file of only blank lines)
-    stageDummyContent('\n\n\n');
+    // whitespace-only additions to a tracked file
+    stageTrackedAppend('\n\n\n');
     r = runHook('git commit -m x');
     assert('fast-path approves whitespace-only staged content', r.decision, 'approve');
     assertContains('marker tagged trivial-diff', readMarker() || '', 'trivial-diff');
 
     cleanAll();
-    // comment-only addition
-    stageDummyContent('# just a note\n# another line\n');
+    // comment-only addition to a tracked file
+    stageTrackedAppend('# just a note\n# another line\n');
     r = runHook('git commit -m x');
     assert('fast-path approves comment-only staged content', r.decision, 'approve');
+    unstageTracked();
+
+    // Round 2, item 3: a NEW file is never trivial, whatever it holds. A new
+    // comment-only module can shadow another one on the import path.
+    cleanAll();
+    stageDummyContent('\n\n\n');
+    r = runHook('git commit -m x');
+    assert('a new whitespace-only file is not fast-pathed', r.decision, 'block');
+    assertFalse('...with no trivial-diff tag', (readMarker() || '').includes('trivial-diff'));
+    cleanAll();
+    stageDummyContent('# just a note\n# another line\n');
+    r = runHook('git commit -m x');
+    assert('a new comment-only file is not fast-pathed', r.decision, 'block');
+    assertFalse('...with no PASS marker', (readMarker() || '').startsWith('PASS'));
 
     cleanAll();
-    // pure literal assignment
+    // pure literal assignment: a value change is a behaviour change
     stageDummyContent('x = "foo"\ny = 42\n');
     r = runHook('git commit -m x');
-    assert('fast-path approves pure literal assignments', r.decision, 'approve');
+    assert('does NOT fast-path literal assignments', r.decision, 'block');
+    assertFalse('literal assignments write no PASS marker', (readMarker() || '').startsWith('PASS'));
+
+    cleanAll();
+    // A docstring is code to the classifier: it is not a comment in any language.
+    stageDummyContent('"""Module docstring."""\n');
+    r = runHook('git commit -m x');
+    assert('does NOT fast-path a docstring', r.decision, 'block');
+
+    // The TDD gate runs BEFORE every fast path. A comment-only change with no test,
+    // in a repository under the mandate, is blocked by the TDD gate and never
+    // approved as trivial-diff. TDD_MANDATE_CONFIG points at a file that does not
+    // exist, so the installed config cannot exempt this repo: the mandate stands.
+    const NO_MANDATE_CFG = path.resolve(TMP_DIR, 'pre-commit-hook-test-no-such-mandate.json');
+    console.log('\n[INT] No fast path runs before the TDD gate:');
+    cleanAll();
+    unstageDummy();
+    stageTrackedAppend('# just a note\n');
+    r = runHook('git commit -m x', { TDD_MANDATE_CONFIG: NO_MANDATE_CFG },
+        { realMandate: true, input: { transcript_path: '' } });
+    assert('comment-only, no test, mandate on: blocked', r.decision, 'block');
+    assertContains('...by the TDD gate', r.systemMessage || '', 'no_tests');
+    assertFalse('...with no PASS marker', (readMarker() || '').startsWith('PASS'));
+    assertFalse('...and no trivial-diff tag', (readMarker() || '').includes('trivial-diff'));
+    unstageTracked();
+
+    // A crash in the TDD check is no verdict, and no verdict is not a pass: the
+    // same comment-only change must be blocked, naming the error, never approved
+    // trivial-diff. The crash is simulated without touching lib/tdd-order.js: a
+    // --require preload replaces classifyTddOrder on the module's shared exports
+    // object, which is the object the hook's own require() returns.
+    console.log('\n[INT] A crash in the TDD check blocks, and opens no fast path:');
+    const TDD_CRASH_PRELOAD = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-crash.js');
+    fs.writeFileSync(TDD_CRASH_PRELOAD,
+        'const m = require(' + JSON.stringify(path.join(__dirname, 'lib', 'tdd-order.js')) + ');\n' +
+        'm.classifyTddOrder = () => { throw new Error("simulated tdd-order crash"); };\n', 'utf-8');
+    cleanAll();
+    unstageDummy();
+    stageTrackedAppend('# just a note\n');
+    r = runHook('git commit -m x',
+        { TDD_MANDATE_CONFIG: NO_MANDATE_CFG, NODE_OPTIONS: '--require ' + JSON.stringify(TDD_CRASH_PRELOAD) },
+        { realMandate: true, input: { transcript_path: '' } });
+    assert('comment-only, TDD check crashes, mandate on: blocked', r.decision, 'block');
+    assertContains('...naming the TDD check error', r.systemMessage || '', 'simulated tdd-order crash');
+    assertFalse('...with no PASS marker', (readMarker() || '').startsWith('PASS'));
+    assertFalse('...and no trivial-diff tag', (readMarker() || '').includes('trivial-diff'));
+    // Like an unreadable index: no lock and no BLOCK marker, so the retry
+    // re-runs the check rather than replaying a cached block.
+    assertFalse('...writes no marker', fs.existsSync(MARKER));
+    assertFalse('...writes no lock', fs.existsSync(LOCK));
+    unstageTracked();
+    try { fs.unlinkSync(TDD_CRASH_PRELOAD); } catch (e) {}
+    cleanAll();
+
+    console.log('\n[UNIT] evaluateTddOrderGate on a throwing classifier blocks:');
+    {
+        const tddOrderMod = require(path.join(__dirname, 'lib', 'tdd-order.js'));
+        const realClassify = tddOrderMod.classifyTddOrder;
+        const savedMandateCfg = process.env.TDD_MANDATE_CONFIG;
+        process.env.TDD_MANDATE_CONFIG = NO_MANDATE_CFG;
+        stageTrackedAppend('# just a note\n');
+        tddOrderMod.classifyTddOrder = () => { throw new Error('simulated tdd-order crash'); };
+        try {
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '');
+            assert('throwing classifier: gate blocks', gate.action, 'block');
+            assert('throwing classifier: status is classifier-error', gate.status, 'classifier-error');
+            assertContains('throwing classifier: reason names the error', gate.reason || '', 'simulated tdd-order crash');
+        } finally {
+            tddOrderMod.classifyTddOrder = realClassify;
+            if (savedMandateCfg === undefined) delete process.env.TDD_MANDATE_CONFIG;
+            else process.env.TDD_MANDATE_CONFIG = savedMandateCfg;
+            unstageTracked();
+        }
+        // A throw that carries no message still blocks, with a reason.
+        tddOrderMod.classifyTddOrder = () => { throw undefined; };   // eslint-disable-line no-throw-literal
+        process.env.TDD_MANDATE_CONFIG = NO_MANDATE_CFG;
+        stageTrackedAppend('# just a note\n');
+        try {
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '');
+            assert('messageless throw: gate blocks', gate.action, 'block');
+            assertContains('messageless throw: reason still set', gate.reason || '', 'classifier-error');
+        } finally {
+            tddOrderMod.classifyTddOrder = realClassify;
+            if (savedMandateCfg === undefined) delete process.env.TDD_MANDATE_CONFIG;
+            else process.env.TDD_MANDATE_CONFIG = savedMandateCfg;
+            unstageTracked();
+        }
+    }
+
+    console.log('\n[INT] Presentational path (Q1: opt-in, counts non-trivial lines):');
+    const POLICY_KEY = REPO_ROOT.replace(/\\/g, '/');
+    cleanAll();
+    // Each eligible case edits a tracked file the policy lists: a new file is
+    // never trivial (round 2, item 3) and counts one removed line, which the
+    // presentational rule refuses.
+    writePolicy({ repos: { [POLICY_KEY]: { presentational_paths: ['tmp/**', TRACKED_REL], trivial_line_threshold: 3 } } });
+    unstageDummy();
+    stageTrackedAppend('TITLE = "Report"\nshow(TITLE)\n');
+    r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: POLICY_PATH });
+    assert('2 non-trivial lines inside a configured path: approved', r.decision, 'approve');
+    assertContains('...tagged presentational', readMarker() || '', 'presentational');
+
+    cleanAll();
+    stageTrackedAppend('a = 1\nb = 2\nc = 3\nd = 4\n');
+    r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: POLICY_PATH });
+    assert('4 non-trivial lines over a threshold of 3: blocked', r.decision, 'block');
+
+    // Review I4: a removed non-trivial line never takes the presentational path,
+    // even when the added count is within the threshold. Nothing under tmp/ is
+    // tracked, so the removal is staged in a tracked file the policy also lists,
+    // straight into the index (the working tree is never touched), and reset after.
+    {
+        cleanAll();
+        unstageDummy();
+        unstageTracked();
+        const REMOVED_REL = 'src/hooks/lib/plugin-names.js';
+        writePolicy({ repos: { [POLICY_KEY]: {
+            presentational_paths: ['tmp/**', REMOVED_REL], trivial_line_threshold: 3 } } });
+        const headBody = execFileSync('git', ['show', 'HEAD:' + REMOVED_REL], { cwd: REPO_ROOT, encoding: 'utf-8' });
+        const target = headBody.split('\n').find(l => /^\s*(?:const|module\.exports|'use strict')/.test(l));
+        assertTrue('the removal fixture has a non-trivial line to remove', !!target);
+        const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
+            { cwd: REPO_ROOT, encoding: 'utf-8', input: headBody.replace(target + '\n', '') }).trim();
+        try {
+            execFileSync('git', ['update-index', '--cacheinfo', '100644,' + blob + ',' + REMOVED_REL], { cwd: REPO_ROOT });
+            r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: POLICY_PATH });
+            assert('1 non-trivial line removed inside configured paths: blocked', r.decision, 'block');
+            // Proves the classifier saw exactly the removal, so the block comes from
+            // the presentational rule's removed-lines clause and nothing earlier.
+            assertContains('...by the review gate, counting 0 added and 1 removed',
+                r.systemMessage || '', '(0 non-trivial lines added, 1 removed)');
+            assertFalse('...not tagged presentational', (readMarker() || '').includes('presentational'));
+            assertFalse('...with no PASS marker', (readMarker() || '').startsWith('PASS'));
+        } finally {
+            try { execFileSync('git', ['reset', '-q', 'HEAD', '--', REMOVED_REL], { cwd: REPO_ROOT }); } catch (e) {}
+        }
+        writePolicy({ repos: { [POLICY_KEY]: { presentational_paths: ['tmp/**', TRACKED_REL], trivial_line_threshold: 3 } } });
+    }
+
+    cleanAll();
+    stageTrackedAppend('TITLE = "Report"\n');
+    r = runHook('git commit -m x', { TDD_MANDATE_CONFIG: NO_MANDATE_CFG, REVIEW_POLICY_CONFIG: POLICY_PATH },
+        { realMandate: true, input: { transcript_path: '' } });
+    assert('presentational-eligible, no test, mandate on: blocked', r.decision, 'block');
+    assertContains('...by the TDD gate', r.systemMessage || '', 'no_tests');
+    assertFalse('...not tagged presentational', (readMarker() || '').includes('presentational'));
+
+    cleanAll();
+    writePolicy({ repos: { [POLICY_KEY]: { presentational_paths: ['docs/**'], trivial_line_threshold: 3 } } });
+    stageTrackedAppend('TITLE = "Report"\n');
+    r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: POLICY_PATH });
+    assert('a file outside the configured paths: blocked', r.decision, 'block');
+
+    cleanAll();
+    cleanPolicy();
+    stageTrackedAppend('TITLE = "Report"\n');
+    r = runHook('git commit -m x');
+    assert('no presentational_paths configured: blocked (off by default)', r.decision, 'block');
+    unstageTracked();
+
+    // Round 2, item 3: a new file inside a configured path is not presentational,
+    // even with non-trivial lines under the threshold.
+    cleanAll();
+    writePolicy({ repos: { [POLICY_KEY]: { presentational_paths: ['tmp/**'], trivial_line_threshold: 3 } } });
+    stageDummyContent('TITLE = "Report"\nshow(TITLE)\n');
+    r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: POLICY_PATH });
+    assert('a new file inside a configured path: blocked', r.decision, 'block');
+    assertFalse('...not tagged presentational', (readMarker() || '').includes('presentational'));
+    cleanPolicy();
 
     cleanAll();
     // call RHS: NOT trivial
@@ -707,6 +1381,257 @@ try {
     assertFalse('null read writes no PASS marker', (readMarker() || '').startsWith('PASS'));
 
     // =====================================================================
+    // Subdirectory commits. `--name-only` prints root-relative paths, so a
+    // diff read that resolves them against a subdirectory cwd matches nothing
+    // and git returns '' with exit 0. Incident: 33 staged code files read as a
+    // 0-byte diff and were approved via trivial-diff.
+    // =====================================================================
+    console.log('\n[UNIT] readStagedDiff fails closed on an empty read over staged code files:');
+    cleanAll();
+    stageDummyContent('def foo():\n    return 1\n');
+    const emptyRead = mod.readStagedDiff([dummyRel], { cwd: path.join(REPO_ROOT, 'src') });
+    assert('empty read over staged code files yields null text', emptyRead.text, null);
+    assertContains('empty read error names the empty diff', emptyRead.error || '', 'empty diff');
+
+    console.log('\n[INT] Gate 3b from a subdirectory does not fast-path a semantic change:');
+    cleanAll();
+    stageDummyContent('def foo():\n    return 1\n');
+    const subLogBefore = fastPassLogLines();
+    r = runHook('git commit -m x', {}, { cwd: path.join(REPO_ROOT, 'src') });
+    assertTrue('subdir semantic change is not approved', r.decision !== 'approve');
+    assertFalse('subdir semantic change writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+    assert('subdir semantic change adds no fast-pass log line', fastPassLogLines(), subLogBefore);
+
+    console.log('\n[INT] Gate 3b from a subdirectory still fast-paths a trivial diff:');
+    cleanAll();
+    unstageDummy();
+    stageTrackedAppend('# comment only\n');
+    r = runHook('git commit -m x', {}, { cwd: path.join(REPO_ROOT, 'src') });
+    assert('subdir comment-only change is approved', r.decision, 'approve');
+    assertContains('subdir comment-only marker tagged trivial-diff', readMarker() || '', 'trivial-diff');
+    unstageTracked();
+
+    if (process.platform !== 'win32') {
+        console.log('\n[INT] Gate 3b empty diff read fails closed from the root:');
+        cleanAll();
+        stageDummyContent('def foo():\n    return 1\n');
+        const TDD_CFG3 = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-mandate3.json');
+        fs.writeFileSync(TDD_CFG3, JSON.stringify({ exempt_repos: [REPO_ROOT] }), 'utf-8');
+        try {
+            r = runHook('git commit -m x',
+                { PATH: writeGitEmptyShim('-U1'), TDD_MANDATE_CONFIG: TDD_CFG3 });
+            assertTrue('empty diff read is not approved', r.decision !== 'approve');
+            assertFalse('empty diff read writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+            assertContains('empty diff read message says the diff could not be read',
+                r.systemMessage || '', 'could not be read');
+        } finally {
+            try { fs.unlinkSync(TDD_CFG3); } catch (e) {}
+            cleanGitShim();
+        }
+    }
+    unstageDummy();
+    cleanAll();
+
+    // =====================================================================
+    // Unusual filenames (step 9). Paths are staged straight into the index
+    // (no working-tree file), so names Windows cannot create still work, and
+    // removed with update-index, which reads paths literally.
+    // =====================================================================
+    const stageBlob = (rel, content) => {
+        const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
+            { cwd: REPO_ROOT, encoding: 'utf-8', input: content }).trim();
+        execFileSync('git', ['update-index', '--add', '--cacheinfo', '100644,' + blob + ',' + rel], { cwd: REPO_ROOT });
+    };
+    const unstageBlob = rel => {
+        try { execFileSync('git', ['update-index', '--force-remove', '--', rel], { cwd: REPO_ROOT, stdio: 'pipe' }); }
+        catch (e) {}
+    };
+
+    console.log('\n[INT] A non-ASCII code filename is not approved as staged-no-code:');
+    cleanAll();
+    const accented = 'tmp/pcr-café.py';
+    stageBlob(accented, 'def foo():\n    return 1\n');
+    try {
+        r = runHook('git commit -m x');
+        assertTrue('staged café.py is not approved', r.decision !== 'approve');
+        assertFalse('staged café.py writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+        cleanAll();
+        r = runHook('git commit -m x', {}, { realMandate: true, input: { transcript_path: '' } });
+        assertContains('staged café.py with no test: TDD gate blocks no_tests', r.systemMessage || '', 'no_tests');
+    } finally {
+        unstageBlob(accented);
+        cleanAll();
+    }
+
+    console.log('\n[INT] A file named like pathspec magic cannot hide a sibling from the diff read:');
+    cleanAll();
+    stageBlob(':(exclude)evil.py', 'x = 1\n');
+    stageBlob('evil.py', 'import os\nos.system("rm -rf /")\n');
+    stageTrackedAppend('# comment only\n');
+    try {
+        r = runHook('git commit -m x');
+        assertTrue('magic-named sibling: not approved', r.decision !== 'approve');
+        assertFalse('magic-named sibling: no PASS marker', (readMarker() || '').startsWith('PASS'));
+    } finally {
+        unstageBlob(':(exclude)evil.py');
+        unstageBlob('evil.py');
+        unstageTracked();
+        cleanAll();
+    }
+
+    // =====================================================================
+    // Step 3a: "has a test" means the staged test diff ADDS test code. A
+    // test-named file alone (empty, or a blank line in an unrelated test) does
+    // not satisfy the mandate; the test-path diff is read and must add a line
+    // that is neither blank nor a comment.
+    // =====================================================================
+    const tddBlocked = res => /^TDD gate/.test(res.reason || '') || /no_tests|code_first/.test(res.systemMessage || '');
+    const runMandate = (extraEnv, opts) => runHook((opts && opts.command) || 'git commit -m x',
+        { TDD_MANDATE_CONFIG: NO_MANDATE_CFG, ...(extraEnv || {}) },
+        { realMandate: true, input: { transcript_path: '' }, ...(opts || {}) });
+    const IMPL_REL = 'tmp/pcr-billing.py';
+    const TEST_REL = 'tmp/test_pcr_billing.py';
+
+    console.log('\n[INT] An empty test file does not satisfy the mandate:');
+    cleanAll();
+    unstageDummy();
+    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    stageBlob(TEST_REL, '');
+    try {
+        r = runMandate();
+        assert('impl + 0-byte test file: blocked', r.decision, 'block');
+        assertContains('...as no_tests', r.systemMessage || '', 'no_tests');
+    } finally {
+        unstageBlob(TEST_REL);
+        unstageBlob(IMPL_REL);
+        cleanAll();
+    }
+
+    console.log('\n[INT] A blank line added to an unrelated test does not satisfy the mandate:');
+    const OTHER_TEST_REL = 'src/hooks/test-commit-command.js';
+    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    {
+        const mode = execFileSync('git', ['ls-tree', 'HEAD', '--', OTHER_TEST_REL],
+            { cwd: REPO_ROOT, encoding: 'utf-8' }).split(' ')[0];
+        const head = execFileSync('git', ['show', 'HEAD:' + OTHER_TEST_REL], { cwd: REPO_ROOT, encoding: 'utf-8' });
+        const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
+            { cwd: REPO_ROOT, encoding: 'utf-8', input: head + '\n' }).trim();
+        execFileSync('git', ['update-index', '--cacheinfo', mode + ',' + blob + ',' + OTHER_TEST_REL], { cwd: REPO_ROOT });
+    }
+    try {
+        r = runMandate();
+        assert('impl + blank line in an unrelated test: blocked', r.decision, 'block');
+        assertContains('...as no_tests', r.systemMessage || '', 'no_tests');
+    } finally {
+        try { execFileSync('git', ['reset', '-q', 'HEAD', '--', OTHER_TEST_REL], { cwd: REPO_ROOT }); } catch (e) {}
+        unstageBlob(IMPL_REL);
+        cleanAll();
+    }
+
+    console.log('\n[INT] A test that adds test code satisfies the mandate:');
+    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    stageBlob(TEST_REL, 'from pcr_billing import bill\n\ndef test_bill():\n    assert bill() == 1\n');
+    try {
+        r = runMandate();
+        assertFalse('impl + a real test: not blocked by the TDD gate', tddBlocked(r));
+        // From a subdirectory too: the test diff is read at the toplevel, where the
+        // repo-relative paths resolve.
+        cleanAll();
+        r = runMandate({}, { cwd: path.join(REPO_ROOT, 'src') });
+        assertFalse('...nor from a subdirectory', tddBlocked(r));
+    } finally {
+        unstageBlob(TEST_REL);
+        unstageBlob(IMPL_REL);
+        cleanAll();
+    }
+
+    if (process.platform !== 'win32') {
+        console.log('\n[INT] An unreadable test diff blocks:');
+        stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+        stageBlob(TEST_REL, 'def test_bill():\n    assert True\n');
+        try {
+            r = runMandate({ PATH: writeGitShim('-U0') });
+            assert('unreadable test diff: blocked', r.decision, 'block');
+            assertContains('...saying the test diff could not be read', r.systemMessage || '', 'test diff could not be read');
+            assertFalse('...writes no marker', fs.existsSync(MARKER));
+            assertFalse('...writes no lock', fs.existsSync(LOCK));
+        } finally {
+            cleanGitShim();
+            unstageBlob(TEST_REL);
+            unstageBlob(IMPL_REL);
+            cleanAll();
+        }
+    }
+
+    // --amend: the test committed in HEAD is part of the result, so it counts even
+    // though `git diff --cached` (index against HEAD) cannot see it. Built in a
+    // throwaway repository with plumbing, so this suite never commits here.
+    console.log('\n[INT] --amend counts a test already in HEAD, root commit or not:');
+    const buildRepo = commits => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-amend-'));
+        const g = (args, input) => execFileSync('git', args,
+            { cwd: dir, encoding: 'utf-8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        g(['init', '-q']);
+        let parent = null;
+        for (const files of commits) {
+            for (const [rel, content] of Object.entries(files)) {
+                fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+                fs.writeFileSync(path.join(dir, rel), content, 'utf-8');
+                g(['add', '--', rel]);
+            }
+            const tree = g(['write-tree']);
+            parent = g(['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit-tree', tree,
+                ...(parent ? ['-p', parent] : []), '-m', 'c']);
+            g(['update-ref', 'HEAD', parent]);
+        }
+        // The amend's own staged change: the implementation only.
+        fs.writeFileSync(path.join(dir, 'src', 'app.py'), 'def app():\n    return 2\n', 'utf-8');
+        g(['add', '--', 'src/app.py']);
+        return dir;
+    };
+    const AMEND = { command: 'git commit --amend --no-edit' };
+    const APP = { 'src/app.py': 'def app():\n    return 1\n' };
+    const REAL_TEST = { 'tests/test_app.py': 'def test_app():\n    assert app() == 2\n' };
+    const EMPTY_TEST = { 'tests/test_app.py': '' };
+    for (const [name, commits, wantBlocked] of [
+        ['amend of a root commit whose test is in HEAD: passes', [{ ...APP, ...REAL_TEST }], false],
+        ['amend of a non-root commit whose test is in HEAD: passes', [{ 'README.md': 'x\n' }, { ...APP, ...REAL_TEST }], false],
+        ['amend of a root commit whose HEAD test is empty: no_tests', [{ ...APP, ...EMPTY_TEST }], true],
+        // The parent already had the real test; the amended commit adds nothing to it.
+        ['amend whose test predates HEAD: no_tests', [{ ...REAL_TEST }, { ...APP, 'tests/test_app.py': REAL_TEST['tests/test_app.py'] + '\n' }], true],
+    ]) {
+        const dir = buildRepo(commits);
+        try {
+            r = runMandate({}, { ...AMEND, cwd: dir });
+            assert(name, tddBlocked(r), wantBlocked);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
+    console.log('\n[UNIT] The marker hash ignores external diff drivers:');
+    cleanAll();
+    {
+        const savedExt = process.env.GIT_EXTERNAL_DIFF;
+        process.env.GIT_EXTERNAL_DIFF = 'true';   // prints nothing for every file
+        try {
+            stageDummyContent('def foo():\n    return 1\n');
+            const h1 = gitReadLib.stagedDiffHash(REPO_ROOT);
+            stageDummyContent('def foo():\n    return 2\n');
+            const h2 = gitReadLib.stagedDiffHash(REPO_ROOT);
+            assertTrue('hash moves with content under GIT_EXTERNAL_DIFF', h1 !== h2);
+        } finally {
+            if (savedExt === undefined) delete process.env.GIT_EXTERNAL_DIFF;
+            else process.env.GIT_EXTERNAL_DIFF = savedExt;
+            unstageDummy();
+        }
+        for (const flag of ['--no-ext-diff', '--no-textconv', '--text', "':(top,exclude)features/*.md'"]) {
+            assertContains('HASH_PIPELINE carries ' + flag, gitReadLib.HASH_PIPELINE, flag);
+        }
+    }
+    cleanAll();
+
+    // =====================================================================
     // Unreadable index: a failed `git diff --cached --name-only` must not
     // read as "no staged code". Second-pass sweep, item A.
     // =====================================================================
@@ -741,12 +1666,14 @@ try {
     r = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: '/dev/null/not-a-file' });
     assertTrue('unreadable policy path does not crash the hook', r.decision === 'block' || r.decision === 'approve');
     // Force a throw inside main via a poisoned TDD config path that is a directory.
-    r = runHook('git commit -m x', { TDD_ORDER_REPOS_CONFIG: REPO_ROOT });
+    // A TDD-gate input, so it runs under the real mandate.
+    r = runHook('git commit -m x', { TDD_ORDER_REPOS_CONFIG: REPO_ROOT }, { realMandate: true });
     assertTrue('directory as config path does not crash the hook', r.decision === 'block' || r.decision === 'approve');
 
     console.log('\n[INT] Gate 0 directory change before the commit:');
     cleanAll();
-    stageDummyContent('# comment only\n');
+    unstageDummy();
+    stageTrackedAppend('# comment only\n');
     r = runHook('cd ' + NON_REPO_DIR + ' && git commit -m x');
     assert('cd out of the repo blocks', r.decision, 'block');
     assertContains('cd block names the repository', r.systemMessage || '', 'leaves the repository');
@@ -756,7 +1683,7 @@ try {
     assert('cd into a repo from outside blocks', r.decision, 'block');
     r = runHook('cd src && git commit -m x');
     assert('cd within the repo proceeds (trivial fast path)', r.decision, 'approve');
-    unstageDummy();
+    unstageTracked();
     cleanAll();
     stageDummyContent('def foo():\n    return 1\n');
     if (process.platform !== 'win32') {
@@ -777,9 +1704,10 @@ try {
         // what stands between the block and a cached BLOCK marker.
         const TDD_CFG2 = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-repos2.json');
         fs.writeFileSync(TDD_CFG2, JSON.stringify({ repos: [REPO_ROOT] }), 'utf-8');
+        // Targets the TDD gate's own read, so it runs under the real mandate.
         r = runHook('git commit -m x',
             { PATH: writeGitShim('--name-only', 2), TDD_ORDER_REPOS_CONFIG: TDD_CFG2 },
-            { input: { transcript_path: '/nonexistent/transcript.jsonl' } });
+            { input: { transcript_path: '/nonexistent/transcript.jsonl' }, realMandate: true });
         assert('tdd gate unreadable paths block', r.decision, 'block');
         assertContains('tdd gate unreadable message', r.systemMessage || '', 'could not be read');
         assertFalse('tdd gate unreadable writes no marker', fs.existsSync(MARKER));
@@ -1027,6 +1955,7 @@ try {
     assertFalse('stale block marker does not repeat its reason', (r.reason || '') === 'Same diff blocked < 30s ago');
 } finally {
     unstageDummy();
+    unstageTracked();
     unstageFeatureDummy();
     unstageLargeFixture();
     cleanGitShim();
@@ -1035,6 +1964,7 @@ try {
     cleanCoverageXml();
     cleanDiffCoverStub();
     cleanPolicy();
+    cleanTddExemptCfg();
     // Restore any files that were staged before the test started.
     restageFiles(PRE_STAGED);
 }

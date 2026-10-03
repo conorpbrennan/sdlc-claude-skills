@@ -53,8 +53,8 @@ Two positional arguments:
 ## Examples
 
 ```
-/feature-new add-user-auth "Ship login and session screens for the web app"
-/feature-new rename-widget "Replace 'Widget' naming with 'Component' across the UI"
+/sdlc:feature-new add-user-auth "Ship login and session screens for the web app"
+/sdlc:feature-new rename-widget "Replace 'Widget' naming with 'Component' across the UI"
 ```
 
 ## Notes

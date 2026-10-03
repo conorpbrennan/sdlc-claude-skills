@@ -11,7 +11,7 @@ Resolve `features/` relative to the repo root
 (`git rev-parse --show-toplevel`). If the directory does not exist, tell
 the user: "No features tracked yet. Start a feature branch and Claude
 will create a stub on session start, or seed one now with
-`/feature-new <slug> \"<requirement>\"`."
+`/sdlc:feature-new <slug> \"<requirement>\"`."
 
 ### Argument is "list" or empty
 
@@ -23,7 +23,7 @@ Print a table of every `features/*.md`. Columns:
 - Last updated (from `**Last updated**:`)
 
 After the table, if any row is `[no requirement]`, remind the user to
-seed those with `/feature-new <slug> "<requirement>"`.
+seed those with `/sdlc:feature-new <slug> "<requirement>"`.
 
 ### Argument is a feature name or search term
 
@@ -39,12 +39,12 @@ seed those with `/feature-new <slug> "<requirement>"`.
    - Do not proceed with any build work yet.
    - Ask the user: "The `<slug>` feature has no recorded requirement.
      What's the one-sentence requirement?"
-   - Once the user answers, invoke `/feature-new <slug> "<their answer>"`
+   - Once the user answers, invoke `/sdlc:feature-new <slug> "<their answer>"`
      to persist it.
    - Then continue.
 
 ## Examples
 
-- `/feature` or `/feature list` - table of all features
-- `/feature add-user-auth` - load one feature's context
-- `/feature auth` - load every feature matching "auth"
+- `/sdlc:feature` or `/sdlc:feature list` - table of all features
+- `/sdlc:feature add-user-auth` - load one feature's context
+- `/sdlc:feature auth` - load every feature matching "auth"

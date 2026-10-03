@@ -14,9 +14,9 @@ none. Every path, symbol and line below is on `main`.
   `src/hooks/lib/commit-command.js`.
 - Rounds are logged through `src/hooks/timing-log.js::logEvent`.
 - The Python symbol check has to read a module, not search it. A function:
-  `.claude/skills/plan-spec/check_citations.py::defined_symbols`. A
+  `tools/analyze-review-timing.py::summarise`. A
   module-level assignment, which is a definition too:
-  `.claude/skills/plan-spec/check_citations.py::SKIP_PREFIXES`.
+  `skills/plan-spec/check_citations.py::SKIP_PREFIXES`.
 
 ## Steps
 

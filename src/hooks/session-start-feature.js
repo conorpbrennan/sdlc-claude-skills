@@ -3,7 +3,7 @@
 // from the user before any build work.
 //
 // Design goals (see .claude/plans/automated-feature-tracking.md):
-//   - Creation happens BEFORE build, so /feature and build skills have
+//   - Creation happens BEFORE build, so the feature command and build skills have
 //     something real to load.
 //   - Deterministic and fast: one git call, at most one file write.
 //   - Never blocks the session — any failure exits 0 silently.
@@ -15,6 +15,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const timingLog = require('./timing-log');
 const ff = require('./lib/feature-file');
+const { cmd } = require('./lib/plugin-names');
 
 function readStdinSync() {
     try {
@@ -133,10 +134,10 @@ function processRepo(repo) {
         const relPath = 'features/' + branch + '.md';
         let msg = 'Feature context available for branch `' + branch
             + '` (in `' + repo + '`): `' + relPath + '`. '
-            + 'Load it with `/feature ' + branch + '`.';
+            + 'Load it with `' + cmd('feature') + ' ' + branch + '`.';
         if (hasTBD) {
             msg += ' The requirement is still `_TBD_` — ask the user for a '
-                + 'one-sentence requirement and run `/feature-new ' + branch
+                + 'one-sentence requirement and run `' + cmd('feature-new') + ' ' + branch
                 + ' "<their answer>"` before starting implementation work.';
         }
         return {
@@ -171,7 +172,7 @@ function processRepo(repo) {
         + 'Before starting any implementation, ask the user:\n'
         + '"What\'s the one-sentence requirement for `' + branch + '`?"\n\n'
         + 'Once the user answers, run:\n'
-        + '`/feature-new ' + branch + ' "<their answer>"`\n\n'
+        + '`' + cmd('feature-new') + ' ' + branch + ' "<their answer>"`\n\n'
         + 'Do not begin build work, edits, or planning until the requirement '
         + 'is captured.';
     return { state: 'stub-created', branch, message: msg };
