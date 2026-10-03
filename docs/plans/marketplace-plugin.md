@@ -95,6 +95,7 @@ WHAT TO BUILD: the hook reads `instructions/*.md` relative to `__dirname` (`../.
 GATE: both tests exit 0. `claude plugin validate .` exits 0. Under the cap with at least 1,500 characters of headroom: the test prints the length, and the report quotes it as a number.
 REVIEW: 1. Is the order deterministic? 2. Can the hook print anything other than the JSON object to stdout? FAIL if: the cap is not asserted, or the hook can exit non-zero.
 ROLLBACK: revert the commit.
+-- status: committed `d15eb16`. code-reviewer:round1:PASS (0/0/3 advisory). Amended: D1 (two merge tests' snippet path). additionalContext is 7,873 chars.
 
 **5. Nothing a skill, command or hook runs assumes the toolchain lives in `~/.claude/`**
 
@@ -152,3 +153,4 @@ Cutover, by the owner after the merge to `main` (each command is outward-facing 
   - D4: the namespaced-message assertion in `test-pre-commit-review.js` is pre-empted by the TDD `no_tests` baseline, so it was verified by hand. The baseline-repair follow-up would make it real.
   - Decision noted: the marker recipe now says to use the *bare* agent name in the tag, so a namespaced `sdlc:code-reviewer:round1:PASS` never reaches a marker.
 - 2026-10-03, step 4 implementer: D1 accepted. `src/test-merge-claude-md.js` and `src/test-unmerge-claude-md.js` read the shipped snippets from `.claude/` and would break on the move, so their path line was changed (one line each), outside the declared file set. The uninstall.sh fold-in was confirmed correct: without it a no-record uninstall would silently skip every snippet. No snippet contained the "installed to `~/.claude/hooks/`" text, so the snippets are unchanged. additionalContext is 7,873 chars. The new hook's timeout is 5 (seconds).
+- 2026-10-03, step 5: its new assertion "block message carries the timing-log command at the hook's own path" joins the TDD-pre-empted baseline (now 27 names). The message was verified by hand against a scratch repo with the mandate disabled, and sdlc-hardening step 0 makes the assertion real. The analyser and timing-log fallbacks use the observed cache layout, `~/.claude/plugins/cache/*/sdlc/*/`.

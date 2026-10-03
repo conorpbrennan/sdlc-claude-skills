@@ -92,11 +92,18 @@ block message and the timing log can say where a change stands.
   critical important` applies the numbered items), then rerun per the
   rounds policy.
 - Either way, record the round so the timing log can join it to the
-  hook's own events (the hooks never see the report):
+  hook's own events (the hooks never see the report). Run the timing
+  command exactly as the block message gives it, filling in the
+  placeholders. The hook builds it from its own location, so its path to
+  `timing-log.js` is right wherever the plugin is installed:
 
   ```bash
-  node "$HOME/.claude/hooks/timing-log.js" review.completed agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"
+  node "<path from the block message>/timing-log.js" review.completed agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"
   ```
+
+  A manual run with no block message: use `./src/hooks/timing-log.js`
+  inside the `sdlc-claude-skills` source repo, else the newest
+  `~/.claude/plugins/cache/*/sdlc/*/src/hooks/timing-log.js`.
 
 - The review is done when the trailer is the last line of the report,
   the event is recorded and, on PASS, the four-line marker is written.

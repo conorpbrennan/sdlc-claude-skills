@@ -249,6 +249,12 @@ const ROUNDS_POLICY = 'Round 1 is ' + agent('code-reviewer') + '. Rerun with --d
     'and ask the user to fix-and-rerun or to accept with the gap named in the commit message.';
 const TAG_NOTE = ' (replace code-reviewer:round1 with the bare agent name, code-reviewer or ' +
     'code-reviewer-deep, and the round used)';
+// The round record the skill asks for, at this hook's own location: the
+// plugin cache, a source checkout or a legacy install all hold timing-log.js
+// beside this file, so the path is right wherever the toolchain lives.
+const TIMING_CMD = 'node "' + path.join(__dirname, 'timing-log.js') + '" review.completed ' +
+    'agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> ' +
+    'advisory=<n> repo="$(git rev-parse --show-toplevel)"';
 
 function writeMarker(markerPath, diffHash, covHash, tag) {
     try {
@@ -885,7 +891,8 @@ function main() {
         'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run ' + REVIEW_CMD + ' --fresh on the ' +
         'staged files: ' + fileList + semanticNote + '. ' + ROUNDS_POLICY +
         ' On TDD_GATE: PASS run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
-        TAG_NOTE + '. On TDD_GATE: FAIL do not write the marker.');
+        TAG_NOTE + '. On TDD_GATE: FAIL do not write the marker. Either way, record the round by running ' +
+        'exactly: ' + TIMING_CMD + ' (fill in the placeholders).');
 }
 
 if (require.main === module) {

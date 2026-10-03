@@ -507,6 +507,12 @@ try {
     let r = runHook('git commit -m x');
     assert('blocks when no marker present', r.decision, 'block');
     assertContains('block message tells user to run review', r.systemMessage || '', '/sdlc:code-review-pre-commit');
+    // The timing-log path comes from the hook's own location, so it is right
+    // wherever the toolchain is installed (plugin cache, source checkout).
+    assertContains('block message carries the timing-log command at the hook\'s own path',
+        r.systemMessage || '', 'node "' + path.join(__dirname, 'timing-log.js') + '" review.completed');
+    assertFalse('block message does not assume ~/.claude/hooks',
+        /(\$HOME|~)\/\.claude\/hooks/.test(r.systemMessage || ''));
 
     cleanLock();
     writeMarker('');

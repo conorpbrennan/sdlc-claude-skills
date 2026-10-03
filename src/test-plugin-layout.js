@@ -418,6 +418,28 @@ for (const rel of textFiles) {
     scanText(rel.split(path.sep).join('/'), 1, fs.readFileSync(path.join(ROOT, rel), 'utf-8'));
 }
 assert('no bare slash command or skill name outside the allowlist', bareHits, []);
+
+console.log('\nNothing the plugin runs assumes the toolchain lives in ~/.claude/:');
+// The toolchain ships in the plugin, wherever Claude Code put it. User data
+// (the timing log, tdd-mandate.json, review-policy.json, hygiene-repos.json)
+// stays in ~/.claude/ and is not matched: only hooks/ and tools/ are.
+const TOOLCHAIN_HOME = /(\$HOME|~)\/\.claude\/(hooks|tools)\b/;
+assert('TOOLCHAIN_HOME catches a deployed hook path',
+    TOOLCHAIN_HOME.test('node "$HOME/.claude/hooks/timing-log.js"'), true);
+assert('TOOLCHAIN_HOME catches a deployed tool path',
+    TOOLCHAIN_HOME.test('`~/.claude/tools/analyze-review-timing.py`'), true);
+assert('TOOLCHAIN_HOME passes user data in ~/.claude/',
+    TOOLCHAIN_HOME.test('`~/.claude/code-review-timing.jsonl` and ~/.claude/tdd-mandate.json'), false);
+const toolchainHits = [];
+for (const rel of [...textFiles, ...hookSources]) {
+    fs.readFileSync(path.join(ROOT, rel), 'utf-8').split('\n').forEach((lineText, k) => {
+        if (TOOLCHAIN_HOME.test(lineText)) {
+            toolchainHits.push(`${rel.split(path.sep).join('/')}:${k + 1}: ${lineText.trim().slice(0, 100)}`);
+        }
+    });
+}
+assert('no ~/.claude/hooks or ~/.claude/tools path under skills, commands, agents, instructions or hooks',
+    toolchainHits, []);
 assert('every subagent_type and skill value is namespaced or built in', badDispatch, []);
 
 console.log('\nThe instruction sections ship in instructions/:');
