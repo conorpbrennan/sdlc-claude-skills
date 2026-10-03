@@ -153,7 +153,7 @@ function fastPassLogLines() {
 
 // The hash the hook uses: the staged diff with feature records excluded.
 function stagedDiffHash() {
-    return execSync("git diff --cached -- ':(top,exclude)features/*.md' | git hash-object --stdin", {
+    return execSync(require(path.join(__dirname, 'lib', 'git-read.js')).HASH_PIPELINE, {
         encoding: 'utf-8', cwd: REPO_ROOT, shell: true,
     }).trim();
 }
@@ -1430,6 +1430,75 @@ try {
         }
     }
     unstageDummy();
+    cleanAll();
+
+    // =====================================================================
+    // Unusual filenames (step 9). Paths are staged straight into the index
+    // (no working-tree file), so names Windows cannot create still work, and
+    // removed with update-index, which reads paths literally.
+    // =====================================================================
+    const stageBlob = (rel, content) => {
+        const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
+            { cwd: REPO_ROOT, encoding: 'utf-8', input: content }).trim();
+        execFileSync('git', ['update-index', '--add', '--cacheinfo', '100644,' + blob + ',' + rel], { cwd: REPO_ROOT });
+    };
+    const unstageBlob = rel => {
+        try { execFileSync('git', ['update-index', '--force-remove', '--', rel], { cwd: REPO_ROOT, stdio: 'pipe' }); }
+        catch (e) {}
+    };
+
+    console.log('\n[INT] A non-ASCII code filename is not approved as staged-no-code:');
+    cleanAll();
+    const accented = 'tmp/pcr-café.py';
+    stageBlob(accented, 'def foo():\n    return 1\n');
+    try {
+        r = runHook('git commit -m x');
+        assertTrue('staged café.py is not approved', r.decision !== 'approve');
+        assertFalse('staged café.py writes no PASS marker', (readMarker() || '').startsWith('PASS'));
+        cleanAll();
+        r = runHook('git commit -m x', {}, { realMandate: true, input: { transcript_path: '' } });
+        assertContains('staged café.py with no test: TDD gate blocks no_tests', r.systemMessage || '', 'no_tests');
+    } finally {
+        unstageBlob(accented);
+        cleanAll();
+    }
+
+    console.log('\n[INT] A file named like pathspec magic cannot hide a sibling from the diff read:');
+    cleanAll();
+    stageBlob(':(exclude)evil.py', 'x = 1\n');
+    stageBlob('evil.py', 'import os\nos.system("rm -rf /")\n');
+    stageTrackedAppend('# comment only\n');
+    try {
+        r = runHook('git commit -m x');
+        assertTrue('magic-named sibling: not approved', r.decision !== 'approve');
+        assertFalse('magic-named sibling: no PASS marker', (readMarker() || '').startsWith('PASS'));
+    } finally {
+        unstageBlob(':(exclude)evil.py');
+        unstageBlob('evil.py');
+        unstageTracked();
+        cleanAll();
+    }
+
+    console.log('\n[UNIT] The marker hash ignores external diff drivers:');
+    cleanAll();
+    {
+        const savedExt = process.env.GIT_EXTERNAL_DIFF;
+        process.env.GIT_EXTERNAL_DIFF = 'true';   // prints nothing for every file
+        try {
+            stageDummyContent('def foo():\n    return 1\n');
+            const h1 = gitReadLib.stagedDiffHash(REPO_ROOT);
+            stageDummyContent('def foo():\n    return 2\n');
+            const h2 = gitReadLib.stagedDiffHash(REPO_ROOT);
+            assertTrue('hash moves with content under GIT_EXTERNAL_DIFF', h1 !== h2);
+        } finally {
+            if (savedExt === undefined) delete process.env.GIT_EXTERNAL_DIFF;
+            else process.env.GIT_EXTERNAL_DIFF = savedExt;
+            unstageDummy();
+        }
+        for (const flag of ['--no-ext-diff', '--no-textconv', '--text', "':(top,exclude)features/*.md'"]) {
+            assertContains('HASH_PIPELINE carries ' + flag, gitReadLib.HASH_PIPELINE, flag);
+        }
+    }
     cleanAll();
 
     // =====================================================================

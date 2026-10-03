@@ -115,9 +115,9 @@ function readMarkerBody(filePath) {
 // Returns { files, error }. files is null when the index could not be read:
 // an unreadable index is not an empty one, and Gate 3 must not approve on it.
 function readStagedCodeFiles() {
-    const r = gitRead.gitRead(['diff', '--cached', '--name-only'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
+    const r = gitRead.gitRead(['diff', '--cached', '--name-only', '-z'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
     if (r.out === null) return { files: null, error: r.error };
-    const files = r.out.trim().split('\n').filter(f => f.length > 0);
+    const files = gitRead.splitNul(r.out);
     return { files: files.filter(isSourcePath), error: null };
 }
 
@@ -155,7 +155,9 @@ function readStagedDiff(codeFiles, opts) {
         const env = { ...process.env };
         delete env.GIT_DIFF_OPTS;
         delete env.GIT_EXTERNAL_DIFF;
-        const text = execFileSync('git', ['diff', '--cached', '--text', '--no-ext-diff', '--no-textconv',
+        // --literal-pathspecs: a staged file named `:(exclude)x.py` is a path,
+        // not pathspec magic that drops its sibling `x.py` from the read.
+        const text = execFileSync('git', ['--literal-pathspecs', 'diff', '--cached', '--text', '--no-ext-diff', '--no-textconv',
             '--no-color', '--submodule=short', '-U1', '--', ...(codeFiles || [])], {
             encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer, cwd: o.cwd, env,
         });
@@ -450,8 +452,8 @@ function repoIsOptedIn(toplevel, repos) {
 
 // null when the index could not be read (never [] for a failure).
 function getAllStagedPaths() {
-    const r = gitRead.gitRead(['diff', '--cached', '--name-only'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
-    return r.out === null ? null : r.out.trim().split('\n').filter(Boolean);
+    const r = gitRead.gitRead(['diff', '--cached', '--name-only', '-z'], { maxBuffer: DIFF_MAX_BUFFER_BYTES });
+    return r.out === null ? null : gitRead.splitNul(r.out);
 }
 
 // Returns { action: 'block'|'continue', status, firstTestPath, firstImplPath, mode, reason }.
@@ -468,9 +470,9 @@ function getAllStagedPaths() {
 function pathsInResultingCommit(isAmend) {
     const staged = getAllStagedPaths();
     if (staged === null || !isAmend) return staged;
-    const head = gitRead.gitRead(['show', '--name-only', '--pretty=format:', 'HEAD']);
+    const head = gitRead.gitRead(['show', '--name-only', '-z', '--pretty=format:', 'HEAD']);
     if (head.out === null) return staged;   // cannot read HEAD: judge the staged set
-    const fromHead = head.out.trim().split('\n').map(f => f.trim()).filter(Boolean);
+    const fromHead = gitRead.splitNul(head.out).map(f => f.trim()).filter(Boolean);
     return Array.from(new Set([...staged, ...fromHead]));
 }
 
