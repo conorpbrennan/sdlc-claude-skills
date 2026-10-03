@@ -1,0 +1,13 @@
+{
+  "name": "sdlc-claude-skills",
+  "owner": {
+    "name": "Conor Brennan"
+  },
+  "description": "Marketplace for the sdlc plugin: the SDLC toolchain for Claude Code.",
+  "plugins": [
+    {
+      "name": "sdlc",
+      "source": "./"
+    }
+  ]
+}
