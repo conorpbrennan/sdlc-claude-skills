@@ -72,12 +72,17 @@ function locateRepo(cwd) {
 // out loses nothing. `:(top,...)` anchors at the repository root whatever
 // the cwd; a pathspec of only excludes matches everything else.
 const HASH_EXCLUDE_PATHSPECS = [':(top,exclude)features/*.md'];
+// --no-ext-diff, --no-textconv, --text: a configured diff driver, textconv
+// filter or binary attribute could print the same bytes for different
+// content and keep the hash stable while the commit changes. No
+// --literal-pathspecs here: it would disable the `:(top,exclude)` magic.
+const HASH_DIFF_ARGS = ['diff', '--cached', '--no-ext-diff', '--no-textconv', '--text'];
 // The same read as a shell pipeline, for the marker recipe the hook emits.
-const HASH_PIPELINE = "git diff --cached -- " +
+const HASH_PIPELINE = 'git ' + HASH_DIFF_ARGS.join(' ') + ' -- ' +
     HASH_EXCLUDE_PATHSPECS.map(p => "'" + p + "'").join(' ') + ' | git hash-object --stdin';
 
 // SHA-1 of the staged diff (feature records excluded), byte-identical to
-// `git diff --cached | git hash-object --stdin` (a git blob hash) in a
+// HASH_PIPELINE's output (a git blob hash) in a
 // SHA-1 repository, so it matches markers written by that pipeline
 // elsewhere. In a SHA-256 repository (`--object-format=sha256`) the two
 // differ; the hook still fails closed there (no marker ever matches), it
@@ -86,7 +91,7 @@ const HASH_PIPELINE = "git diff --cached -- " +
 // shell pipeline without pipefail reports success when only the last
 // command succeeds.
 function stagedDiffHash(cwd) {
-    const r = gitRead(['diff', '--cached', '--', ...HASH_EXCLUDE_PATHSPECS], { cwd, raw: true });
+    const r = gitRead([...HASH_DIFF_ARGS, '--', ...HASH_EXCLUDE_PATHSPECS], { cwd, raw: true });
     if (r.out === null) return null;
     const buf = Buffer.isBuffer(r.out) ? r.out : Buffer.from(r.out);
     return crypto.createHash('sha1')
@@ -95,4 +100,11 @@ function stagedDiffHash(cwd) {
         .digest('hex');
 }
 
-module.exports = { gitRead, locateRepo, stagedDiffHash, errorText, HASH_EXCLUDE_PATHSPECS, HASH_PIPELINE };
+// Splits `--name-only -z` output. NUL-terminated paths are never C-quoted
+// (core.quotePath would turn `café.py` into `"caf\303\251.py"`, whose
+// extension reads as `.py"`), and a newline in a name cannot split it.
+function splitNul(out) {
+    return String(out).split('\0').filter(f => f.length > 0);
+}
+
+module.exports = { gitRead, locateRepo, stagedDiffHash, splitNul, errorText, HASH_EXCLUDE_PATHSPECS, HASH_PIPELINE };

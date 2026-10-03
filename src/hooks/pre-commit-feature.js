@@ -129,7 +129,7 @@ if (gitDir && fs.existsSync(path.resolve(repo, gitDir, 'MERGE_HEAD'))) {
     approve('skip-merge');
 }
 
-const stagedRaw = runGit(['diff', '--cached', '--name-only', '--diff-filter=ACMR'], repo);
+const stagedRaw = runGit(['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR'], repo);
 if (stagedRaw === null) {
     // Fail closed: an index we cannot read might hold a source commit on a
     // protected branch. "No diff to reason about" is not a reason to approve.
@@ -139,7 +139,8 @@ if (stagedRaw === null) {
         'branch and feature-file rules cannot be checked. Retry; if it persists, ' +
         'check the repository state (index.lock, GIT_DIR, cwd).');
 }
-const staged = stagedRaw.split('\n').map(s => s.trim()).filter(Boolean);
+// -z: NUL-terminated paths are never C-quoted under core.quotePath.
+const staged = gitRead.splitNul(stagedRaw);
 if (staged.length === 0) {
     // Genuinely nothing staged. Let git itself decide.
     approve('skip-nothing-staged');
