@@ -13,6 +13,12 @@
 // subcommands computed at run time) counts as unreadable and blocks.
 // The cost is that staging and committing must be two separate commands.
 //
+// Other subcommands create commits too (cherry-pick, revert, merge, am,
+// rebase, pull, commit-tree), and no pre-commit gate sees them. Their
+// committing forms are refused with a reason naming the non-committing
+// form; persisted aliases (`git ci`) and `git-<sub>` executables are
+// classified as the command they stand for.
+//
 // Known limits, accepted deliberately. The classifier sees one Bash
 // command's text and nothing else:
 //   - A command name built entirely from data the command never spells out
@@ -52,6 +58,101 @@ const INDEX_WRITING_SUBCOMMANDS = new Set([
 // / `list` / `show` do not stage anything for the following commit.
 const STASH_INDEX_VERBS = new Set(['pop', 'apply']);
 
+// Subcommands that create commits themselves, which no pre-commit gate ever
+// inspects. Each lists the flags that make it stop short of committing
+// (`nonCommitting`, matched exactly before any `--`) and the text the
+// refusal names as the way to get the same result through the gates. Any
+// other form, `--continue` and `--skip` included, commits and is refused.
+const COMMIT_PRODUCING = {
+    'commit-tree': {
+        nonCommitting: [],
+        instead: 'stage the tree and run `git commit` on its own',
+    },
+    'cherry-pick': {
+        nonCommitting: ['-n', '--no-commit', '--abort', '--quit'],
+        instead: 'run `git cherry-pick -n <commit>` (or `--no-commit`), then `git commit` on its own',
+    },
+    'revert': {
+        nonCommitting: ['-n', '--no-commit', '--abort', '--quit'],
+        instead: 'run `git revert --no-commit <commit>` (or `-n`), then `git commit` on its own',
+    },
+    'merge': {
+        nonCommitting: ['--no-commit', '--squash', '--ff-only', '--abort', '--quit'],
+        instead: 'run `git merge --no-commit <branch>` (or `--squash`, or `--ff-only`), then `git commit` on its own',
+    },
+    'pull': {
+        nonCommitting: ['--ff-only'],
+        instead: 'run `git pull --ff-only`, or `git fetch` then `git merge --no-commit`, then `git commit` on its own',
+    },
+    'am': {
+        nonCommitting: ['--abort', '--quit', '--show-current-patch'],
+        instead: 'run `git apply --index <patch>`, then `git commit` on its own',
+    },
+    'rebase': {
+        nonCommitting: ['--abort', '--quit', '--show-current-patch', '--edit-todo'],
+        instead: 'it has no non-committing form: ask the user to run it, or replay with `git cherry-pick -n` and `git commit` on its own',
+    },
+};
+
+function isCommitProducing(sub) {
+    return Object.prototype.hasOwnProperty.call(COMMIT_PRODUCING, sub);
+}
+
+// Returns the refusal for a commit-producing subcommand in its committing
+// form, else null.
+function commitProducingReason(sub, args) {
+    if (!isCommitProducing(sub)) return null;
+    const entry = COMMIT_PRODUCING[sub];
+    const end = args.indexOf('--');
+    const flags = end === -1 ? args : args.slice(0, end);
+    if (flags.some(a => entry.nonCommitting.includes(a.split('=')[0]))) return null;
+    return '`git ' + sub + '` creates commits the pre-commit gates never inspect; ' + entry.instead;
+}
+
+// Alias names git can store: `alias.<name>` with a config variable name.
+// Anything else cannot be an alias, so it is not looked up.
+const ALIAS_NAME_RE = /^[A-Za-z][A-Za-z0-9-]*$/;
+// Alias-of-alias chains deeper than this are refused rather than followed.
+const MAX_ALIAS_DEPTH = 8;
+
+// The default alias resolver: one `git config` read in `cwd`. Returns the
+// alias value, '' when there is none, or null when the read failed.
+function defaultAliasResolver(cwd) {
+    return sub => gitRead.gitRead(['config', '--default', '', '--get', 'alias.' + sub], { cwd }).out;
+}
+
+// Resolves a persisted alias in `{ sub, args }`. Returns { sub, args } with
+// the alias expanded (chains followed), or { reason } when the hook cannot
+// see what the alias runs. Subcommands the classifier already knows are
+// returned as they are: an alias cannot shadow a builtin.
+function resolveAlias(sub, args, resolve) {
+    for (let depth = 0; ; depth += 1) {
+        if (sub === 'commit' || INDEX_WRITING_SUBCOMMANDS.has(sub) || isCommitProducing(sub) ||
+            !ALIAS_NAME_RE.test(sub)) {
+            return { sub, args };
+        }
+        if (depth >= MAX_ALIAS_DEPTH) {
+            return { reason: '`git ' + sub + '` is an alias chain too deep to follow; run the command it stands for directly' };
+        }
+        const value = resolve(sub);
+        if (value === null || value === undefined) {
+            return { reason: 'the hook could not read `alias.' + sub + '` from git config, so it cannot tell whether `git ' + sub + '` stages or commits' };
+        }
+        const text = String(value).trim();
+        if (text === '') return { sub, args };
+        if (text.startsWith('!')) {
+            return { reason: '`git ' + sub + '` is a shell alias (`alias.' + sub + '=!...`) the hook cannot inspect; run the command it stands for directly' };
+        }
+        const segs = tokenize(text);
+        if (segs.length !== 1 || segs[0].words.length === 0) {
+            return { reason: '`alias.' + sub + '` has a value the hook cannot parse; run the command it stands for directly' };
+        }
+        const words = segs[0].words;
+        sub = words[0];
+        args = [...words.slice(1), ...args];
+    }
+}
+
 // `git commit` long options that take a value in the NEXT word when not
 // written as --opt=value.
 const COMMIT_VALUE_OPTS = new Set([
@@ -69,8 +170,10 @@ const GIT_GLOBAL_VALUE_OPTS = new Set([
     '--super-prefix', '--config-env', '--list-cmds', '--attr-source',
 ]);
 const GIT_OTHER_REPO_OPTS = new Set(['-C', '--git-dir', '--work-tree']);
-// The git executable: bare, with .exe, or behind any path.
-const GIT_EXE_RE = /^(.*[\\/])?git(\.exe)?$/i;
+// The git executable: bare, with .exe, or behind any path. A `git-<sub>`
+// executable (`/usr/lib/git-core/git-commit`) runs `<sub>` directly; group 2
+// captures that `-<sub>`.
+const GIT_EXE_RE = /^(.*[\\/])?git(-[a-z][a-z0-9-]*)?(\.exe)?$/i;
 // Environment variables that retarget git at another repository or index.
 const GIT_OTHER_REPO_ENV_RE = /^(GIT_DIR|GIT_WORK_TREE|GIT_INDEX_FILE|GIT_OBJECT_DIRECTORY|GIT_COMMON_DIR)=/;
 
@@ -322,6 +425,9 @@ function parseGitSegment(words) {
     // closed: an unknown wrapper is assumed to run what follows.
     while (i < words.length && !GIT_EXE_RE.test(words[i])) i += 1;
     if (i >= words.length) return null;
+    // `git-<sub>` runs <sub> directly, with no global options before its own.
+    const dashed = GIT_EXE_RE.exec(words[i])[2];
+    if (dashed) return { sub: dashed.slice(1), args: words.slice(i + 1), otherRepo, definesAlias };
     i += 1;
     while (i < words.length && words[i].startsWith('-')) {
         const w = words[i];
@@ -426,7 +532,19 @@ function looksLikeCommitText(text) {
 // exists) and `amend` (one of them is `--amend`). Post-commit hooks use
 // those two, not `kind`: by the time they run, an "unreliable" shape such
 // as `git commit -a` has already committed, and its record is still due.
-function classifyCommitCommand(command) {
+//
+// A subcommand the classifier does not know may be a persisted alias, so it
+// is looked up once (`git config --get alias.<sub>` in `opts.cwd`, default
+// the process cwd) and its expansion classified as if typed. `opts.resolveAlias`
+// replaces that lookup: sub -> value, '' for none, null for a failed read.
+function classifyCommitCommand(command, opts) {
+    const o = opts || {};
+    const lookup = typeof o.resolveAlias === 'function' ? o.resolveAlias : defaultAliasResolver(o.cwd);
+    const aliasCache = new Map();
+    const resolve = sub => {
+        if (!aliasCache.has(sub)) aliasCache.set(sub, lookup(sub));
+        return aliasCache.get(sub);
+    };
     // No raw-text shortcut here, deliberately: only tokenized words decide.
     const segments = tokenize(String(command || ''));
     const commits = [];
@@ -434,6 +552,7 @@ function classifyCommitCommand(command) {
     let otherRepoReason = null;
 
     let aliasReason = null;
+    let producingReason = null;
     let dynamicReason = null;
     let mentionsGit = false;
     const cds = [];
@@ -461,14 +580,24 @@ function classifyCommitCommand(command) {
         if (DYNAMIC_WORD_RE.test(cw) && !dynamicReason) {
             dynamicReason = 'a command name is computed at run time (variable or substitution), so the hook cannot tell whether it stages or commits';
         }
-        const g = parseGitSegment(seg.words);
-        if (!g) continue;
-        if (DYNAMIC_WORD_RE.test(g.sub) && !dynamicReason) {
-            dynamicReason = 'the git subcommand is computed at run time (variable or substitution), so the hook cannot tell whether it stages or commits';
+        const parsed = parseGitSegment(seg.words);
+        if (!parsed) continue;
+        if (DYNAMIC_WORD_RE.test(parsed.sub)) {
+            if (!dynamicReason) dynamicReason = 'the git subcommand is computed at run time (variable or substitution), so the hook cannot tell whether it stages or commits';
+            continue;
         }
-        if (g.definesAlias && !aliasReason) {
+        if (parsed.definesAlias && !aliasReason) {
             aliasReason = '`git -c alias.*=...` defines an alias in the same command, which may stage or commit under another name';
         }
+        // That alias reason already refuses the command; no lookup needed.
+        const resolved = parsed.definesAlias ? parsed : resolveAlias(parsed.sub, parsed.args, resolve);
+        if (resolved.reason) {
+            if (!aliasReason) aliasReason = resolved.reason;
+            continue;
+        }
+        const g = { ...parsed, sub: resolved.sub, args: resolved.args };
+        const producing = commitProducingReason(g.sub, g.args);
+        if (producing && !producingReason) producingReason = producing;
         if (g.sub === 'commit') {
             if (firstCommitSeg === -1) firstCommitSeg = segIndex;
             commits.push({ seg, ...inspectCommitArgs(g.args) });
@@ -506,13 +635,16 @@ function classifyCommitCommand(command) {
     }
 
     // Reasons in priority order. An alias or a run-time computed word can
-    // hide any of the later shapes, so they come first; staging in the same
+    // hide any of the later shapes, so they come first; a commit-producing
+    // subcommand (cherry-pick, merge, ...) is refused with or without a
+    // `git commit` beside it, so it comes before the no-commit exit; staging in the same
     // command is the incident this module exists for and outranks a
     // commit's own flags; the other-repo and wrapped cases are last because
     // they are the least specific. A command with no commit and nothing
     // wrapped is not ours at all.
     if (aliasReason) return { kind: 'unreliable', reason: aliasReason, ...facts };
     if (dynamicReason && mentionsGit) return { kind: 'unreliable', reason: dynamicReason, ...facts };
+    if (producingReason) return { kind: 'unreliable', reason: producingReason, ...facts };
     if (commits.length === 0 && !wrapped) return { kind: 'not-a-commit', ...facts };
     if (stagingReason) return { kind: 'unreliable', reason: stagingReason, ...facts };
     for (const c of commits) if (c.reason) return { kind: 'unreliable', reason: c.reason, ...facts };
