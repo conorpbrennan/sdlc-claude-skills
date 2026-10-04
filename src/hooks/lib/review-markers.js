@@ -21,7 +21,7 @@ const path = require('path');
 const gitRead = require('./git-read');
 
 // The commit gate's marker and lock. pre-commit-review.js owns these and writes a
-// body: `PASS\n<diff>\n<cov>\n<tag>` or `BLOCK\n<diff>\n<reason>`.
+// body: `PASS\n<diff>\n<cov>\n<tag>` or `BLOCK\n<diff>\n<reason>\n<cov>`.
 const MARKER_NAME = '.claude-last-review';
 const LOCK_NAME = '.claude-review-in-progress';
 

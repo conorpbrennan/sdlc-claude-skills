@@ -2092,6 +2092,26 @@ try {
         r = s.run();
         assert('coverage refreshed: the retry is measured and approved', r.decision, 'approve');
     });
+
+    console.log('\n[INT] The 30s repeat fires only when nothing the hook checks has changed:');
+    // A stale-coverage block is cleared by fresh coverage, which leaves the
+    // staged diff as it was. Repeating on the diff alone turned a quick retry
+    // after regenerating coverage into the same block with advice that did
+    // not apply.
+    withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
+        s.rerunCoverage();
+        s.age(path.join(s.dir, 'coverage.xml'), 600);   // older than every staged file
+        writeDiffCoverStub(0);
+        r = s.run();
+        assertContains('stale coverage: blocked as stale', r.systemMessage || '', 'coverage.xml is stale');
+        r = s.run();
+        assert('nothing changed: the quick retry repeats', r.reason, 'Same diff blocked < 30s ago');
+        assertContains('nothing changed: the repeat names what it compared', r.systemMessage || '',
+            'Nothing this hook checks has changed since (the staged diff and coverage.xml)');
+        s.rerunCoverage();
+        r = s.run();
+        assert('coverage refreshed within 30s: the retry is measured and approved', r.decision, 'approve');
+    });
     withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
         s.write('app.py', 'def app():\n    return 2\n');
         s.rerunCoverage();

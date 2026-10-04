@@ -13,8 +13,9 @@
 //   marker             -> approve when a fresh PASS marker matches both the
 //                         staged-diff hash and the coverage.xml hash: the
 //                         review passed. Releases the lock. A fresh BLOCK
-//                         marker for the same diff repeats its reason for
-//                         30 s so an unchanged retry is not re-dispatched.
+//                         marker for the same diff and coverage.xml repeats
+//                         its reason for 30 s so an unchanged retry is not
+//                         re-dispatched.
 //   review in flight   -> block when a fresh lock is bound to this diff and
 //                         no marker matched: a review was requested and has
 //                         not passed. The lock never approves. A lock for a
@@ -338,9 +339,22 @@ function writeMarker(markerPath, diffHash, covHash, tag) {
     } catch (e) { /* non-fatal */ }
 }
 
-function writeBlockMarker(markerPath, diffHash, shortReason) {
+// Writes `BLOCK\n<diff hash>\n<reason>\n<coverage.xml hash>`. The coverage
+// hash is taken now, not at hook start, so it is the file a quick retry will
+// compare: a block cleared by fresh coverage leaves the diff unchanged, and
+// only the coverage hash tells that retry apart from an unchanged one.
+//
+// Args:
+//   markerPath: the review marker file.
+//   diffHash: the staged-diff hash; nothing is written without one.
+//   coveragePath: coverage.xml, or null when the repo has none.
+//   shortReason: the block's reason, repeated by a quick retry.
+// Returns:
+//   nothing; a write failure only loses the repeat.
+function writeBlockMarker(markerPath, diffHash, coveragePath, shortReason) {
     if (!diffHash) return;
-    const body = ['BLOCK', diffHash, (shortReason || '').slice(0, 200)].join('\n');
+    const covHash = coveragePath ? getCoverageXmlHash(coveragePath) : 'none';
+    const body = ['BLOCK', diffHash, (shortReason || '').slice(0, 200), covHash].join('\n');
     try { fs.writeFileSync(markerPath, body, 'utf-8'); } catch (e) {}
 }
 
@@ -765,12 +779,18 @@ function main() {
                 approve();
             }
         }
+        // Repeat only when nothing this hook checks has changed. A marker
+        // from before the coverage hash was recorded (three lines) repeats
+        // on the diff alone, as it always did.
         if (parts[0] === 'BLOCK' && parts.length >= 2 && diffHash &&
-            markerFreshShort && parts[1] === diffHash) {
+            markerFreshShort && parts[1] === diffHash &&
+            (parts[3] === undefined || parts[3] === covHash)) {
             const priorReason = parts[2] || 'prior block (no reason recorded)';
             timingLog.logEvent('review.requested', { ...hookMeta, via: 'marker-block-repeat' });
             block('marker-block-repeat', 'Same diff blocked < 30s ago',
-                'PRE_COMMIT_REVIEW: ' + priorReason + '. Same staged diff was just blocked. Modify the diff or run `rm ' + MARKER_FILE + '` to force a fresh review.');
+                'PRE_COMMIT_REVIEW: ' + priorReason + '. Nothing this hook checks has changed since ' +
+                '(the staged diff and coverage.xml). Address the block above and retry, or run `rm ' +
+                MARKER_FILE + '` to re-run the checks now.');
         }
     }
 
@@ -842,7 +862,7 @@ function main() {
                 'the test before the impl edit.';
         }
         if (!noVerdict) {
-            writeBlockMarker(MARKER_FILE, diffHash, 'tdd-order: ' + tddGate.status);
+            writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'tdd-order: ' + tddGate.status);
         }
         timingLog.logEvent('review.requested', { ...hookMeta, via: 'tdd-order' });
         block('tdd-order', reason,
@@ -966,7 +986,7 @@ function main() {
                 // before this gate, never measures coverage, and offers the marker.
                 timingLog.logEvent('review.requested', { ...hookMeta, via: 'coverage-stale' });
                 const blockTag = deferToHygiene ? 'wait-for-hygiene timed out' : 'no hygiene cov check';
-                writeBlockMarker(MARKER_FILE, diffHash, 'coverage-stale: ' + blockTag);
+                writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'coverage-stale: ' + blockTag);
                 const reason = deferToHygiene
                     ? 'Hygiene did not produce fresh coverage.xml in time'
                     : 'coverage.xml is stale (older than staged files) and no hygiene cov check is configured';
@@ -1067,7 +1087,7 @@ function main() {
             // message says to write the marker on TDD_GATE: PASS. The retry
             // instead comes back through this gate, which measures again.
             timingLog.logEvent('review.requested', { ...hookMeta, via: 'coverage-gap-patch' });
-            writeBlockMarker(MARKER_FILE, diffHash, 'coverage-gap-patch: ' + uncovered.length + ' uncovered file(s)');
+            writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'coverage-gap-patch: ' + uncovered.length + ' uncovered file(s)');
             block('coverage-gap-patch', 'Coverage thresholds not met',
                 'PRE_COMMIT_REVIEW: diff-cover reported uncovered lines.' + branchNote +
                     ' Dispatch ONE gap-patching sub-agent per the <gap-patching-mode> section of the ' +
@@ -1093,7 +1113,7 @@ function main() {
         reason = 'Code review required before commit';
     }
     reason = fastPathSkipNote + reason;
-    writeBlockMarker(MARKER_FILE, diffHash, 'review-required: ' + reason.split('\n')[0].slice(0, 120));
+    writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'review-required: ' + reason.split('\n')[0].slice(0, 120));
     block('review-required', reason,
         'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run ' + REVIEW_CMD + ' --fresh on the ' +
         'staged files: ' + fileList + semanticNote + '. ' + ROUNDS_POLICY +
