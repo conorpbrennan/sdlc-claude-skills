@@ -53,6 +53,23 @@ readable, optimized**, in that order of priority. The reviewer criteria in
 method, constraints and report format; the skills and the docs refer to
 that file rather than restate it.
 
+**Reviewing this project's own gates.** The hooks guard against honest
+mistakes in the ordinary commands Claude writes. They do not guard against
+adversarial shell. A hook that reads command text can never prove what
+bash will do, so an invariant such as "approve only when the hook knows
+the message" cannot pass an adversarial reviewer. The co-author fix spent
+four `code-reviewer-deep` rounds chasing process substitution,
+backslash-newline joins and `3<<` heredocs.
+
+- Every reviewer brief for a hook or gate diff states that threat model and
+  lists its non-goals. Genuine findings get fixed: a bug in a command shape
+  Claude writes, or a regression in an existing gate. A shape Claude would
+  not write is a rabbit hole. It is ADVISORY, not CRITICAL, and it is named
+  as a gap, not chased.
+- Stop at the two-round cap. Do not offer a third round. Commit with the
+  open gaps named in the commit message and PR, and let the owner decide
+  from there.
+
 Every git read in the pre-commit hooks fails closed (`lib/git-read.js`),
 and `lib/commit-command.js` blocks any commit whose contents cannot be
 known from the index at hook time. Staging and committing must be two

@@ -700,8 +700,10 @@ rather than a thing to remember.
 
 **The commit command itself** is written out in the plan (§20.2), in full,
 checked once against every gate the harness runs. This repository's, for
-one, refuses a `-m` commit that carries no `Co-Authored-By:` trailer, so the
-forms that pass are `-F <file>` or a second `-m`. One blocked commit per run
+one, refuses a commit whose message -- `-m`, the `-F` file, or a heredoc on
+`-F -` -- has no `Co-Authored-By:` line, unless `--trailer` adds one; a `-F`
+file must be written by an earlier command, and at an absolute path when the
+commit runs behind a `cd` or `git -C`. One blocked commit per run
 while someone works that out is cheap; one per step is not.
 
 **Rule.** Use the marker command the hook's block message prints, verbatim,
