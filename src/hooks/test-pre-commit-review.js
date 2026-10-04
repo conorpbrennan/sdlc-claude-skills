@@ -238,8 +238,62 @@ console.log('============================');
 
 // The integration tests exercise the hook via spawnSync against the real repo
 // index. Any files already staged by the caller would bleed into classifyDiff
-// and break assertions. Snapshot the staged set, unstage, and restage at the
-// end via try/finally at the bottom of this file.
+// and break assertions, so they are unstaged here, and the index is put back
+// at the end.
+//
+// Put back byte for byte, from a copy of the index file taken before anything
+// touches it. Re-adding the staged paths staged their working-tree content,
+// so an unstaged edit to a staged file ended up staged.
+//
+// The copy is a file, not a buffer, because a kill cannot be caught: this
+// suite is synchronous throughout, so Node never dispatches a signal handler,
+// and registering one only stops the default kill. On a normal exit or a
+// crash the `exit` event renames the copy back over the index. After a kill
+// the copy stays, and the next run refuses to start until the user restores
+// it or deletes it -- restoring it unasked could overwrite staging done since.
+// Work staged from another terminal while the suite runs is lost either way.
+const INDEX_PATH = path.resolve(REPO_ROOT, execSync('git rev-parse --git-path index', {
+    encoding: 'utf-8', cwd: REPO_ROOT,
+}).trim());
+const INDEX_COPY = INDEX_PATH + '.pre-commit-review-test';
+// Single quotes: a path holding `$` or a backtick must not expand when pasted.
+const shQuote = s => "'" + String(s).replace(/'/g, "'\\''") + "'";
+const RESTORE_CMD = 'mv ' + shQuote(INDEX_COPY) + ' ' + shQuote(INDEX_PATH);
+if (fs.existsSync(INDEX_COPY)) {
+    console.log('An earlier run of this suite was interrupted and left your index at\n  ' + INDEX_COPY +
+        '\nRestore it with `' + RESTORE_CMD + '`, or delete it if you have staged since, then rerun.');
+    process.exit(2);
+}
+// What the caller had staged and unstaged, checked again after the restore:
+// a regression here must fail the suite, not just pass while corrupting.
+const diffFingerprint = () => ['--cached', null].map(flag => sha1(execSync(
+    'git diff --binary --no-ext-diff' + (flag ? ' ' + flag : ''),
+    { cwd: REPO_ROOT, maxBuffer: 256 * 1024 * 1024, stdio: ['pipe', 'pipe', 'pipe'] }))).join(' ');
+const CALLER_DIFFS = diffFingerprint();
+const HAD_INDEX = fs.existsSync(INDEX_PATH);
+if (HAD_INDEX) {
+    // Copy, then rename: a kill mid-copy must not leave a truncated copy that
+    // the next run would tell the user to restore over a good index.
+    fs.copyFileSync(INDEX_PATH, INDEX_COPY + '.tmp');
+    fs.renameSync(INDEX_COPY + '.tmp', INDEX_COPY);
+}
+let indexRestored = false;
+function restoreIndex() {
+    if (indexRestored) return;
+    // Rename, not a write in place: a restore cut short leaves the copy whole.
+    if (HAD_INDEX) fs.renameSync(INDEX_COPY, INDEX_PATH);
+    else try { fs.unlinkSync(INDEX_PATH); } catch (e) { /* none was made */ }
+    indexRestored = true;
+}
+// The crash path. A throw here would be swallowed behind the original error,
+// so say what failed and how to recover, and keep the exit non-zero.
+process.on('exit', () => {
+    try { restoreIndex(); } catch (e) {
+        console.error('Could not restore your index (' + e.message + '). Run: ' + RESTORE_CMD);
+        process.exitCode = 1;
+    }
+});
+
 function snapshotStaged() {
     try {
         const out = execSync('git diff --cached --name-only', {
@@ -251,12 +305,6 @@ function snapshotStaged() {
 function unstageFiles(files) {
     for (const f of files) {
         try { execSync(`git reset HEAD "${f}"`, { cwd: REPO_ROOT, stdio: 'pipe' }); }
-        catch (e) { /* ignore */ }
-    }
-}
-function restageFiles(files) {
-    for (const f of files) {
-        try { execSync(`git add -f "${f}"`, { cwd: REPO_ROOT, stdio: 'pipe' }); }
         catch (e) { /* ignore */ }
     }
 }
@@ -1652,6 +1700,22 @@ try {
     r = runHook('git commit -m x', {}, { cwd: NON_REPO_DIR });
     assert('genuine non-repo cwd approves', r.decision, 'approve');
 
+    console.log('\n[UNIT] Requiring the hook as a library leaves crash handling alone:');
+    // The crash handler turns any throw into a block and exit 0. Installed by a
+    // plain require, it did that to this suite: a test that threw printed a
+    // block and exited 0, with no Results line, so a crashed run read as a pass.
+    {
+        const probe = (code) => spawnSync('node', ['-e', code], { encoding: 'utf-8' });
+        const req = 'require(' + JSON.stringify(HOOK_PATH) + ');';
+        const added = probe('const n = process.listenerCount("uncaughtException"); ' + req +
+            ' console.log(process.listenerCount("uncaughtException") - n);');
+        assert('require adds no uncaughtException listener', (added.stdout || '').trim(), '0');
+        const thrown = probe(req + ' throw new Error("a test threw");');
+        assertTrue('a throw after require exits non-zero', thrown.status !== 0);
+        assertFalse('a throw after require prints no hook decision',
+            (thrown.stdout || '').includes('"decision"'));
+    }
+
     console.log('\n[INT] A crashing hook blocks, never approves by silence:');
     if (process.platform !== 'win32') {
         // A truncated lib file (partial install) must block at load time too.
@@ -2139,8 +2203,10 @@ try {
     cleanDiffCoverStub();
     cleanPolicy();
     cleanTddExemptCfg();
-    // Restore any files that were staged before the test started.
-    restageFiles(PRE_STAGED);
+    // Put the caller's index back exactly as it was, and prove it.
+    restoreIndex();
+    assert('the caller\'s staged and unstaged diffs are as they were before the suite',
+        diffFingerprint(), CALLER_DIFFS);
 }
 
 console.log(`\n============================`);
