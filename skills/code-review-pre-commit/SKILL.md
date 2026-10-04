@@ -132,12 +132,16 @@ Thresholds: <from the block message: diff-cover N%, branch M%>
    surrounding code.
 2. Write the minimum pytest test(s) that exercise those lines and assert
    observable behaviour (return value, stored state, externally visible
-   side effect). Do NOT assert on mocks or log messages.
+   side effect). Do NOT assert on mocks or log messages. Write each test to
+   a path git does not ignore: `git check-ignore -q <path>` must exit 1.
+   pytest still runs an ignored test, so coverage would count a test the
+   commit cannot carry.
 3. Run: pytest --cov=<pkg> --cov-branch --cov-report=xml -q
 4. Run: diff-cover coverage.xml --compare-branch=HEAD --fail-under=<N>
 5. List every test file you created or changed.
-6. If diff-cover exits 0 and per-file branch coverage on changed files is
-   >= M%, print `GAP_PATCH: PASS` as the last line of your report.
+6. If diff-cover exits 0, per-file branch coverage on changed files is
+   >= M%, and `git check-ignore` exits 1 for every test file you listed,
+   print `GAP_PATCH: PASS` as the last line of your report.
    Otherwise print `GAP_PATCH: FAIL` with a one-line reason.
 
 Do NOT refactor the source.
@@ -161,9 +165,11 @@ a scope review.
 The retry comes back through the coverage gate, which measures again. It
 approves on its own `thresholds-met` marker only when `coverage.xml` was
 measured on the index: no Python file differs from its staged copy, and no
-test file or `conftest.py` is untracked. Otherwise the commit needs a scope
-review, and the block message names the files coverage ran that the index
-lacks, so the review knows what it is not seeing.
+test file or `conftest.py` is untracked or gitignored. Otherwise the commit
+needs a scope review, and the block message names the files coverage ran
+that the index lacks, so the review knows what it is not seeing. A test
+inside a wholly ignored directory is invisible to that check, which is why
+the prompt above forbids ignored paths.
 
 On `GAP_PATCH: FAIL`, surface the reason. After two FAILs stop and ask
 the user, as in the rounds policy.

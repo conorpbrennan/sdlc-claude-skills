@@ -1989,6 +1989,30 @@ try {
             JSON.stringify((mod.readCoverageDrift(s.dir).files || []).slice().sort()),
             JSON.stringify(['app.py', 'tests/new dir/test a.py']));
     });
+    withScratchRepo({ ...APP_PY, '.gitignore': 'tests/test_local*.py\nscratch/\n.venv/\n' }, s => {
+        // Ignored by a pattern that names the file: listed, and marked ignored.
+        s.write('tests/test_local_a.py', 'def test_a():\n    pass\n');
+        // Inside a wholly ignored directory: git reports the directory, not its
+        // contents, so this is the documented limit -- and why a .venv full of
+        // packaged test files neither slows the read nor floods it.
+        s.write('scratch/test_s.py', 'def test_s():\n    pass\n');
+        s.write('.venv/lib/site-packages/pkg/tests/test_pkg.py', 'def test_p():\n    pass\n');
+        const drift = mod.readCoverageDrift(s.dir);
+        assert('a pattern-ignored test is drift',
+            JSON.stringify(drift.files), JSON.stringify(['tests/test_local_a.py']));
+        assert('... and is reported as ignored',
+            JSON.stringify(drift.ignored), JSON.stringify(['tests/test_local_a.py']));
+    });
+    // An ignored directory that holds a tracked file is walked, so a new test
+    // inside it is seen: the blind spot is only a directory git can skip whole.
+    withScratchRepo({ ...APP_PY, '.gitignore': 'tests/local/\n' }, s => {
+        s.write('tests/local/keep.py', 'x = 1\n');
+        s.g(['add', '-f', '--', 'tests/local/keep.py']);
+        s.write('tests/local/test_new_local.py', 'def test_n():\n    pass\n');
+        assert('a test in an ignored directory holding a tracked file is drift',
+            JSON.stringify(mod.readCoverageDrift(s.dir).ignored),
+            JSON.stringify(['tests/local/test_new_local.py']));
+    });
 
     console.log('\n[INT] thresholds-met needs coverage.xml to match the index:');
     // Control: nothing drifted, so coverage approves.
@@ -2009,6 +2033,32 @@ try {
         assertContains('untracked conftest.py: named', r.systemMessage || '', 'conftest.py');
         assertContains('untracked conftest.py: the stash route is given',
             r.systemMessage || '', 'git stash push --keep-index --include-untracked');
+    });
+    // A gitignored test file: pytest collects it, `git status` leaves it out
+    // unless asked, and `git add` refuses it -- so it is drift, and the message
+    // must say why staging it plainly fails.
+    withScratchRepo({ ...APP_PY, ...APP_TEST, '.gitignore': 'tests/test_local*.py\n' }, s => {
+        s.write('tests/test_local_app.py', 'def test_local():\n    pass\n');
+        s.rerunCoverage();
+        writeDiffCoverStub(0);
+        r = s.run();
+        assert('gitignored test file: not approved', r.decision, 'block');
+        assertContains('gitignored test file: named',
+            r.systemMessage || '', 'tests/test_local_app.py');
+        assertContains('gitignored test file: the message says it is gitignored',
+            r.systemMessage || '', 'gitignored');
+    });
+    // Both kinds at once: the note must not call the untracked one gitignored.
+    withScratchRepo({ ...APP_PY, ...APP_TEST, '.gitignore': 'tests/test_local*.py\n' }, s => {
+        s.write('tests/test_local_app.py', 'def test_local():\n    pass\n');
+        s.write('tests/test_new.py', 'def test_new():\n    pass\n');
+        s.rerunCoverage();
+        writeDiffCoverStub(0);
+        r = s.run();
+        assert('untracked and gitignored drift: not approved', r.decision, 'block');
+        assertContains('untracked and gitignored drift: only the ignored one is called gitignored',
+            r.systemMessage || '', 'Of these, the following are gitignored, so `git add` refuses them ' +
+                'and the stash leaves them: tests/test_local_app.py.');
     });
     withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
         s.write('app.py', 'def app():\n    return 2\n');

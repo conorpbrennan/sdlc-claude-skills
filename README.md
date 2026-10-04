@@ -173,8 +173,9 @@ patches uncovered lines instead and writes no marker: the new tests are
 staged and the commit retried. Its report ends in `GAP_PATCH`, not
 `TDD_GATE`, so it cannot license the marker. The hook approves on coverage
 only once no Python file differs from its staged copy and no test file or
-`conftest.py` is untracked. Not for ad-hoc PR review — use the built-in
-`/code-review` for that.
+`conftest.py` is untracked or gitignored (a test inside a wholly ignored
+directory is the one it cannot see). Not for ad-hoc PR review — use the
+built-in `/code-review` for that.
 
 ### `code-review-implementer`
 `[all|critical|important|advisory|<item-numbers>]`
