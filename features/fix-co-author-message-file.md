@@ -18,4 +18,11 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-04 `61f1644` — Read the real commit message in the co-author hook
+  - CLAUDE.md
+  - README.md
+  - skills/plan-spec/reference.md
+  - src/hooks/enforce-co-author.js
+  - src/hooks/lib/commit-command.js
+  - src/hooks/test-commit-command.js
+  - src/hooks/test-enforce-co-author.sh
