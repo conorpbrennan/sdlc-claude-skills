@@ -1371,6 +1371,12 @@ try {
         mod.getStagedDiff([dummyRel], { maxBuffer: 16 }), null);
     assert('git error yields null', mod.getStagedDiff([dummyRel], { cwd: NON_REPO_DIR }), null);
 
+    console.log('\n[UNIT] readCoverageDrift fails closed:');
+    // A failed read is not "nothing drifted": that would let thresholds-met
+    // approve over files it never saw.
+    assert('git error yields null files, not an empty list',
+        mod.readCoverageDrift(NON_REPO_DIR).files, null);
+
     console.log('\n[INT] Gate 3b null read does not fast-path:');
     cleanAll();
     // Force the code-only read to overflow so the hook takes the null path.
@@ -1781,6 +1787,174 @@ try {
     assert('blocks when diff-cover stub exits non-zero', r.decision, 'block');
     assertContains('gap-patching systemMessage mentions uncovered',
         r.systemMessage || '', 'gap-patching');
+    // The patched tests are written to the working tree, not the index, so the
+    // gap block hands out no marker recipe. Nor does it write a review lock: no
+    // review was requested, and the lock's retry message says to write the
+    // marker on TDD_GATE: PASS. The retries run in scratch repositories below.
+    assertFalse('gap-patching systemMessage carries no marker recipe',
+        (r.systemMessage || '').includes('printf'));
+    assertContains('gap-patching systemMessage says to stage the new tests',
+        r.systemMessage || '', 'git add');
+    assertFalse('the gap block writes no review lock', fs.existsSync(LOCK));
+
+    console.log('\n[INT] After a gap block, nothing approves that diff without its tests:');
+    // Scratch repositories: these scenarios plant untracked tests and unstaged
+    // edits, which in this checkout would mix with the developer's own. Built
+    // with plumbing, as the --amend cases are.
+    const withScratchRepo = (files, fn) => {
+        const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-gap-')));
+        const cfg = dir + '-tdd.json';
+        const g = args => execFileSync('git', args,
+            { cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        const write = (rel, content) => {
+            fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            fs.writeFileSync(path.join(dir, rel), content, 'utf-8');
+        };
+        const gitDir = path.join(dir, '.git');
+        const covXml = path.join(dir, 'coverage.xml');
+        const s = {
+            dir, g, write,
+            marker: path.join(gitDir, '.claude-last-review'),
+            lock: path.join(gitDir, '.claude-review-in-progress'),
+            // pytest reran: coverage.xml changes and is newer than every staged file.
+            rerunCoverage: () => fs.writeFileSync(covXml,
+                '<coverage><!-- ' + Date.now() + ' ' + Math.random() + ' --></coverage>', 'utf-8'),
+            covHash: () => sha1(fs.readFileSync(covXml)),
+            diffHash: () => gitReadLib.stagedDiffHash(dir),
+            age: (file, seconds) => {
+                const old = new Date(Date.now() - seconds * 1000);
+                fs.utimesSync(file, old, old);
+            },
+            run: () => runHook('git commit -m x', {
+                TDD_MANDATE_CONFIG: cfg,
+                COVERAGE_XML_PATH: covXml,
+                DIFF_COVER_CMD: 'node ' + DIFF_COVER_STUB,
+            }, { cwd: dir }),
+        };
+        try {
+            fs.writeFileSync(cfg, JSON.stringify({ exempt_repos: [dir] }), 'utf-8');
+            g(['init', '-q']);
+            write('README.md', 'x\n');
+            g(['add', '--', 'README.md']);
+            const tree = g(['write-tree']);
+            g(['update-ref', 'HEAD',
+                g(['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit-tree', tree, '-m', 'c'])]);
+            for (const [rel, content] of Object.entries(files)) {
+                write(rel, content);
+                g(['add', '--', rel]);
+            }
+            fn(s);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+            fs.rmSync(cfg, { force: true });
+        }
+    };
+    const APP_PY = { 'app.py': 'def app():\n    return 1\n' };
+    const APP_TEST = { 'tests/test_app.py': 'from app import app\n\ndef test_app():\n    assert app() == 1\n' };
+    const APP_UNCOVERED = [{ file: 'app.py', lines: [2] }];
+    const DRIFT_NOTE = 'measured with files the index does not hold';
+    // The gap block, then the gap-patcher's work: a test written, coverage
+    // rerun and passing, nothing staged.
+    const gapThenPatch = s => {
+        s.rerunCoverage();
+        writeDiffCoverStub(1, APP_UNCOVERED);
+        r = s.run();
+        assert('scratch: the gap block fires', r.decision, 'block');
+        assertFalse('scratch: the gap block writes no review lock', fs.existsSync(s.lock));
+        s.write('tests/test_app.py', APP_TEST['tests/test_app.py']);
+        s.rerunCoverage();
+        writeDiffCoverStub(0);
+    };
+
+    // The retry with the test unstaged. Coverage passes only because pytest ran
+    // a test the index does not hold, so the hook must not approve on coverage,
+    // and the review it asks for instead is told which test that is -- for a
+    // diff coverage can fully measure and for one it cannot, and however much
+    // unrelated work is staged meanwhile.
+    for (const [shape, files] of [['all-Python', APP_PY], ['mixed', { ...APP_PY, 'deploy.sh': 'echo deploy\n' }]]) {
+        withScratchRepo(files, s => {
+            gapThenPatch(s);
+            s.age(s.marker, 60);
+            r = s.run();
+            assert(shape + ' diff, test unstaged: not approved', r.decision, 'block');
+            assertContains(shape + ' diff, test unstaged: the review is told the test is not staged',
+                r.systemMessage || '', DRIFT_NOTE + ' (tests/test_app.py)');
+
+            s.write('README.md', 'y\n');
+            s.g(['add', '--', 'README.md']);
+            r = s.run();
+            assert(shape + ' diff, unrelated file staged: not approved', r.decision, 'block');
+            assertContains(shape + ' diff, unrelated file staged: the test is still named',
+                r.systemMessage || '', DRIFT_NOTE + ' (tests/test_app.py)');
+
+            s.g(['add', '--', 'tests/test_app.py']);
+            s.rerunCoverage();
+            r = s.run();
+            if (shape === 'all-Python') {
+                assert('all-Python diff, test staged: approved on coverage', r.decision, 'approve');
+                assertContains('all-Python diff, test staged: the hook\'s own thresholds-met marker',
+                    fs.readFileSync(s.marker, 'utf-8'), 'thresholds-met');
+            } else {
+                // deploy.sh is outside coverage, so the commit still needs a
+                // review -- but no longer one warned about a missing test.
+                assertFalse('mixed diff, test staged: no drift reported',
+                    (r.systemMessage || '').includes(DRIFT_NOTE));
+            }
+        });
+    }
+
+    console.log('\n[UNIT] readCoverageDrift reads the working tree without writing the index:');
+    withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
+        // A stat-only change is not drift, and reading must not refresh the
+        // index: a parallel hook's `git add` would lose that race on index.lock.
+        const later = new Date(Date.now() + 60 * 1000);
+        fs.utimesSync(path.join(s.dir, 'app.py'), later, later);
+        const indexPath = path.join(s.dir, '.git', 'index');
+        const indexBefore = fs.statSync(indexPath).mtimeMs;
+        assert('a touched but unchanged file is not drift',
+            JSON.stringify(mod.readCoverageDrift(s.dir).files), '[]');
+        assert('reading drift leaves the index file untouched', fs.statSync(indexPath).mtimeMs, indexBefore);
+
+        // What does count: a staged file deleted from the working tree, and an
+        // untracked test inside an untracked directory, with a space in its
+        // name. An untracked module that is not a test or conftest.py does not.
+        fs.unlinkSync(path.join(s.dir, 'app.py'));
+        s.write('tests/new dir/test a.py', 'def test_a():\n    pass\n');
+        s.write('notes.py', 'x = 1\n');
+        assert('drift lists the deleted file and the untracked test, not the module',
+            JSON.stringify((mod.readCoverageDrift(s.dir).files || []).slice().sort()),
+            JSON.stringify(['app.py', 'tests/new dir/test a.py']));
+    });
+
+    console.log('\n[INT] thresholds-met needs coverage.xml to match the index:');
+    // Control: nothing drifted, so coverage approves.
+    withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
+        s.rerunCoverage();
+        writeDiffCoverStub(0);
+        assert('no drift: thresholds-met approves', s.run().decision, 'approve');
+    });
+    // pytest loads a root conftest.py unconditionally, test-named or not.
+    withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
+        s.write('conftest.py', 'import pytest\n');
+        s.rerunCoverage();
+        writeDiffCoverStub(0);
+        r = s.run();
+        assert('untracked conftest.py: not approved', r.decision, 'block');
+        assertFalse('untracked conftest.py: no thresholds-met marker',
+            (fs.existsSync(s.marker) ? fs.readFileSync(s.marker, 'utf-8') : '').includes('thresholds-met'));
+        assertContains('untracked conftest.py: named', r.systemMessage || '', 'conftest.py');
+        assertContains('untracked conftest.py: the stash route is given',
+            r.systemMessage || '', 'git stash push --keep-index --include-untracked');
+    });
+    withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
+        s.write('app.py', 'def app():\n    return 2\n');
+        s.rerunCoverage();
+        writeDiffCoverStub(0);
+        r = s.run();
+        assert('staged file with unstaged edits: not approved', r.decision, 'block');
+        assertContains('staged file with unstaged edits: the drift is named',
+            r.systemMessage || '', 'measured with files the index does not hold (app.py)');
+    });
 
     // Policy-driven threshold: if policy says 80, stub should receive 80.
     cleanAll();
