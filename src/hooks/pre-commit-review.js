@@ -809,10 +809,12 @@ function main() {
         reason: tddGate.reason,
     });
     if (tddGate.action === 'block') {
-        // No lock and no BLOCK marker when the gate reached no verdict (an
-        // unreadable index, a classifier that threw): the retry must re-check.
+        // No BLOCK marker when the gate reached no verdict (an unreadable
+        // index, a classifier that threw): the retry must re-check. And never a
+        // review lock: this asks for a test, not a review, and a lock would turn
+        // the retry into review-in-flight, which runs before this gate and
+        // offers the marker -- a way past the mandate.
         const noVerdict = tddGate.status === 'unreadable' || tddGate.status === 'classifier-error';
-        if (!noVerdict) writeLock(LOCK_FILE, diffHash);
         let reason;
         let remedy;
         if (tddGate.status === 'unreadable' && /^test-diff-unreadable/.test(tddGate.reason || '')) {
@@ -959,8 +961,10 @@ function main() {
                 });
             }
             if (!coverageFresh) {
+                // No review lock: this asks for fresh coverage, not a review. A
+                // lock would send the retry to review-in-flight, which runs
+                // before this gate, never measures coverage, and offers the marker.
                 timingLog.logEvent('review.requested', { ...hookMeta, via: 'coverage-stale' });
-                writeLock(LOCK_FILE, diffHash);
                 const blockTag = deferToHygiene ? 'wait-for-hygiene timed out' : 'no hygiene cov check';
                 writeBlockMarker(MARKER_FILE, diffHash, 'coverage-stale: ' + blockTag);
                 const reason = deferToHygiene

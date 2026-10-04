@@ -1865,7 +1865,7 @@ try {
     // Scratch repositories: these scenarios plant untracked tests and unstaged
     // edits, which in this checkout would mix with the developer's own. Built
     // with plumbing, as the --amend cases are.
-    const withScratchRepo = (files, fn) => {
+    const withScratchRepo = (files, fn, opts = {}) => {
         const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-gap-')));
         const cfg = dir + '-tdd.json';
         const g = args => execFileSync('git', args,
@@ -1896,7 +1896,7 @@ try {
             }, { cwd: dir }),
         };
         try {
-            fs.writeFileSync(cfg, JSON.stringify({ exempt_repos: [dir] }), 'utf-8');
+            fs.writeFileSync(cfg, JSON.stringify({ exempt_repos: opts.mandate ? [] : [dir] }), 'utf-8');
             g(['init', '-q']);
             write('README.md', 'x\n');
             g(['add', '--', 'README.md']);
@@ -2060,6 +2060,38 @@ try {
             r.systemMessage || '', 'Of these, the following are gitignored, so `git add` refuses them ' +
                 'and the stash leaves them: tests/test_local_app.py.');
     });
+
+    console.log('\n[INT] Only a block that requests a review leaves a review lock:');
+    // The lock means "a review was requested for this diff". The retry's
+    // review-in-flight block says to write the marker on TDD_GATE: PASS, and it
+    // runs before the TDD and coverage gates. A block that asked for a code
+    // change or fresh coverage must leave the retry to the gate that blocked it.
+    withScratchRepo(APP_PY, s => {
+        r = s.run();
+        assertContains('mandate on, no test staged: the TDD gate blocks', r.systemMessage || '', 'TDD gate');
+        assertFalse('the TDD block writes no review lock', fs.existsSync(s.lock));
+        s.age(s.marker, 60);
+        r = s.run();
+        assertContains('the retry is judged by the TDD gate again', r.systemMessage || '', 'TDD gate');
+        assertFalse('the TDD retry offers no marker recipe', (r.systemMessage || '').includes('printf'));
+    }, { mandate: true });
+    withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
+        s.rerunCoverage();
+        s.age(path.join(s.dir, 'coverage.xml'), 600);   // older than every staged file
+        writeDiffCoverStub(0);
+        r = s.run();
+        assertContains('stale coverage: blocked as stale', r.systemMessage || '', 'coverage.xml is stale');
+        assertFalse('the stale-coverage block writes no review lock', fs.existsSync(s.lock));
+        s.age(s.marker, 60);
+        r = s.run();
+        assertContains('coverage still stale: the retry is blocked as stale again',
+            r.systemMessage || '', 'coverage.xml is stale');
+        assertFalse('coverage still stale: no marker recipe', (r.systemMessage || '').includes('printf'));
+        s.rerunCoverage();
+        s.age(s.marker, 60);   // past the 30s same-diff repeat window
+        r = s.run();
+        assert('coverage refreshed: the retry is measured and approved', r.decision, 'approve');
+    });
     withScratchRepo({ ...APP_PY, ...APP_TEST }, s => {
         s.write('app.py', 'def app():\n    return 2\n');
         s.rerunCoverage();
@@ -2189,6 +2221,7 @@ try {
     assert('wait-for-hygiene timeout blocks commit', r.decision, 'block');
     assertContains('timeout block cites hygiene', r.reason || '', 'Hygiene did not produce');
     assertContains('timeout message guides user to hygiene', r.systemMessage || '', 'hygiene hook');
+    assertFalse('the hygiene timeout writes no review lock', fs.existsSync(LOCK));
     try { fs.unlinkSync(HYGIENE_CFG); } catch (e) {}
     cleanDiffCoverStub();
     cleanCoverageXml();
