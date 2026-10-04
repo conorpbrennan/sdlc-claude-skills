@@ -214,5 +214,21 @@ assert_eq "(g) edited backup stays in backups/" \
     "$(cat "$C/backups/commands/review-timing.md.bak.100" 2>/dev/null)" "edited copy"
 
 echo ""
+echo "(h) The confirmation prompt: no input aborts cleanly, y proceeds:"
+H="$SCRATCH/home-h"; build_home "$H" full
+before="$(snapshot "$H")"
+run_uninstall "$H" < /dev/null; rc=$?
+assert_eq "(h) end of input exits 0" "$rc" 0
+assert_true "(h) end of input says Aborted" "grep -q '^Aborted' '$SCRATCH/out.log'"
+assert_eq "(h) end of input leaves home byte-identical" "$(snapshot "$H")" "$before"
+run_uninstall "$H" <<< "n"; rc=$?
+assert_eq "(h) n exits 0" "$rc" 0
+assert_true "(h) n says Aborted" "grep -q '^Aborted' '$SCRATCH/out.log'"
+assert_eq "(h) n leaves home byte-identical" "$(snapshot "$H")" "$before"
+run_uninstall "$H" <<< "y"; rc=$?
+assert_eq "(h) y exits 0" "$rc" 0
+assert_clean "(h) y" "$H"
+
+echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

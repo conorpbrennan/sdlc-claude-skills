@@ -55,7 +55,8 @@ echo "Target: $USER_CLAUDE_DIR"
 echo ""
 
 if [ "$DRY_RUN" -eq 0 ] && [ "$ASSUME_YES" -eq 0 ]; then
-    read -r -p "Proceed? [y/N] " reply
+    # No input (a closed or non-terminal stdin) is a no, not a silent set -e exit.
+    read -r -p "Proceed? [y/N] " reply || { echo ""; reply=""; }
     case "$reply" in
         [yY]|[yY][eE][sS]) ;;
         *) echo "Aborted."; exit 0 ;;
