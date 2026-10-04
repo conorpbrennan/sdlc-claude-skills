@@ -16,4 +16,9 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-04 `892a330` — Count gitignored test files as coverage drift
+  - README.md
+  - skills/code-review-pre-commit/SKILL.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
+  - src/test-plugin-layout.js
