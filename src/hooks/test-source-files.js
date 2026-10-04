@@ -14,6 +14,10 @@
 // Consolidating is the part that keeps it fixed: four copies of a list that decides
 // whether code gets reviewed will drift eventually, and the drift is silent. The
 // guard at the bottom of this file fails if any hook grows its own copy again.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const path = require('path');
 

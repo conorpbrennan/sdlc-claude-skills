@@ -14,6 +14,10 @@
 // worktree --git-dir returns `.git/worktrees/<name>`, so two worktrees of one
 // repository get separate markers without any hashing. These tests assert both
 // properties.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
