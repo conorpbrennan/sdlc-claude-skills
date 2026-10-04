@@ -19,17 +19,21 @@ When the hook does block, the `systemMessage` carries one of two shapes:
 
 - **Gap-patching** (thresholds failed, `coverage.xml` present): dispatch ONE
   sub-agent using the `<gap-patching-mode>` prompt in
-  `sdlc:code-review-pre-commit`, with the thresholds, uncovered lines and
-  marker command from the message. No scope review alongside.
+  `sdlc:code-review-pre-commit`, with the thresholds and uncovered lines
+  from the message. No scope review alongside, and no marker: on PASS the
+  new tests are not staged yet, so the user stages them (`git add`, its own
+  command) and retries. Its report ends `GAP_PATCH: PASS` or
+  `GAP_PATCH: FAIL`: it is not a review, so it never licenses the marker.
 - **Scope review** (everything else): run `/sdlc:code-review-pre-commit --fresh`.
   ONE `sdlc:code-reviewer` sub-agent (Sonnet) on the staged diff. `--deep`
   selects `sdlc:code-reviewer-deep` (Opus) for security-sensitive or
   parser-shaped changes and when the rounds policy says so.
 
-Both reports end with `TDD_GATE: PASS` or `TDD_GATE: FAIL` on the last line.
+The scope review ends with `TDD_GATE: PASS` or `TDD_GATE: FAIL` on the
+last line. Only that trailer, from that review, licenses the marker.
 
-On **PASS**, run the `printf` command from the block message verbatim,
-replacing `code-reviewer:round1` with the bare agent name (`code-reviewer`
+On a scope review's **PASS**, run the `printf` command from the block
+message verbatim, replacing `code-reviewer:round1` with the bare agent name (`code-reviewer`
 or `code-reviewer-deep`, no `sdlc:` prefix) and the round used. It
 recomputes both hashes at write time; do not compose a marker command by
 hand.
