@@ -203,7 +203,10 @@ const INERT_COMMANDS = new Set([
 // so that "opaque" text can be inspected separately.
 // ---------------------------------------------------------------------------
 
-function newSegment() { return { words: [], opaque: [], heredocs: [] }; }
+// stdinSources counts the segment's redirections of fd 0 (`<`, `0<`, `<<`,
+// `<<<`, `<>`, `<&`): bash feeds the command only the last, so a heredoc body
+// is known to be the command's stdin only when it is the one source.
+function newSegment() { return { words: [], opaque: [], heredocs: [], stdinSources: 0 }; }
 
 function isBlank(c) { return c === ' ' || c === '\t' || c === '\r'; }
 
@@ -352,10 +355,17 @@ function tokenize(cmd) {
             word += '${' + r.text + '}'; inWord = true; wordOpaque = true; i = r.end;
             continue;
         }
+        // Process substitution: a path only bash knows, so a dynamic word.
+        if ((c === '<' || c === '>') && next === '(') {
+            const r = scanUntil(s, i + 2, ')', null);
+            word += c + '(' + r.text + ')'; inWord = true; wordOpaque = true; i = r.end;
+            continue;
+        }
         if (c === '<' && next === '<' && s[i + 2] !== '<') {
             endWord();
             const h = readHeredocDelim(s, i + 2);
             pending.push(h.delim);
+            seg.stdinSources += 1;
             i = h.end;
             continue;
         }
@@ -364,7 +374,9 @@ function tokenize(cmd) {
             // &>target, <<<word. Not an argument; drop it and its target.
             // A bare fd number immediately before the operator ("2>&1")
             // belongs to the redirection, not the command.
-            if (inWord && !/^\d+$/.test(word)) endWord();
+            const fd = inWord && /^\d+$/.test(word) ? word : null;
+            if (c === '<' && (fd === null || fd === '0')) seg.stdinSources += 1;
+            if (fd === null) endWord();
             word = ''; inWord = false; wordOpaque = false;
             while (i < s.length && (s[i] === '>' || s[i] === '<' || s[i] === '&')) i += 1;
             while (i < s.length && isBlank(s[i])) i += 1;
@@ -447,11 +459,62 @@ function parseGitSegment(words) {
     return { sub, args: words.slice(i + 1), otherRepo, definesAlias };
 }
 
+// Every long option `git commit` takes (git 2.39, `git commit -h`), negated
+// forms included. git accepts any unique prefix of one, so `--mess=x` is
+// --message and `--patc` is --patch; matching exact names only let those
+// through as an ordinary commit. A prefix that is ambiguous here is one git
+// rejects, so it is left as typed. `--verify` is the negation of
+// `--no-verify`, so the list is de-duplicated: a name listed twice made every
+// prefix of it look ambiguous.
+const COMMIT_LONG_OPTS = [
+    'ahead-behind', 'all', 'allow-empty', 'allow-empty-message', 'amend', 'author', 'branch',
+    'cleanup', 'date', 'dry-run', 'edit', 'file', 'fixup', 'gpg-sign', 'include', 'interactive',
+    'long', 'message', 'no-post-rewrite', 'no-verify', 'null', 'only', 'patch', 'pathspec-file-nul',
+    'pathspec-from-file', 'porcelain', 'quiet', 'reedit-message', 'reset-author', 'reuse-message',
+    'short', 'signoff', 'squash', 'status', 'template', 'trailer', 'untracked-files', 'verbose',
+    'verify', 'post-rewrite',
+];
+const COMMIT_LONG_ALL = [...new Set([...COMMIT_LONG_OPTS, ...COMMIT_LONG_OPTS.map(o => 'no-' + o)])].map(o => '--' + o);
+
+// Args:
+//   name: a long option as typed, without any `=value`.
+// Returns:
+//   the full option name when `name` is one or a unique prefix of one, else `name`.
+function expandCommitLongOption(name) {
+    if (COMMIT_LONG_ALL.includes(name)) return name;
+    const matches = COMMIT_LONG_ALL.filter(o => o.startsWith(name));
+    return matches.length === 1 ? matches[0] : name;
+}
+
+// Where a commit's message comes from, by option. A value lands in at most
+// one list: -m/--message text, -F/--file paths ('-' is stdin), --trailer
+// values. The lists hold what git uses, not every value named: -m values add
+// up until --no-message drops them, and only the last -F counts, until
+// --no-file drops it. The reuse options take an existing commit's message
+// instead.
+const MESSAGE_LONG = { '--message': 'messages', '--file': 'files', '--trailer': 'trailers' };
+const MESSAGE_SHORT = { m: 'messages', F: 'files' };
+const REUSE_LONG = new Set(['--reuse-message', '--reedit-message', '--fixup', '--squash']);
+const REUSE_SHORT = 'Cc';
+
+// Args:
+//   sources: the { messages, files, trailers } lists being built.
+//   kind: which list the value belongs to.
+//   value: the option's value.
+// Returns:
+//   nothing; a file replaces the one before it, as git reads only the last.
+function addSource(sources, kind, value) {
+    if (kind === 'files') sources.files = [value];
+    else sources[kind].push(value);
+}
+
 // Inspects the arguments of a top-level `git commit`. Returns
-// { reason, optionValues, readsMessageFromStdin }.
+// { reason, optionValues, readsMessageFromStdin, amend, messages, files,
+//   trailers, reusesMessage }.
 function inspectCommitArgs(args) {
     const optionValues = [];
-    let readsMessageFromStdin = false;
+    const sources = { messages: [], files: [], trailers: [] };
+    let reusesMessage = false;
     let amend = false;
     let reason = null;
     const note = r => { if (!reason) reason = r; };
@@ -463,9 +526,11 @@ function inspectCommitArgs(args) {
         }
         if (a.startsWith('--')) {
             const eq = a.indexOf('=');
-            const name = eq === -1 ? a : a.slice(0, eq);
+            const name = expandCommitLongOption(eq === -1 ? a : a.slice(0, eq));
             const attached = eq === -1 ? null : a.slice(eq + 1);
             if (name === '--amend') amend = true;
+            if (name === '--no-message') sources.messages = [];
+            if (name === '--no-file') sources.files = [];
             if (name === '--all') note('`git commit -a`/`--all` stages every tracked change at commit time');
             else if (name === '--include') note('`git commit -i`/`--include` stages the listed paths at commit time');
             else if (name === '--interactive' || name === '--patch') note('`git commit --interactive`/`--patch` picks hunks at commit time');
@@ -473,7 +538,8 @@ function inspectCommitArgs(args) {
             if (COMMIT_VALUE_OPTS.has(name)) {
                 const v = attached !== null ? attached : args[++i];
                 if (v !== undefined) optionValues.push(v);
-                if (name === '--file' && v === '-') readsMessageFromStdin = true;
+                if (v !== undefined && MESSAGE_LONG[name]) addSource(sources, MESSAGE_LONG[name], v);
+                if (REUSE_LONG.has(name)) reusesMessage = true;
             }
             continue;
         }
@@ -488,7 +554,8 @@ function inspectCommitArgs(args) {
                     const rest = cluster.slice(k + 1);
                     const v = rest.length ? rest : args[++i];
                     if (v !== undefined) optionValues.push(v);
-                    if (f === 'F' && v === '-') readsMessageFromStdin = true;
+                    if (v !== undefined && MESSAGE_SHORT[f]) addSource(sources, MESSAGE_SHORT[f], v);
+                    if (REUSE_SHORT.includes(f)) reusesMessage = true;
                     break;
                 } else if (COMMIT_ATTACHED_SHORT.includes(f)) {
                     break;
@@ -498,7 +565,8 @@ function inspectCommitArgs(args) {
         }
         note('`git commit <pathspec>` commits working-tree contents of those paths, not the index');
     }
-    return { reason, optionValues, readsMessageFromStdin, amend };
+    const readsMessageFromStdin = sources.files[0] === '-';
+    return { reason, optionValues, readsMessageFromStdin, amend, ...sources, reusesMessage };
 }
 
 // ---------------------------------------------------------------------------
@@ -628,8 +696,9 @@ function classifyCommitCommand(command, opts) {
         const inert = INERT_COMMANDS.has(commandWord(seg.words));
         for (const text of [...seg.opaque, ...seg.heredocs]) {
             if (exempt.has(text) || !looksLikeCommitText(text)) continue;
-            // $( ) and backticks execute regardless of the surrounding command.
-            if (inert && !/\$\(|`/.test(text)) continue;
+            // $( ), backticks and <( ) / >( ) execute regardless of the
+            // surrounding command.
+            if (inert && !/\$\(|`|[<>]\(/.test(text)) continue;
             wrapped = true;
         }
     }
@@ -760,4 +829,4 @@ function blockMessage(reason) {
         'prose from a command: write that file with a file tool instead of the shell.';
 }
 
-module.exports = { classifyCommitCommand, indexUnreliableReason, directoryChangeReason, blockMessage, splitSegments, tokenize, parseGitSegment, inspectCommitArgs };
+module.exports = { classifyCommitCommand, indexUnreliableReason, directoryChangeReason, blockMessage, splitSegments, tokenize, parseGitSegment, inspectCommitArgs, expandCommitLongOption, findDirectoryChange };
