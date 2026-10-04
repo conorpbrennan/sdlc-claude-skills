@@ -571,6 +571,10 @@ assert('the gap-patcher\'s report ends in its own trailer',
     /GAP_PATCH: PASS/.test(gapMode) && /GAP_PATCH: FAIL/.test(gapMode), true);
 assert('the gap-patching mode never prints the review trailer',
     /TDD_GATE: (PASS|FAIL)/.test(gapMode), false);
+// A test written to a gitignored path counts toward coverage but cannot be
+// staged plainly, and inside an ignored directory the hook cannot see it.
+assert('the gap-patcher checks every test it writes with git check-ignore',
+    /git check-ignore/.test(gapMode), true);
 const CLAUDE_MD_SNIPPET = fs.readFileSync(path.join(ROOT, 'instructions', 'claude-md-snippet.md'), 'utf-8');
 const gapBullet = (CLAUDE_MD_SNIPPET.match(/- \*\*Gap-patching\*\*[\s\S]*?(?=\n- \*\*)/) || [''])[0];
 assert('the instructions snippet has a gap-patching bullet', gapBullet.length > 0, true);

@@ -13,4 +13,6 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-04 `3d17faf` — Leave the caller's index intact and fail on a crash in the hook tests
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
