@@ -338,7 +338,11 @@ stops. A completed review does not grant permission to commit.
 
 The lock, `.git/.claude-review-in-progress`, means "a review was requested
 for this diff and has not passed". It never approves. Delete it to force a
-fresh review.
+fresh review. Only the review-required block writes it: the TDD,
+coverage-stale and gap-patch blocks ask for a code or coverage change, not
+a review, so their retries go back through the gate that blocked them. On
+the hygiene path that means a retry waits for fresh coverage again, up to
+`COV_WAIT_TIMEOUT_MS` (two minutes by default).
 
 ---
 
