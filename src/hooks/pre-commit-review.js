@@ -239,6 +239,49 @@ function readLock(lockPath) {
     };
 }
 
+// What follows a gap-patch. No marker recipe: the patched tests are in the
+// working tree, not the index, and a marker hashes the index, so one written
+// now approves a commit that leaves them out. The gap-patcher's report ends in
+// GAP_PATCH, never TDD_GATE, so no "on TDD_GATE: PASS write the marker"
+// instruction can be satisfied by it.
+const GAP_PATCH_REMEDY = ' Write no marker: the gap-patcher is not a review. On success, stage the ' +
+    'new test files with `git add` (its own command) and retry the commit; this hook checks ' +
+    'coverage again.';
+
+// coverage.xml comes from a pytest run over the working tree, so it speaks for
+// the index only where the two agree. Returns { files, error }: files are the
+// paths that disagree -- a Python file whose working copy differs from the
+// index (edited or deleted), or an untracked test file or conftest.py, both of
+// which pytest ran -- and null when the read failed. Other untracked Python is
+// left out: pytest runs it only if a test imports it, and a helper outside the
+// test naming rules is a known gap.
+//
+// One `git status`, not `git diff` plus `git ls-files`: `git diff` refreshes
+// stat data and rewrites the index under index.lock, a race the feature hook's
+// parallel `git add` can lose. --no-optional-locks keeps status read-only while
+// still comparing content, so a touched but unchanged file is not drift.
+function readCoverageDrift(toplevel) {
+    const r = gitRead.gitRead(['--no-optional-locks', 'status', '--porcelain=v1', '-z',
+        '--no-renames', '--untracked-files=all', '--ignore-submodules=all'],
+        { cwd: toplevel, maxBuffer: DIFF_MAX_BUFFER_BYTES });
+    if (r.out === null) return { files: null, error: r.error };
+    const ranByPytest = f => tddOrder.isTestFile(f) || path.posix.basename(f) === 'conftest.py';
+    const files = [];
+    for (const entry of gitRead.splitNul(r.out)) {
+        // `XY path`: X is the index against HEAD, Y the working tree against
+        // the index; `??` is untracked. --no-renames keeps it one path per entry.
+        const xy = entry.slice(0, 2);
+        const file = entry.slice(3);
+        if (!file || !coverageMeasurable(file)) continue;
+        if (xy === '??') {
+            if (ranByPytest(file)) files.push(file);
+        } else if (xy[1] !== ' ') {
+            files.push(file);
+        }
+    }
+    return { files, error: null };
+}
+
 function shellQuote(s) {
     return "'" + String(s).replace(/'/g, "'\\''") + "'";
 }
@@ -951,7 +994,29 @@ function main() {
         // Only the APPROVAL is withheld. The gap-block below stays unconditional:
         // a coverage gap is still a gap whatever else is staged.
         const allCoverable = codeFiles.every(coverageMeasurable);
-        if (dcRan && !haveActionableGap && allCoverable && tddAllowsFastPath) {
+        // Coverage measured the working tree. Wherever it passed, check that it
+        // measured the index: a file it ran that the index does not hold -- an
+        // unstaged test, an edited module -- would let the fast path approve a
+        // commit without it. Drift withholds the approval, and the note carries
+        // the files into the review-required message, so the scope review
+        // reading the index is told what the index lacks. That holds on every
+        // path coverage passed on, not only the fast path's.
+        const drift = (dcRan && !haveActionableGap)
+            ? readCoverageDrift(toplevel) : { files: [], error: null };
+        if (drift.files === null) {
+            fastPathSkipNote += 'Unstaged and untracked files could not be read (' + drift.error +
+                '), so coverage.xml cannot be matched to the index and the coverage fast path was skipped. ';
+        } else if (drift.files.length > 0) {
+            fastPathSkipNote += 'Coverage thresholds are met, but coverage.xml was ' +
+                'measured with files the index does not hold (' + drift.files.slice(0, 5).map(sanitizePath).join(', ') +
+                (drift.files.length > 5 ? ', ...' : '') + '), so the coverage fast path was skipped and a ' +
+                'review of the staged diff will not see them. If they belong in this commit, stage them with ' +
+                '`git add` (its own command) and retry. If not, set them aside with `git stash push ' +
+                '--keep-index --include-untracked`, rerun coverage and retry, then `git stash pop` after ' +
+                'the commit. ';
+        }
+        if (dcRan && !haveActionableGap && allCoverable && tddAllowsFastPath &&
+            drift.files !== null && drift.files.length === 0) {
             const tag = dcOk ? 'thresholds-met' : 'thresholds-met-empty-gap';
             writeMarker(MARKER_FILE, diffHash, effectiveCovHash, tag);
             appendFastPassLog(gitDir, tag, (diffHash || '').slice(0, 8), codeFiles.length);
@@ -976,15 +1041,17 @@ function main() {
             const branchNote = (!branchCovOk)
                 ? ` Branch coverage ${minBranchCov.toFixed(1)}% < ${policy.branch_cover_threshold}% threshold.`
                 : '';
+            // No review lock: no review was requested, and the lock's retry
+            // message says to write the marker on TDD_GATE: PASS. The retry
+            // instead comes back through this gate, which measures again.
             timingLog.logEvent('review.requested', { ...hookMeta, via: 'coverage-gap-patch' });
-            writeLock(LOCK_FILE, diffHash);
             writeBlockMarker(MARKER_FILE, diffHash, 'coverage-gap-patch: ' + uncovered.length + ' uncovered file(s)');
             block('coverage-gap-patch', 'Coverage thresholds not met',
                 'PRE_COMMIT_REVIEW: diff-cover reported uncovered lines.' + branchNote +
                     ' Dispatch ONE gap-patching sub-agent per the <gap-patching-mode> section of the ' +
                     skill('code-review-pre-commit') + ' skill. Thresholds: diff-cover ' + policy.diff_cover_threshold +
                     '%, branch ' + policy.branch_cover_threshold + '%. Uncovered: ' + uncoveredSummary +
-                    '. On success run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'gap-patch:round1:PASS') + '.');
+                    '.' + GAP_PATCH_REMEDY);
         }
         // dc.status === null: diff-cover absent or errored. Fall through to the default block.
     }
@@ -1022,6 +1089,7 @@ module.exports = {
     SOURCE_EXTENSIONS,
     isSourcePath,
     readBranchCoverage,
+    readCoverageDrift,
     pollForFreshCoverage,
     hygieneHasCovCheck,
     isCovCheck,

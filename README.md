@@ -169,8 +169,12 @@ Runs the review a `PRE_COMMIT_REVIEW` hook block asks for: one
 trailer, then writes the marker using the `printf` command from the block
 message. `--deep` selects `code-reviewer-deep` (Opus) for
 security-sensitive or parser-shaped changes. On a gap-patching block it
-patches uncovered lines instead. Not for ad-hoc PR review — use the
-built-in `/code-review` for that.
+patches uncovered lines instead and writes no marker: the new tests are
+staged and the commit retried. Its report ends in `GAP_PATCH`, not
+`TDD_GATE`, so it cannot license the marker. The hook approves on coverage
+only once no Python file differs from its staged copy and no test file or
+`conftest.py` is untracked. Not for ad-hoc PR review — use the built-in
+`/code-review` for that.
 
 ### `code-review-implementer`
 `[all|critical|important|advisory|<item-numbers>]`
@@ -347,6 +351,11 @@ diff-cover recipe. Copy that rather than inventing a variant.
 
 The hook runs `bash -c`, not a login shell, so conda must be sourced
 explicitly in `setup`.
+
+A `ruff check --fix` or `ruff format` check that rewrites a staged file
+leaves the rewrite unstaged. The coverage gate then skips its fast path and
+names the file, because `coverage.xml` measured the rewrite rather than the
+index: stage it and retry.
 
 For Python repos also using the coverage gate, include a pytest-cov check
 (any check whose name contains "cov" or whose command uses `--cov-*`). When

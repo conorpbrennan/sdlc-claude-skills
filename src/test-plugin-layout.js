@@ -550,6 +550,48 @@ assert('instructions/ holds the four snippets',
 assert('no snippet remains under .claude/',
     listDir(path.join(ROOT, '.claude')).filter(e => e.name.endsWith('snippet.md')).map(e => e.name), []);
 
+console.log('\nGap-patching writes no marker:');
+// The gap-patcher's tests land in the working tree, not the index, so a marker
+// written by it hashes an index without them and approves a commit that leaves
+// them out. The hook re-measures once they are staged; nothing else approves.
+const PRE_COMMIT_SKILL = fs.readFileSync(
+    path.join(SKILLS_DIR, 'code-review-pre-commit', 'SKILL.md'), 'utf-8');
+// The tags on lines of their own: the skill also names the section in prose.
+const gapMode = (PRE_COMMIT_SKILL.match(/^<gap-patching-mode>$([\s\S]*?)^<\/gap-patching-mode>$/m) || [])[1] || '';
+assert('the skill has a gap-patching-mode section', gapMode.length > 0, true);
+assert('the gap-patching prompt never runs a marker command',
+    /run[^\n]*marker command/i.test(gapMode), false);
+assert('the gap-patching prompt forbids writing the marker',
+    /Do NOT[^\n]*write the review marker/.test(gapMode), true);
+assert('the gap-patching mode has the new tests staged before the retry',
+    gapMode.includes('git add'), true);
+// Every "write the marker" instruction keys on a report ending TDD_GATE: PASS.
+// The gap-patcher's report is not a review, so it must not end that way.
+assert('the gap-patcher\'s report ends in its own trailer',
+    /GAP_PATCH: PASS/.test(gapMode) && /GAP_PATCH: FAIL/.test(gapMode), true);
+assert('the gap-patching mode never prints the review trailer',
+    /TDD_GATE: (PASS|FAIL)/.test(gapMode), false);
+const CLAUDE_MD_SNIPPET = fs.readFileSync(path.join(ROOT, 'instructions', 'claude-md-snippet.md'), 'utf-8');
+const gapBullet = (CLAUDE_MD_SNIPPET.match(/- \*\*Gap-patching\*\*[\s\S]*?(?=\n- \*\*)/) || [''])[0];
+assert('the instructions snippet has a gap-patching bullet', gapBullet.length > 0, true);
+assert('the snippet\'s gap-patching bullet hands over no marker command',
+    /marker command|printf/.test(gapBullet), false);
+assert('the instructions snippet tells the two trailers apart',
+    gapBullet.includes('GAP_PATCH:'), true);
+
+console.log('\nThe deep reviewer reaches the base criteria from any repository:');
+// An agent gets no plugin base directory, and its cwd is the repository under
+// review, so a repo-relative `agents/code-reviewer.md` resolves only inside this
+// one. The skill hands over the absolute path; the agent fails closed without it.
+const DEEP_AGENT = fs.readFileSync(path.join(AGENTS_DIR, 'code-reviewer-deep.md'), 'utf-8');
+const modeSelection = (PRE_COMMIT_SKILL.match(/<mode-selection>([\s\S]*?)<\/mode-selection>/) || [])[1] || '';
+assert('the skill passes the absolute path of code-reviewer.md to the deep reviewer',
+    /absolute path[^.]*code-reviewer\.md/.test(modeSelection.replace(/\s+/g, ' ')), true);
+assert('the deep reviewer reads the path it was handed',
+    /absolute path/.test(DEEP_AGENT), true);
+assert('the deep reviewer fails closed when the base criteria cannot be read',
+    /cannot be read[\s\S]{0,300}TDD_GATE: FAIL/.test(DEEP_AGENT), true);
+
 console.log(`\n===================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
