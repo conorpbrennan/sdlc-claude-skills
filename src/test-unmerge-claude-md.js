@@ -6,6 +6,10 @@
 // prove a heading-matching rule correct against markdown edge cases, because the
 // lookup is a literal string search -- so the old fence, prefix-heading and CRLF
 // cases appear here only as "this was never ours, do not touch it".
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./hooks/lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');

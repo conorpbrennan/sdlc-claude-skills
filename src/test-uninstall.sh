@@ -7,6 +7,9 @@
 # snippets/). Every run uses scratch HOME and CLAUDE_HOME, never ~/.claude,
 # and a scratch copy of this tree, since uninstall.sh also clears the source
 # tree's .claude/hooks deploy target.
+# Drop git's repository-locating variables: inherited from a git hook, they
+# would aim every git call here at the outer repository (src/test-suite-isolation.js).
+unset $(env -i PATH="$PATH" git rev-parse --local-env-vars)
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"

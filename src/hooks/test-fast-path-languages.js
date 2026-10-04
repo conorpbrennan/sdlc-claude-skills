@@ -11,6 +11,10 @@
 //
 // Each case builds its own throwaway repository, so unlike test-pre-commit-review.js
 // this file never reads or writes the index of the repo it is run from.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');

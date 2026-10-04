@@ -1,6 +1,9 @@
 #!/bin/bash
 # Tests for stop-review-trigger.js
 # Run from the project root: bash .claude/hooks/test-stop-hook.sh
+# Drop git's repository-locating variables: inherited from a git hook, they
+# would aim every git call here at the outer repository (src/test-suite-isolation.js).
+unset $(env -i PATH="$PATH" git rev-parse --local-env-vars)
 
 set -e
 
