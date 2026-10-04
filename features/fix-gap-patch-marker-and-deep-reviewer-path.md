@@ -18,4 +18,11 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-04 `cdd82dc` — Stop the gap-patch flow from licensing a review marker
+  - README.md
+  - agents/code-reviewer-deep.md
+  - instructions/claude-md-snippet.md
+  - skills/code-review-pre-commit/SKILL.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
+  - src/test-plugin-layout.js

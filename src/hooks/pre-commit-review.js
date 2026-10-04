@@ -41,8 +41,10 @@
 // A hook that throws prints nothing, and PreToolUse reads no decision as
 // "proceed". Every failure must be a block, including our own, so this
 // is registered before any require: a truncated lib file from a partial
-// install must block too, not exit silently.
-process.on('uncaughtException', (e) => {
+// install must block too, not exit silently. Only when run as the hook: a
+// process that requires this file for its exports (the test suite) keeps its
+// own crash handling, or a throw there would also exit 0.
+if (require.main === module) process.on('uncaughtException', (e) => {
     const reason = 'Pre-commit hook pre-commit-review failed: ' + String((e && e.message) || e).split('\n')[0].slice(0, 200);
     try {
         console.log(JSON.stringify({
