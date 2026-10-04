@@ -251,12 +251,18 @@ const GAP_PATCH_REMEDY = ' Write no marker: the gap-patcher is not a review. On 
     'coverage again.';
 
 // coverage.xml comes from a pytest run over the working tree, so it speaks for
-// the index only where the two agree. Returns { files, error }: files are the
-// paths that disagree -- a Python file whose working copy differs from the
-// index (edited or deleted), or an untracked test file or conftest.py, both of
-// which pytest ran -- and null when the read failed. Other untracked Python is
-// left out: pytest runs it only if a test imports it, and a helper outside the
-// test naming rules is a known gap.
+// the index only where the two agree. Returns { files, ignored, error }: files
+// are the paths that disagree -- a Python file whose working copy differs from
+// the index (edited or deleted), or an untracked or gitignored test file or
+// conftest.py, all of which pytest ran -- and null when the read failed.
+// ignored is the gitignored subset, which `git add` refuses without -f.
+//
+// Known gaps, both outside what this read can see without guessing pytest's
+// collection (testpaths, norecursedirs, python_files): other untracked Python,
+// which pytest runs only if a test imports it; and a test inside a wholly
+// ignored directory, which git reports as the directory alone. That second
+// rule is also what keeps a .venv of packaged tests from being walked. The
+// gap-patcher is told to write no test to an ignored path.
 //
 // One `git status`, not `git diff` plus `git ls-files`: `git diff` refreshes
 // stat data and rewrites the index under index.lock, a race the feature hook's
@@ -264,24 +270,28 @@ const GAP_PATCH_REMEDY = ' Write no marker: the gap-patcher is not a review. On 
 // still comparing content, so a touched but unchanged file is not drift.
 function readCoverageDrift(toplevel) {
     const r = gitRead.gitRead(['--no-optional-locks', 'status', '--porcelain=v1', '-z',
-        '--no-renames', '--untracked-files=all', '--ignore-submodules=all'],
+        '--no-renames', '--untracked-files=all', '--ignore-submodules=all', '--ignored=matching'],
         { cwd: toplevel, maxBuffer: DIFF_MAX_BUFFER_BYTES });
-    if (r.out === null) return { files: null, error: r.error };
+    if (r.out === null) return { files: null, ignored: null, error: r.error };
     const ranByPytest = f => tddOrder.isTestFile(f) || path.posix.basename(f) === 'conftest.py';
     const files = [];
+    const ignored = [];
     for (const entry of gitRead.splitNul(r.out)) {
         // `XY path`: X is the index against HEAD, Y the working tree against
-        // the index; `??` is untracked. --no-renames keeps it one path per entry.
+        // the index; `??` is untracked, `!!` ignored (a directory ends in /).
+        // --no-renames keeps it one path per entry.
         const xy = entry.slice(0, 2);
         const file = entry.slice(3);
         if (!file || !coverageMeasurable(file)) continue;
-        if (xy === '??') {
-            if (ranByPytest(file)) files.push(file);
+        if (xy === '??' || xy === '!!') {
+            if (!ranByPytest(file)) continue;
+            files.push(file);
+            if (xy === '!!') ignored.push(file);
         } else if (xy[1] !== ' ') {
             files.push(file);
         }
     }
-    return { files, error: null };
+    return { files, ignored, error: null };
 }
 
 function shellQuote(s) {
@@ -1004,7 +1014,7 @@ function main() {
         // reading the index is told what the index lacks. That holds on every
         // path coverage passed on, not only the fast path's.
         const drift = (dcRan && !haveActionableGap)
-            ? readCoverageDrift(toplevel) : { files: [], error: null };
+            ? readCoverageDrift(toplevel) : { files: [], ignored: [], error: null };
         if (drift.files === null) {
             fastPathSkipNote += 'Unstaged and untracked files could not be read (' + drift.error +
                 '), so coverage.xml cannot be matched to the index and the coverage fast path was skipped. ';
@@ -1016,6 +1026,12 @@ function main() {
                 '`git add` (its own command) and retry. If not, set them aside with `git stash push ' +
                 '--keep-index --include-untracked`, rerun coverage and retry, then `git stash pop` after ' +
                 'the commit. ';
+            if (drift.ignored.length > 0) {
+                fastPathSkipNote += 'Of these, the following are gitignored, so `git add` refuses them ' +
+                    'and the stash leaves them: ' + drift.ignored.slice(0, 5).map(sanitizePath).join(', ') +
+                    (drift.ignored.length > 5 ? ', ...' : '') + '. Move them to a path git does not ' +
+                    'ignore, or `git add -f` them if they belong in the commit. ';
+            }
         }
         if (dcRan && !haveActionableGap && allCoverable && tddAllowsFastPath &&
             drift.files !== null && drift.files.length === 0) {
