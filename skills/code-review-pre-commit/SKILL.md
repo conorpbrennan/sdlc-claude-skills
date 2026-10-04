@@ -53,6 +53,12 @@ is the everyday gate.
   sub-agent the repository path, the diff target (the staged diff unless
   files were named), the commit's stated intent in one paragraph, and,
   on a rerun, the previous round's open items with what changed.
+- `sdlc:code-reviewer-deep` also gets the absolute path of
+  `agents/code-reviewer.md`: `../../agents/code-reviewer.md` resolved
+  from this skill's base directory. The deep reviewer takes its criteria
+  and report format from that file, and an agent's working directory is
+  the repository under review, so a relative path finds nothing outside
+  this plugin's own source repo.
 </mode-selection>
 
 <scope>
@@ -114,8 +120,7 @@ block message and the timing log can say where a change stands.
 
 Invoked only when the hook's message names gap-patching. Dispatch ONE
 sub-agent (`subagent_type: "general-purpose"`, model `sonnet`) with this
-prompt, filling in the message's thresholds, uncovered locations and
-marker command:
+prompt, filling in the message's thresholds and uncovered locations:
 
 ```
 You are patching test coverage gaps. Do ONLY the steps below.
@@ -130,16 +135,38 @@ Thresholds: <from the block message: diff-cover N%, branch M%>
    side effect). Do NOT assert on mocks or log messages.
 3. Run: pytest --cov=<pkg> --cov-branch --cov-report=xml -q
 4. Run: diff-cover coverage.xml --compare-branch=HEAD --fail-under=<N>
-5. If diff-cover exits 0 and per-file branch coverage on changed files is
-   >= M%, run exactly the marker command from the block message.
-6. Print `TDD_GATE: PASS` as the last line of your report. Otherwise print
-   `TDD_GATE: FAIL` with a one-line reason.
+5. List every test file you created or changed.
+6. If diff-cover exits 0 and per-file branch coverage on changed files is
+   >= M%, print `GAP_PATCH: PASS` as the last line of your report.
+   Otherwise print `GAP_PATCH: FAIL` with a one-line reason.
 
 Do NOT refactor the source.
 Do NOT add tests for already-covered code.
 Do NOT run red-first / green-first choreography.
 Do NOT re-review the diff.
+Do NOT stage, commit, or write the review marker.
 ```
+
+The trailer is `GAP_PATCH`, not `TDD_GATE`, on purpose. Every instruction
+to write the review marker keys on the review's `TDD_GATE` trailer, and
+this report is not a review: it never read the staged diff.
+
+On `GAP_PATCH: PASS`, write no marker. The new tests are in the working
+tree, not the index, and the marker hashes the index: one written now
+approves a commit that leaves them out. Show the user the test files and
+that they must be staged with `git add <files>`, its own command, before
+the commit is retried. Staging and the retry are the user's call, as after
+a scope review.
+
+The retry comes back through the coverage gate, which measures again. It
+approves on its own `thresholds-met` marker only when `coverage.xml` was
+measured on the index: no Python file differs from its staged copy, and no
+test file or `conftest.py` is untracked. Otherwise the commit needs a scope
+review, and the block message names the files coverage ran that the index
+lacks, so the review knows what it is not seeing.
+
+On `GAP_PATCH: FAIL`, surface the reason. After two FAILs stop and ask
+the user, as in the rounds policy.
 </gap-patching-mode>
 
 </review-protocol>
