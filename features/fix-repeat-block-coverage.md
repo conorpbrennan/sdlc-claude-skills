@@ -14,4 +14,7 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-04 `78e857a` — Repeat a block only when coverage.xml is unchanged too
+  - src/hooks/lib/review-markers.js
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js

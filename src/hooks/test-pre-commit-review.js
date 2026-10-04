@@ -2,6 +2,10 @@
 // Two suites:
 //   1. Unit tests for the exported classifier (classifyDiff, isLineTrivial).
 //   2. Integration tests via spawnSync (original suite plus new-gate cases).
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const { spawnSync, execSync, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -895,6 +899,12 @@ const gitReadLib = require(path.join(__dirname, 'lib', 'git-read.js'));
     }
 }
 
+console.log('\n[UNIT] briefPathList');
+assert('short list: every path, no ellipsis', mod.briefPathList(['a.py', 'b.py'], 3), 'a.py, b.py');
+assert('exactly max: no ellipsis', mod.briefPathList(['a', 'b', 'c'], 3), 'a, b, c');
+assert('over max: the first max, then an ellipsis', mod.briefPathList(['a', 'b', 'c', 'd'], 3), 'a, b, c, ...');
+assert('paths are sanitized', mod.briefPathList(['a;rm -rf.py'], 3), 'a_rm -rf.py');
+
 console.log('\n[UNIT] readBranchCoverage');
 
 const covXmlFull = `<?xml version="1.0"?><coverage>
@@ -1060,6 +1070,8 @@ try {
     assertContains('in-flight block says a review was requested', r.reason || '', 'review was requested');
     assertContains('in-flight block names the lock to remove', r.systemMessage || '', 'rm ');
     assertContains('in-flight block carries the marker recipe', r.systemMessage || '', "printf 'PASS");
+    assertTrue('a lock with no note adds nothing before the message',
+        (r.systemMessage || '').startsWith('PRE_COMMIT_REVIEW: A review was requested'));
     assert('lock is kept while the review is in flight', fs.existsSync(LOCK), true);
     // A matching PASS marker opens the gate and releases the lock.
     writeMarker(`PASS\n${g2Hash}\nnone\ncode-reviewer:round1:PASS`);
@@ -2033,6 +2045,16 @@ try {
         assertContains('untracked conftest.py: named', r.systemMessage || '', 'conftest.py');
         assertContains('untracked conftest.py: the stash route is given',
             r.systemMessage || '', 'git stash push --keep-index --include-untracked');
+        // The retry lands on review-in-flight, which runs before coverage is
+        // read. It must still say what the index lacks, or the reviewer
+        // dispatched from that message reviews without knowing.
+        s.age(s.marker, 60);   // past the 30s same-diff repeat window
+        r = s.run();
+        assert('drift retry: review in flight', r.reason && r.reason.startsWith('A review was requested'), true);
+        assertContains('drift retry: the in-flight message repeats the drift note',
+            r.systemMessage || '', 'measured with files the index does not hold (conftest.py)');
+        assertContains('drift retry: the note ends its sentence before the reason',
+            r.systemMessage || '', 'after the commit. A review was requested');
     });
     // A gitignored test file: pytest collects it, `git status` leaves it out
     // unless asked, and `git add` refuses it -- so it is drift, and the message

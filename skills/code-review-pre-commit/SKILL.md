@@ -21,8 +21,9 @@ run before this skill is invoked.
 
 ## Trailer contract
 
-The last line of every report is exactly `TDD_GATE: PASS` or
-`TDD_GATE: FAIL`. Claude, not the hook, reads it: on PASS Claude writes the
+The last line of every review report is exactly `TDD_GATE: PASS` or
+`TDD_GATE: FAIL`. A gap-patching report ends in `GAP_PATCH` instead (see
+`<gap-patching-mode>`). Claude, not the hook, reads it: on PASS Claude writes the
 marker; the hook only ever compares the marker's hashes to the index. The
 name is historical.
 

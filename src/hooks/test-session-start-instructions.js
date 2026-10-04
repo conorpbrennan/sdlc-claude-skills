@@ -1,5 +1,9 @@
 // Tests for session-start-instructions.js: the plugin SessionStart hook that
 // injects the four instruction sections (instructions/*.md) as additionalContext.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
