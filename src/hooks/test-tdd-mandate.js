@@ -14,6 +14,10 @@
 //   3. Order could only be checked from a session transcript, and no transcript
 //      meant no gate at all. Absent a transcript the mandate now still requires
 //      a test to be PRESENT, which is checkable from the index alone.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const path = require('path');
 const fs = require('fs');
 const os = require('os');

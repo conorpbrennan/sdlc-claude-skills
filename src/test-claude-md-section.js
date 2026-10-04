@@ -7,6 +7,10 @@
 // mention, CRLF, tabs -- are now simply irrelevant, and there are assertions
 // below that say so explicitly. If a future change reintroduces pattern matching
 // over user text, those are the ones that should fail.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./hooks/lib/isolate-git-env.js').isolateGitEnv();
+
 const section = require('./lib/claude-md-section');
 
 let passed = 0;

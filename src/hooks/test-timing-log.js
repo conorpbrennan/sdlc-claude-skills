@@ -1,4 +1,8 @@
 // Tests for timing-log.js shared helper.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');

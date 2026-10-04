@@ -1,6 +1,10 @@
 // Tests for the plugin and marketplace layout: the manifests, the hook wiring
 // in hooks/hooks.json against a frozen copy of the expected wiring, the
 // retired installer's absence, and the instruction sections under instructions/.
+// Drop git's repository-locating variables: inherited from a git hook, they
+// would aim every git call here at the outer repository (src/test-suite-isolation.js).
+require('./hooks/lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const path = require('path');
 
@@ -106,6 +110,11 @@ console.log('===================');
 console.log('\nManifests:');
 const plugin = readJson('plugin.json', PLUGIN_JSON);
 assert('plugin name is sdlc', plugin && plugin.name, 'sdlc');
+// `claude plugin validate` warns that no version is set. The warning is the
+// intended state: with a version, `/plugin update` ignores every commit that
+// does not bump it ("is already at the latest version"), and this plugin ships
+// by commit. Without one, the commit sha is the version
+// (code.claude.com/docs/en/plugins/publish).
 assert('plugin has no version field', plugin && 'version' in plugin, false);
 
 const marketplace = readJson('marketplace.json', MARKETPLACE_JSON);

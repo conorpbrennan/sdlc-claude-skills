@@ -223,21 +223,36 @@ function appendFastPassLog(gitDir, reason, hashPrefix, fileCount) {
     } catch (e) { /* non-fatal */ }
 }
 
-// Lock body: `<ISO timestamp>\n<diff hash>`. The hash binds the lock to the
-// diff whose review was requested; a lock for another diff is stale.
-function writeLock(lockPath, diffHash) {
-    try { fs.writeFileSync(lockPath, new Date().toISOString() + '\n' + (diffHash || 'none'), 'utf-8'); }
+// Writes `<ISO time>\n<diff hash>\n<note>`. The hash binds the lock to the
+// diff whose review was requested; a lock for another diff is stale. The
+// note is what the
+// review-required block told the reviewer beyond the file list (coverage
+// drift, unreadable files); the retry's review-in-flight block runs before
+// any of that is read again, so it repeats the note from here.
+//
+// Args:
+//   lockPath: the review lock file.
+//   diffHash: the staged-diff hash the review was requested for.
+//   note: the block's notes, or '' for none.
+// Returns:
+//   nothing; a write failure only loses the lock.
+function writeLock(lockPath, diffHash, note) {
+    const body = new Date().toISOString() + '\n' + (diffHash || 'none') + '\n' + (note || '').replace(/\n/g, ' ');
+    try { fs.writeFileSync(lockPath, body, 'utf-8'); }
     catch (e) { /* non-fatal */ }
 }
 
 function readLock(lockPath) {
     let body;
     try { body = fs.readFileSync(lockPath, 'utf-8'); } catch (e) { return null; }
-    const [ts, diffHash] = body.trim().split('\n');
-    const at = Date.parse(ts || '');
+    // Each field trimmed on its own: the note ends in the space that
+    // separates it from the sentence the block puts after it.
+    const [ts, diffHash, note] = body.split('\n');
+    const at = Date.parse((ts || '').trim());
     return {
         at: Number.isNaN(at) ? null : at,
-        diffHash: diffHash || null,
+        diffHash: (diffHash || '').trim() || null,
+        note: note || '',
         fresh: isFileFresh(lockPath, LOCK_MAX_AGE_MS),
     };
 }
@@ -450,6 +465,16 @@ function findCoverageXml(toplevel) {
 
 function sanitizePath(p) {
     return p.replace(/[^a-zA-Z0-9_./()\- ]/g, '_');
+}
+
+// Args:
+//   paths: file paths to name in a block message.
+//   max: how many to name before eliding the rest.
+// Returns:
+//   the first `max` paths, sanitized and comma-separated, with `, ...` when
+//   some were left out.
+function briefPathList(paths, max) {
+    return paths.slice(0, max).map(sanitizePath).join(', ') + (paths.length > max ? ', ...' : '');
 }
 
 // --- Stale-coverage handling -------------------------------------------------
@@ -805,7 +830,7 @@ function main() {
             const reason = 'A review was requested' + (ago !== null ? ' ' + ago + 's ago' : '') +
                 ' for this exact staged diff and no PASS marker matches it';
             block('review-in-flight', reason,
-                'PRE_COMMIT_REVIEW: ' + reason + '. Finish that review and, on ' +
+                'PRE_COMMIT_REVIEW: ' + lock.note + reason + '. Finish that review and, on ' +
                     'TDD_GATE: PASS, run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
                     TAG_NOTE + '; or run `rm ' +
                     shellQuote(LOCK_FILE) + '` to request a fresh review.');
@@ -894,8 +919,7 @@ function main() {
         // fast path through a language table that does not describe it.
         const unreadable = codeFiles.filter(f => !classifierUnderstands(f));
         fastPathSkipNote = 'Staged diff includes ' + unreadable.length + ' file(s) the ' +
-            'classifier cannot read (' + unreadable.slice(0, 3).map(sanitizePath).join(', ') +
-            (unreadable.length > 3 ? ', ...' : '') + '), so both fast paths were skipped. ';
+            'classifier cannot read (' + briefPathList(unreadable, 3) + '), so both fast paths were skipped. ';
     } else {
         // Counts NON-TRIVIAL lines: anything but blank lines and whole comments.
         const classification = classifyDiff(diffRead.text);
@@ -1044,17 +1068,16 @@ function main() {
                 '), so coverage.xml cannot be matched to the index and the coverage fast path was skipped. ';
         } else if (drift.files.length > 0) {
             fastPathSkipNote += 'Coverage thresholds are met, but coverage.xml was ' +
-                'measured with files the index does not hold (' + drift.files.slice(0, 5).map(sanitizePath).join(', ') +
-                (drift.files.length > 5 ? ', ...' : '') + '), so the coverage fast path was skipped and a ' +
-                'review of the staged diff will not see them. If they belong in this commit, stage them with ' +
+                'measured with files the index does not hold (' + briefPathList(drift.files, 5) +
+                '), so the coverage fast path was skipped and a review of the staged diff will not see them. ' +
+                'If they belong in this commit, stage them with ' +
                 '`git add` (its own command) and retry. If not, set them aside with `git stash push ' +
                 '--keep-index --include-untracked`, rerun coverage and retry, then `git stash pop` after ' +
                 'the commit. ';
             if (drift.ignored.length > 0) {
                 fastPathSkipNote += 'Of these, the following are gitignored, so `git add` refuses them ' +
-                    'and the stash leaves them: ' + drift.ignored.slice(0, 5).map(sanitizePath).join(', ') +
-                    (drift.ignored.length > 5 ? ', ...' : '') + '. Move them to a path git does not ' +
-                    'ignore, or `git add -f` them if they belong in the commit. ';
+                    'and the stash leaves them: ' + briefPathList(drift.ignored, 5) +
+                    '. Move them to a path git does not ignore, or `git add -f` them if they belong in the commit. ';
             }
         }
         if (dcRan && !haveActionableGap && allCoverable && tddAllowsFastPath &&
@@ -1072,8 +1095,7 @@ function main() {
             const unmeasurable = codeFiles.filter(f => !coverageMeasurable(f));
             fastPathSkipNote += 'Coverage thresholds are met for the measurable files, but ' +
                 unmeasurable.length + ' staged file(s) are outside coverage (' +
-                unmeasurable.slice(0, 3).map(sanitizePath).join(', ') +
-                (unmeasurable.length > 3 ? ', ...' : '') + '), so the commit still needs a review. ';
+                briefPathList(unmeasurable, 3) + '), so the commit still needs a review. ';
         }
         if (dcRan && haveActionableGap) {
             // Coverage gap: gap-patching dispatch.
@@ -1100,7 +1122,7 @@ function main() {
 
     // Review required: nothing above approved. Write the lock and say how to proceed.
     timingLog.logEvent('review.requested', { ...hookMeta, via: 'review-required' });
-    writeLock(LOCK_FILE, diffHash);
+    writeLock(LOCK_FILE, diffHash, fastPathSkipNote);
     const fileList = codeFiles.map(sanitizePath).join(', ');
     let reason;
     if (markerFresh && markerBody === '') {
@@ -1127,6 +1149,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    briefPathList,
     ...classifier,
     SOURCE_EXTENSIONS,
     isSourcePath,

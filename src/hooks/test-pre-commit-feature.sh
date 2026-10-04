@@ -1,6 +1,9 @@
 #!/bin/bash
 # Tests for pre-commit-feature.js
 # Run: bash src/hooks/test-pre-commit-feature.sh
+# Drop git's repository-locating variables: inherited from a git hook, they
+# would aim every git call here at the outer repository (src/test-suite-isolation.js).
+unset $(env -i PATH="$PATH" git rev-parse --local-env-vars)
 set -e
 
 HOOK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pre-commit-feature.js"
