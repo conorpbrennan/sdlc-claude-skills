@@ -500,13 +500,8 @@ cleanup runs, leaving `features/pre-commit-hook-test.md` and
 `settings.json` and `CLAUDE.md` a legacy install wrote with the frozen mergers in
 `legacy/`, then check that `uninstall.sh`'s unmergers reverse them exactly.
 
-Every suite passes except one, inherited from `risk-claude-skills` at the same count
-and not caused by the split. Run them from a clone with history, not from this repo
+Every suite passes. Run them from a clone with history, not from this repo
 before its first commit — see the note above.
-
-| Suite | State |
-|---|---|
-| `test-enforce-co-author.sh` | 6 passed, 1 failed |
 
 `test-stop-hook.sh` used to fail 3 of 14 and is now 14/14. The cause was the review
 markers living in `$HOME`: the suite backed up, deleted and restored the user's real

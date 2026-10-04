@@ -380,6 +380,90 @@ ok('three segments', segs.length === 3, segs);
 ok('quoted operator stays inside the word', segs[2].join(' ') === 'git commit -m a && b', segs[2]);
 ok('subshell parens are segment boundaries', splitSegments('(git commit -m x)').length === 1);
 
+console.log('\n[UNIT] tokenize: process substitution and stdin sources');
+{
+    const { tokenize } = require(path.join(__dirname, 'lib', 'commit-command.js'));
+    // `<(...)` is a word whose value is a path only bash knows. Read as a
+    // redirection, it vanished and took -F's value with it.
+    const ps = tokenize('git commit -F <(cat m) -s')[0];
+    ok('<( ) is one opaque word', JSON.stringify(ps.words) === JSON.stringify(['git', 'commit', '-F', '<(cat m)', '-s']) &&
+        ps.opaque.includes('<(cat m)'), ps);
+    ok('<( ) attached to a flag stays in its word', tokenize('git commit -F<(cat m)')[0].words[2] === '-F<(cat m)');
+    ok('>( ) is one opaque word', tokenize('tee >(cat)')[0].words[1] === '>(cat)');
+    const stdin = cmd => tokenize(cmd)[0].stdinSources;
+    ok('no redirection: no stdin source', stdin('git commit -F -') === 0);
+    ok('a heredoc is one stdin source', stdin("git commit -F - <<'A'\nx\nA") === 1);
+    ok('two heredocs are two', stdin("git commit -F - <<'A' <<'B'\nx\nA\ny\nB") === 2);
+    ok('< file counts', stdin("git commit -F - <<'A' < m\nx\nA") === 2);
+    ok('0< file counts', stdin('git commit -F - 0<m') === 1);
+    ok('<<< counts', stdin('git commit -F - <<< x') === 1);
+    ok('<> and <& count', stdin('git commit -F - <>m 0<&3') === 2);
+    ok('output redirections do not count', stdin('git commit -F - > o 2>&1 2<m') === 0);
+}
+
+console.log('\ninspectCommitArgs reports where the message comes from:');
+{
+    const { inspectCommitArgs } = require(path.join(__dirname, 'lib', 'commit-command.js'));
+    const src = args => {
+        const r = inspectCommitArgs(args);
+        return JSON.stringify({ m: r.messages, f: r.files, t: r.trailers, reuse: r.reusesMessage });
+    };
+    const want = (m, f, t, reuse) => JSON.stringify({ m, f, t, reuse });
+    ok('-m and --message, separate and attached', src(['-m', 'a', '-mb', '--message', 'c', '--message=d']) ===
+        want(['a', 'b', 'c', 'd'], [], [], false));
+    // git reads only the last -F, and the --no- forms drop what came before.
+    ok('-F and --file, separate and attached: the last one wins', src(['-F', 'p', '-Fq', '--file', 'r', '--file=s']) ===
+        want([], ['s'], [], false));
+    ok('--no-message drops earlier messages', src(['-m', 'a', '--no-message', '-m', 'b']) === want(['b'], [], [], false));
+    ok('--no-file drops the file', src(['-F', 'p', '--no-file', '-m', 'b']) === want(['b'], [], [], false));
+    ok('--no-mes and --no-fil are those prefixes', src(['-m', 'a', '-F', 'p', '--no-mes', '--no-fil']) ===
+        want([], [], [], false));
+    ok('stdin is read only when -F - is the last file', inspectCommitArgs(['-F', '-', '-F', 'p']).readsMessageFromStdin === false &&
+        inspectCommitArgs(['-F', 'p', '-F', '-']).readsMessageFromStdin === true);
+    ok('--trailer, separate and attached', src(['-m', 'x', '--trailer', 'K: v', '--trailer=L: w']) ===
+        want(['x'], [], ['K: v', 'L: w'], false));
+    ok('-m inside a short-flag cluster', src(['-sm', 'y']) === want(['y'], [], [], false));
+    for (const reuse of [['-C', 'HEAD'], ['-c', 'HEAD'], ['--reuse-message=HEAD'], ['--reedit-message', 'HEAD'],
+        ['--fixup', 'HEAD'], ['--squash=HEAD']]) {
+        ok('reuses a message: ' + reuse.join(' '), src(reuse) === want([], [], [], true));
+    }
+    ok('--author and --date values are not messages', src(['--author', 'A <a@b>', '--date=now', '-m', 'z']) ===
+        want(['z'], [], [], false));
+
+    // git takes any unique prefix of a long option: `--mess=x` is --message.
+    // An exact-name parser saw no message in it at all.
+    ok('a unique prefix of --message is a message', src(['--mess=x', '--me', 'y']) === want(['x', 'y'], [], [], false));
+    ok('a unique prefix of --file is a file', src(['--fil=p', '--fil', 'q']) === want([], ['q'], [], false));
+    ok('--fi is ambiguous (--file, --fixup) and names no file', src(['--fi=p', '-m', 'z']) === want(['z'], [], [], false));
+    ok('a unique prefix of --file reads stdin', inspectCommitArgs(['--fil=-']).readsMessageFromStdin === true);
+    ok('a unique prefix of --trailer is a trailer', src(['--tra=K: v']) === want([], [], ['K: v'], false));
+    ok('a unique prefix of --reuse-message reuses', src(['--reu=HEAD']) === want([], [], [], true));
+    // An ambiguous prefix is git's own error, so it names nothing here.
+    ok('an ambiguous prefix names no option', src(['--a', '-m', 'z']) === want(['z'], [], [], false));
+    // --verify negates to --no-verify, which is listed too: one option, not two.
+    const { expandCommitLongOption } = require(path.join(__dirname, 'lib', 'commit-command.js'));
+    ok('--no-veri is the unique prefix of --no-verify', expandCommitLongOption('--no-veri') === '--no-verify');
+    ok('--no-ver is ambiguous, as git says', expandCommitLongOption('--no-ver') === '--no-ver');
+}
+
+console.log('\nThe commit gate sees through abbreviated long options:');
+for (const [cmd, why] of [
+    ['git commit --inc -m x f.py', 'include'],
+    ['git commit --interac -m x', 'interactive'],
+    ['git commit --patc -m x', 'patch'],
+]) {
+    const r = classifyCommitCommand(cmd, { resolveAlias: () => '' });
+    ok(cmd + ' is unreliable', r.kind === 'unreliable' && new RegExp(why).test(r.reason || ''), JSON.stringify(r));
+}
+
+// A process substitution runs its command whatever command it is handed to,
+// as $( ) does, so an inert `cat` does not make a commit inside it inert.
+console.log('\nA commit inside a process substitution is not inert:');
+for (const cmd of ['cat <(git commit -m x)', 'diff a >(git commit -m x)', 'grep a <(git commit -m x)']) {
+    const r = classifyCommitCommand(cmd, { resolveAlias: () => '' });
+    ok(cmd + ' is gated', r.kind !== 'not-a-commit', JSON.stringify(r));
+}
+
 console.log(`\n====================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

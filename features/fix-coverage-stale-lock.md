@@ -14,4 +14,7 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-04 `6cc1635` — Write the review lock only when a review is requested
+  - README.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
