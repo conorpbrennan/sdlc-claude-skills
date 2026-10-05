@@ -34,7 +34,7 @@ console.log('\nEvery suite isolates itself before it runs:');
 {
     const SHELL_LINE = 'unset $(env -i PATH="$PATH" git rev-parse --local-env-vars)';
     const JS_CALL = 'isolateGitEnv()';
-    const roots = [__dirname, path.join(__dirname, 'hooks')];
+    const roots = [__dirname, path.join(__dirname, 'hooks'), path.join(__dirname, '..', 'tools')];
     const suites = roots.flatMap(d => fs.readdirSync(d)
         .filter(f => /^test-.*\.(js|sh)$/.test(f))
         .map(f => path.join(d, f)));
