@@ -110,12 +110,12 @@ console.log('===================');
 console.log('\nManifests:');
 const plugin = readJson('plugin.json', PLUGIN_JSON);
 assert('plugin name is sdlc', plugin && plugin.name, 'sdlc');
-// `claude plugin validate` warns that no version is set. The warning is the
-// intended state: with a version, `/plugin update` ignores every commit that
-// does not bump it ("is already at the latest version"), and this plugin ships
-// by commit. Without one, the commit sha is the version
-// (code.claude.com/docs/en/plugins/publish).
-assert('plugin has no version field', plugin && 'version' in plugin, false);
+// The plugin carries a semver version, raised on every commit (CLAUDE.md).
+// With a version set, `/plugin update` ignores a commit that leaves it
+// unchanged ("is already at the latest version",
+// code.claude.com/docs/en/plugins/publish), so tools/plugin-version.js check
+// gates each commit through the repo's hygiene config.
+assert('plugin has a semver version', plugin && /^\d+\.\d+\.\d+$/.test(plugin.version || ''), true);
 
 const marketplace = readJson('marketplace.json', MARKETPLACE_JSON);
 assert('marketplace name is sdlc-claude-skills', marketplace && marketplace.name, 'sdlc-claude-skills');

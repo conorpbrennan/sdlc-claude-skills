@@ -23,6 +23,15 @@ edit made there is lost on the next update, and it never reaches the repo.
   root. Ship it: commit, then `/plugin marketplace update sdlc-claude-skills`
   and `/plugin update sdlc@sdlc-claude-skills`.
 - `claude plugin validate .` must exit 0.
+- **Every commit raises the plugin version.** `/plugin update` ignores a
+  commit that leaves `version` in `.claude-plugin/plugin.json` unchanged, so
+  users silently keep the old copy. Before staging a commit, run
+  `node tools/plugin-version.js bump` (raises the patch number), then stage
+  `.claude-plugin/plugin.json` with the rest. Raise minor or major by hand
+  for a larger change. `node tools/plugin-version.js check` blocks a commit
+  whose staged version is not above HEAD's; it runs from this repo's entry in
+  `~/.claude/hygiene-repos.json`. Two branches that each bump will conflict
+  on that line at merge; keep the higher number and bump once more.
 - `./uninstall.sh` removes a pre-plugin deployment from `~/.claude/` (the
   one-time migration); `--dry-run` shows what it would do. It reads its
   legacy wiring from `legacy/hooks-config.json`.
