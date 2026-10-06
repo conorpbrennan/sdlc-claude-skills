@@ -73,6 +73,18 @@ const TEST_PATH_RE = new RegExp(
 // Maven and Gradle already put these under src/test/java/**, which the directory
 // rules above match on their own, so requiring the context costs nothing real.
 const TEST_DIR_RE = /(?:^|\/)(?:tests?|specs?|__tests__)\//;
+
+// .NET is the exception: its tests live in a `<Name>.Tests` project folder, often
+// upper-cased (`CCF.TESTS/`), or a bare `Tests/`. Those, and `<Name>.Specs`, are
+// matched in any case. The rule above stays case-sensitive on purpose: folding it
+// would make a capitalised `Specs/` a test directory, and in .NET that is where the
+// Specification pattern keeps production classes (`Specs/ActiveCustomerSpec.cs`).
+// Plural only, which also keeps a `shop.test/` TLD folder out. The segment rule
+// still holds -- `latest/`, `contest/`, `Foo.Testing/`, `Foo.Tests.Helpers/` stay out.
+// Accepted trade-off: where "test" is a domain noun, a capitalised `Tests/` folder of
+// production classes (`Lab/Tests/BloodTest.cs`) now counts as tests, as the
+// lower-case `tests/BloodTest.cs` always did.
+const DOTNET_TEST_DIR_RE = /(?:^|\/)(?:tests|[^/]+\.(?:tests|specs))\//i;
 const TEST_SUFFIX_RE = /(?:^|\/)[^/]+(?:Test|Tests|Spec|Specs)\.[^/]+$/;
 
 // What needs no test. Inverted deliberately: rather than keeping a second list of
@@ -126,7 +138,7 @@ function isTestFile(p) {
     if (!sourceFiles.isSourcePath(n)) return false;
     if (TEST_PATH_RE.test(n)) return true;
     // The weak capitalised suffixes, only with a test directory in the path.
-    return TEST_SUFFIX_RE.test(n) && TEST_DIR_RE.test(n);
+    return TEST_SUFFIX_RE.test(n) && (TEST_DIR_RE.test(n) || DOTNET_TEST_DIR_RE.test(n));
 }
 
 function isExemptPath(p, opts) {
