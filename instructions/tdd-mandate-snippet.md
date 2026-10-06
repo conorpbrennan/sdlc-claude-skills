@@ -40,7 +40,7 @@ To exempt a path rather than a whole repository, add it to `exempt_paths` in
 `src/hooks/lib/tdd-order.js`: a `test/`, `tests/`, `spec/` or `__tests__/`
 directory; a `test-` or `test_` prefix; a `_test.` or `.test.` or `.spec.` infix;
 `_spec.rb`; or a `*Test.java`-style suffix **inside** a test directory, where a
-.NET `<Name>.Tests/` or `<Name>.Specs/` project folder (any case) also counts. That
+.NET `Tests/`, `<Name>.Tests/` or `<Name>.Specs/` folder (any case, plural only) also counts. That
 last restriction matters -- a bare `*Spec.java` rule swept in whole public APIs
 (JavaPoet's `TypeSpec`, KotlinPoet's `FileSpec`) and calling production code a test
 is the fail-open direction.
