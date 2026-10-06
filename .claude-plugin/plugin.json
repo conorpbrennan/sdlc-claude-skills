@@ -1,6 +1,6 @@
 {
   "name": "sdlc",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SDLC toolchain for Claude Code: plan, build, review and commit skills, review sub-agents, slash commands, and the pre-commit gates (TDD mandate, code review, feature tracking, co-author, hygiene).",
   "author": {
     "name": "Conor Brennan"

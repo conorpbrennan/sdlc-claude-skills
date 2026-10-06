@@ -333,8 +333,18 @@ const DOTNET_NOT_TESTS = [
     'src/contest/FooTests.cs',
     'src/Foo.Testing/BarTests.cs',
     'src/Foo.Tests.Helpers/BarTests.cs',
+    // The Specification pattern (Ardalis.Specification): `*Spec.cs` in a `Specs/`
+    // folder is production code. Only the dotted `.Specs` project folder and the
+    // lower-case `spec/` / `specs/` count, so case-folding must not reach these.
+    'src/Domain/Specs/ActiveCustomerSpec.cs',
+    'src/Domain/Spec/ActiveCustomerSpec.cs',
+    // Plural only: a singular `.Test` folder is rare in .NET and also a `.test` TLD.
+    'src/Experiments/Ab.Test/PricingTest.cs',
+    'sites/shop.test/app/AbTest.php',
 ];
 for (const f of DOTNET_NOT_TESTS) assert(`not a test: ${f}`, tdd.isTestFile(f), false);
+assert('Customer.cs + a Specs/ specification class is still no_tests', tdd.classifyFromEvents(
+    ['src/Domain/Customer.cs', 'src/Domain/Specs/ActiveCustomerSpec.cs'], []).status, 'no_tests');
 assert('CCF.ROOT code + CCF.TESTS test is not no_tests', tdd.classifyFromEvents(
     ['root/CCF.ROOT/X.cs', 'root/CCF.TESTS/XTests.cs'], []).status, 'not_applicable');
 assert('two production .cs files with no test is still no_tests', tdd.classifyFromEvents(

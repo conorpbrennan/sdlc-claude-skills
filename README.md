@@ -296,8 +296,8 @@ everywhere.
 
 What counts as a test is a path convention in `src/hooks/lib/tdd-order.js`. The
 capitalised `*Test.java` / `*Spec.kt` suffix counts only **inside** a test
-directory, which includes a .NET `<Name>.Tests/` or `<Name>.Specs/` project folder
-in any case (`CCF.TESTS/`): a bare rule swept in whole public APIs — JavaPoet's `TypeSpec`,
+directory, which includes a .NET `Tests/`, `<Name>.Tests/` or `<Name>.Specs/` folder
+in any case (`CCF.TESTS/`), plural only: a bare rule swept in whole public APIs — JavaPoet's `TypeSpec`,
 KotlinPoet's `FileSpec`, `tensor_spec.py` — and calling production code a test is
 the fail-open direction, because it moves the file out of the implementation set
 *and* into the test set, so a commit with no test stops being `no_tests`.
