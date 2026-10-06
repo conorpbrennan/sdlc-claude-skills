@@ -72,7 +72,13 @@ const TEST_PATH_RE = new RegExp(
 //
 // Maven and Gradle already put these under src/test/java/**, which the directory
 // rules above match on their own, so requiring the context costs nothing real.
-const TEST_DIR_RE = /(?:^|\/)(?:tests?|specs?|__tests__)\//;
+//
+// .NET is the exception: its tests live in a `<Name>.Tests` project folder, often
+// upper-cased (`CCF.TESTS/`), so a test directory here is also a segment that ENDS
+// in `.Tests` / `.Specs`, matched case-insensitively. The segment rule still holds
+// -- the name starts a segment or follows a dot, and ends one -- which keeps
+// `latest/`, `contest/`, `Foo.Testing/` and `Foo.Tests.Helpers/` out.
+const TEST_DIR_RE = /(?:^|\/)(?:(?:tests?|specs?|__tests__)|[^/]+\.(?:tests?|specs?))\//i;
 const TEST_SUFFIX_RE = /(?:^|\/)[^/]+(?:Test|Tests|Spec|Specs)\.[^/]+$/;
 
 // What needs no test. Inverted deliberately: rather than keeping a second list of
