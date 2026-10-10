@@ -729,9 +729,9 @@ What the per-commit reviews caught that the step's own tests had passed:
 Each was small, local, and would have been buried under later steps by the
 time a phase-level review looked. That is the case for per-commit.
 
-**Rule.** Round one on the everyday reviewer (Sonnet). The deep reviewer
-(Opus) only after a FAIL with a critical or a correctness finding in a
-parser, gate or shell hunk. After two FAILs, stop and ask. The heavy tier
+**Rule.** Round one on the everyday reviewer (Sonnet), whatever the change.
+Any rerun after a FAIL on the deep reviewer (Opus). After two FAILs, stop
+and ask. The heavy tier
 (Opus) is for the plan text and the signed spec, where a defect costs an
 amendment; it earned its cost there twice, which is why it is the default
 there and an escalation, not a default, on a 50-line diff. The loop it runs
@@ -1057,10 +1057,8 @@ error to fix).
 
 ### 18.3 The review fails
 
-Round one is the everyday reviewer. Escalate to the deep reviewer only after
-a FAIL carrying a critical or a correctness finding in a parser, gate or
-shell hunk. Any other FAIL — a scope breach, a missing test, an artefact
-that disagrees with the plan — reruns on the everyday reviewer. After
+Round one is the everyday reviewer, whatever the change. Any FAIL reruns on
+the deep reviewer once the fix is in. After
 two FAILs, stop: do not dispatch a third review. Show the open items and ask
 the owner to choose between fixing and accepting with the gap named in the
 commit message (§9). The run has a bounded number of rounds per step by

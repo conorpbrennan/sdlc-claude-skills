@@ -25,9 +25,9 @@ When the hook does block, the `systemMessage` carries one of two shapes:
   command) and retries. Its report ends `GAP_PATCH: PASS` or
   `GAP_PATCH: FAIL`: it is not a review, so it never licenses the marker.
 - **Scope review** (everything else): run `/sdlc:code-review-pre-commit --fresh`.
-  ONE `sdlc:code-reviewer` sub-agent (Sonnet) on the staged diff. `--deep`
-  selects `sdlc:code-reviewer-deep` (Opus) for security-sensitive or
-  parser-shaped changes and when the rounds policy says so.
+  ONE `sdlc:code-reviewer` sub-agent (Sonnet) on the staged diff. Round 1
+  is always Sonnet, whatever the change. `--deep` selects
+  `sdlc:code-reviewer-deep` (Opus) for the rerun after a FAIL.
 
 The scope review ends with `TDD_GATE: PASS` or `TDD_GATE: FAIL` on the
 last line. Only that trailer, from that review, licenses the marker.
@@ -39,10 +39,9 @@ recomputes both hashes at write time; do not compose a marker command by
 hand.
 
 On **FAIL**, do NOT write the marker. Surface the failing items and fix
-with user permission. Rerun on `sdlc:code-reviewer-deep` only after a CRITICAL
-or a correctness finding in a parser, gate or shell hunk; otherwise on
-`sdlc:code-reviewer`. After two FAILs stop and ask the user to fix-and-rerun or
-to accept with the gap named in the commit message.
+with user permission. Rerun on `sdlc:code-reviewer-deep`. The hook refuses a
+round-1 marker from `code-reviewer-deep`. After two FAILs stop and ask the user
+to fix-and-rerun or to accept with the gap named in the commit message.
 
 **Stop after the marker is written.** Completing a review does not grant
 permission to commit -- wait for the user. The retry is approved only by

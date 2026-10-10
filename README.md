@@ -167,8 +167,8 @@ cannot be fixed before dispatch.
 Runs the review a `PRE_COMMIT_REVIEW` hook block asks for: one
 `code-reviewer` sub-agent on the staged diff, ending in the `TDD_GATE`
 trailer, then writes the marker using the `printf` command from the block
-message. `--deep` selects `code-reviewer-deep` (Opus) for
-security-sensitive or parser-shaped changes. On a gap-patching block it
+message. Round 1 is always `code-reviewer` (Sonnet); `--deep` selects
+`code-reviewer-deep` (Opus) for the rerun after a FAIL. On a gap-patching block it
 patches uncovered lines instead and writes no marker: the new tests are
 staged and the commit retried. Its report ends in `GAP_PATCH`, not
 `TDD_GATE`, so it cannot license the marker. The hook approves on coverage

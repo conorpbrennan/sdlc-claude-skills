@@ -333,11 +333,13 @@ function markerRecipe(markerPath, coveragePath, tag) {
 // they are namespaced; the marker tag is a label and stays bare, which
 // TAG_NOTE says outright so a namespaced agent name does not leak into it.
 const REVIEW_CMD = cmd('code-review-pre-commit');
-const ROUNDS_POLICY = 'Round 1 is ' + agent('code-reviewer') + '. Rerun with --deep (' +
-    agent('code-reviewer-deep') + ') only after a ' +
-    'FAIL with a CRITICAL or a correctness finding in a parser, gate or shell hunk; a pure scope/' +
-    'artefact/secret/churn FAIL reruns on ' + agent('code-reviewer') + '. After two FAILs stop, show the open items, ' +
+const ROUNDS_POLICY = 'Round 1 is always ' + agent('code-reviewer') + ', whatever the change: do not pass ' +
+    '--deep on round 1. After a FAIL, fix and rerun with --deep (' + agent('code-reviewer-deep') + '). ' +
+    'After two FAILs stop, show the open items, ' +
     'and ask the user to fix-and-rerun or to accept with the gap named in the commit message.';
+// Round 1 is the everyday reviewer's, so a deep reviewer's round-1 PASS does not
+// approve: it would let the costlier reviewer stand in for the gate's first pass.
+const DEEP_ROUND_ONE = /^code-reviewer-deep:round1(:|$)/;
 const TAG_NOTE = ' (replace code-reviewer:round1 with the bare agent name, code-reviewer or ' +
     'code-reviewer-deep, and the round used)';
 // The round record the skill asks for, at this hook's own location: the
@@ -788,6 +790,17 @@ function main() {
     if (markerFresh && markerBody) {
         const parts = markerBody.split('\n');
         if (parts[0] === 'PASS' && parts.length >= 3 && diffHash) {
+            // Checked before the in-flight lock below: the block that asked for
+            // this review left a lock for the same diff, which would otherwise
+            // answer with the generic review-in-flight reason. The lock stays,
+            // so the round-1 rerun's marker approves and releases it.
+            if (parts[1] === diffHash && parts[2] === covHash && DEEP_ROUND_ONE.test(parts[3] || '')) {
+                const reason = 'Round 1 runs on ' + agent('code-reviewer') + ', not ' +
+                    agent('code-reviewer-deep') + '. Rerun round 1 with ' + REVIEW_CMD + ' --fresh (no --deep).';
+                block('deep-round-one', reason,
+                    'PRE_COMMIT_REVIEW: ' + reason + ' ' + ROUNDS_POLICY + ' On TDD_GATE: PASS run exactly: ' +
+                    markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') + TAG_NOTE + '.');
+            }
             if (parts[1] === diffHash && parts[2] === covHash) {
                 // The review this lock was written for has passed: measure it
                 // (lock -> marker match is the sub-agent's wall clock) and
