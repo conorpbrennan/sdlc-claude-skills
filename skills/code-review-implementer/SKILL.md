@@ -73,8 +73,7 @@ RULES:
 <after>
 Relay the sub-agent's per-item outcome and the test result. Then rerun
 the review per the rounds policy in `sdlc:code-review-pre-commit`: on
-`sdlc:code-reviewer-deep` if the FAIL carried a CRITICAL or a correctness
-finding in a parser, gate or shell hunk, otherwise on `sdlc:code-reviewer`.
+`sdlc:code-reviewer-deep`.
 Do not stage or commit; that is the user's call.
 </after>
 
