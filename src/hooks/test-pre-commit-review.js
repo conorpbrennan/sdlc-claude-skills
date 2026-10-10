@@ -1078,6 +1078,30 @@ try {
     r = runHook('git commit -m x');
     assert('matching marker approves despite the lock', r.decision, 'approve');
     assert('lock is released on the marker match', fs.existsSync(LOCK), false);
+    // Round 1 runs on code-reviewer (Sonnet). A deep round-1 PASS is refused, so
+    // round 1 cannot start on Opus; the deep reviewer's rerun still approves.
+    cleanAll();
+    writeMarker(`PASS\n${g2Hash}\nnone\ncode-reviewer-deep:round1:PASS`);
+    r = runHook('git commit -m x');
+    assert('deep round-1 marker does not approve', r.decision, 'block');
+    assertContains('deep round-1 block names the round-1 reviewer', r.reason || '',
+        'Round 1 runs on sdlc:code-reviewer');
+    // The real flow: the block that asked for the review left a lock for this
+    // diff. The deep round-1 refusal must still be the reason given, not the
+    // generic review-in-flight one, and the lock stays for the round-1 rerun.
+    cleanAll();
+    fs.writeFileSync(LOCK, new Date().toISOString() + '\n' + g2Hash, 'utf-8');
+    writeMarker(`PASS\n${g2Hash}\nnone\ncode-reviewer-deep:round1:PASS`);
+    r = runHook('git commit -m x');
+    assert('deep round-1 marker with a lock does not approve', r.decision, 'block');
+    assertContains('deep round-1 block with a lock names the round-1 reviewer', r.reason || '',
+        'Round 1 runs on sdlc:code-reviewer');
+    assertContains('deep round-1 block carries the marker recipe', r.systemMessage || '', "printf 'PASS");
+    assert('deep round-1 block keeps the lock', fs.existsSync(LOCK), true);
+    cleanAll();
+    writeMarker(`PASS\n${g2Hash}\nnone\ncode-reviewer-deep:round2:PASS`);
+    r = runHook('git commit -m x');
+    assert('deep round-2 marker approves', r.decision, 'approve');
     // A lock for a different diff is stale: removed, and the gates run.
     cleanAll();
     fs.writeFileSync(LOCK, new Date().toISOString() + '\ndeadbeefdeadbeef', 'utf-8');
@@ -1103,6 +1127,10 @@ try {
     assertContains('recipe uses printf', r.systemMessage || '', "printf 'PASS");
     assertContains('recipe writes the absolute marker path', r.systemMessage || '', MARKER);
     assertContains('message states the rounds policy', r.systemMessage || '', 'After two FAILs stop');
+    assertContains('policy puts round 1 on code-reviewer always', r.systemMessage || '',
+        'Round 1 is always sdlc:code-reviewer');
+    assertContains('policy puts every rerun on code-reviewer-deep', r.systemMessage || '',
+        'rerun with --deep (sdlc:code-reviewer-deep');
     // The dummy is a new file: its two lines plus one opaque count on each side
     // for the whole-file add (round 2, item 3).
     assertContains('message reports non-trivial line counts', r.systemMessage || '', '(3 non-trivial lines added, 1 removed)');
