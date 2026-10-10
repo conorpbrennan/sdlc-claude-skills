@@ -23,3 +23,10 @@
   - instructions/tdd-mandate-snippet.md
   - src/hooks/lib/tdd-order.js
   - src/hooks/test-tdd-mandate.js
+- 2026-10-06 `e44d5b7` — Keep case-folding off the old test-dir rule
+  - .claude-plugin/plugin.json
+  - README.md
+  - features/dotnet-test-dirs.md
+  - instructions/tdd-mandate-snippet.md
+  - src/hooks/lib/tdd-order.js
+  - src/hooks/test-tdd-mandate.js

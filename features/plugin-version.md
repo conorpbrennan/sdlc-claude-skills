@@ -17,4 +17,10 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-05 `0f2f368` — Version the plugin and require a bump on every commit
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - src/test-plugin-layout.js
+  - src/test-suite-isolation.js
+  - tools/plugin-version.js
+  - tools/test-plugin-version.js

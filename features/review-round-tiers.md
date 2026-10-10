@@ -20,4 +20,13 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-10 `9ee39f1` — Run review round 1 on Sonnet and every rerun on Opus
+  - .claude-plugin/plugin.json
+  - README.md
+  - agents/code-reviewer-deep.md
+  - instructions/claude-md-snippet.md
+  - skills/code-review-implementer/SKILL.md
+  - skills/code-review-pre-commit/SKILL.md
+  - skills/plan-spec/reference.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
