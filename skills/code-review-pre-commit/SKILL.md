@@ -36,11 +36,10 @@ name is historical.
 /sdlc:code-review-pre-commit src/file.py        # scope: one file's staged portion
 ```
 
-`--deep` selects `sdlc:code-reviewer-deep` (Opus). Use it for security-sensitive
-or parser-shaped changes (input validation, auth, secrets, shell or git
-command handling, gates that must fail closed), and when the rounds policy
-below calls for it. Everything else stays on `sdlc:code-reviewer` (Sonnet): it
-is the everyday gate.
+`--deep` selects `sdlc:code-reviewer-deep` (Opus). It is for the rerun after
+a FAIL, never for round 1: round 1 is always `sdlc:code-reviewer` (Sonnet),
+whatever the change, and the hook refuses a round-1 marker from the deep
+reviewer.
 
 <review-protocol>
 
@@ -72,11 +71,9 @@ hunk and nothing more, per its own definition.
 The block message states this policy; it is repeated here so a manual run
 follows it too.
 
-- Round 1 runs `sdlc:code-reviewer`.
-- A FAIL with a CRITICAL finding, or a correctness finding in a parser,
-  gate or shell hunk, reruns on `sdlc:code-reviewer-deep` after the fix.
-- A FAIL on §6 alone (scope, commented-out code, debug artefact, secret,
-  reformat churn) reruns on `sdlc:code-reviewer` after the fix.
+- Round 1 runs `sdlc:code-reviewer`, whatever the change. Do not pass
+  `--deep` on round 1; the hook refuses a `code-reviewer-deep:round1` marker.
+- Any FAIL reruns on `sdlc:code-reviewer-deep` after the fix.
 - After two FAILs, stop. Do not dispatch a third review. Show the open
   items and ask the user to choose: fix and rerun, or accept with the gap
   named in the commit message. On accept, the user writes the marker.
