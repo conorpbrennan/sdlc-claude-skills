@@ -7,12 +7,15 @@
 process.on('uncaughtException', (e) => {
     const reason = 'Pre-commit hook %s failed: ' + String((e && e.message) || e).split('\n')[0].slice(0, 200);
     try {
+        // The lib/hook-output.js deny shape, inline: no require has run yet.
+        const message = 'PRE_COMMIT_GATE: ' + reason.replace('%s', 'pre-commit-hygiene') +
+            '. The hook itself crashed, so the commit cannot be checked. Report this; the ' +
+            'hook source is in sdlc-claude-skills/src/hooks/pre-commit-hygiene.js.';
         console.log(JSON.stringify({
+            hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
             decision: 'block',
             reason: reason.replace('%s', 'pre-commit-hygiene'),
-            systemMessage: 'PRE_COMMIT_GATE: ' + reason.replace('%s', 'pre-commit-hygiene') +
-                '. The hook itself crashed, so the commit cannot be checked. Report this; the ' +
-                'hook source is in sdlc-claude-skills/src/hooks/pre-commit-hygiene.js.',
+            systemMessage: message,
         }));
     } catch (_) { /* nothing more we can do */ }
     process.exit(0);
@@ -24,6 +27,7 @@ const os = require('os');
 const { execSync, spawnSync } = require('child_process');
 const timingLog = require('./timing-log');
 const commitCommand = require('./lib/commit-command');
+const hookOutput = require('./lib/hook-output');
 const gitRead = require('./lib/git-read');
 
 const hookTimer = timingLog.timer();
@@ -83,7 +87,7 @@ function approve() {
 }
 
 function block(reason, systemMessage) {
-    console.log(JSON.stringify({ decision: 'block', reason, systemMessage }));
+    console.log(JSON.stringify(hookOutput.deny(reason, systemMessage)));
     process.exit(0);
 }
 
