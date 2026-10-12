@@ -25,7 +25,14 @@ run_test() {
     fi
     output=$(cd "$cwd" && printf '%s' "$payload" | node "$HOOK" 2>&1) || true
 
-    if echo "$output" | grep -q "\"decision\":\"$expected\"" || \
+    # A block must also be a PreToolUse deny: Claude sees permissionDecisionReason,
+    # not the legacy reason (lib/hook-output.js).
+    if [ "$expected" = "block" ] && ! echo "$output" | grep -q '"permissionDecision":"deny"'; then
+        echo "FAIL: $desc"
+        echo "  Expected: a PreToolUse deny"
+        echo "  Got: $output"
+        FAIL=$((FAIL + 1))
+    elif echo "$output" | grep -q "\"decision\":\"$expected\"" || \
        echo "$output" | grep -q "\"decision\": \"$expected\""; then
         echo "PASS: $desc"
         PASS=$((PASS + 1))

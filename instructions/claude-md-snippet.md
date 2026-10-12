@@ -15,7 +15,7 @@ a script, Makefile target, or package script: the gates guard ordinary
 command shapes, not deliberate evasion, and cannot see inside those. A
 commit must be `git commit` typed in its own command.
 
-When the hook does block, the `systemMessage` carries one of two shapes:
+When the hook does block, the block reason carries one of two shapes:
 
 - **Gap-patching** (thresholds failed, `coverage.xml` present): dispatch ONE
   sub-agent using the `<gap-patching-mode>` prompt in

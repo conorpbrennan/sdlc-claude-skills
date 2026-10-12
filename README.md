@@ -272,6 +272,12 @@ staged in an earlier session — the order check is skipped but a test must stil
 present, because that is decided from the index alone. An unverifiable order is not
 an excuse for a missing test.
 
+A change can also go in as two commits, test first. An implementation commit with
+no test passes when the commit just before it (HEAD, or HEAD~1 for `--amend`) is
+test-only and adds test code. Until 2026-10-12 the docs promised this and the gate
+blocked the second commit as `no_tests` every time. Committing the test first is
+also the way through a `code_first` block.
+
 It was written long before it ran. The opt-in was an allowlist at
 `~/.claude/tdd-order-repos.json` that nobody had created, and `loadTddOrderRepos`
 returned `[]` on any read failure, so the gate was dormant everywhere. Switching it
@@ -319,6 +325,13 @@ Every git read fails closed (`lib/git-read.js`). A `git diff --cached` that
 errors returns null, never an empty list, so a read failure blocks with
 "could not be read" rather than passing as "nothing staged". No lock or
 marker is written on such a block, so the retry re-reads the index.
+
+Every PreToolUse block goes out through `lib/hook-output.js` as a
+`permissionDecision: deny`. Claude sees `permissionDecisionReason` and nothing
+else: `systemMessage` goes to the user, and the legacy `reason` is dropped once
+the deny shape is present. So the deny reason carries the full instructions:
+the marker recipe, the rounds policy, a failing check's output. Until 2026-10-12
+those were in `systemMessage` only, and Claude never saw them.
 
 ### Marker protocol
 

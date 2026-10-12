@@ -273,6 +273,26 @@ function testDiffAddsTestCode(diffText) {
     return false;
 }
 
+// True when a commit's paths and test diff make it a test-only commit: at least
+// one test path, no implementation path (exempt and non-code paths are neither),
+// and a test diff that adds test code. The hook asks this of the commit before an
+// implementation-only one, so that splitting a change into two commits, test
+// first, passes instead of reading as `no_tests`.
+//
+// Args:
+//   paths: the commit's repo-relative paths.
+//   diffText: the commit's `-U0` diff of its test paths; anything not a string
+//     (a read that failed) is not a test-only commit.
+//   opts: optional { configPath } for exempt_paths, as in classifyFromEvents.
+// Returns:
+//   boolean.
+function isTestOnlyCommit(paths, diffText, opts) {
+    const cleaned = (paths || []).map(p => String(p || '').trim()).filter(Boolean);
+    if (!cleaned.some(isTestFile)) return false;
+    if (cleaned.some(p => !isTestFile(p) && !isExemptPath(p, opts))) return false;
+    return typeof diffText === 'string' && testDiffAddsTestCode(diffText);
+}
+
 function compareEvents(a, b) {
     // Prefer timestamp, fall back to encounter order.
     if (a.ts && b.ts && a.ts !== b.ts) return a.ts < b.ts ? -1 : 1;
@@ -443,4 +463,5 @@ module.exports = {
     COMMENT_RE,
     isNonCommentLine,
     testDiffAddsTestCode,
+    isTestOnlyCommit,
 };
