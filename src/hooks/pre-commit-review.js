@@ -21,7 +21,8 @@
 //                         not passed. The lock never approves. A lock for a
 //                         different diff is stale and removed.
 //   tdd mandate        -> on by default everywhere: block impl edited before
-//                         its test, or impl with no test in the diff. Order
+//                         its test, or impl with no test in the diff and no
+//                         test-only commit just before it. Order
 //                         comes from the session transcript; when it cannot
 //                         be known, a test must still be present. Runs before
 //                         every fast path, and only a `continue` verdict lets
@@ -48,12 +49,15 @@
 if (require.main === module) process.on('uncaughtException', (e) => {
     const reason = 'Pre-commit hook pre-commit-review failed: ' + String((e && e.message) || e).split('\n')[0].slice(0, 200);
     try {
+        // The lib/hook-output.js deny shape, inline: no require has run yet.
+        const message = 'PRE_COMMIT_GATE: ' + reason +
+            '. The hook itself crashed, so the commit cannot be checked. Report this; the ' +
+            'hook source is in sdlc-claude-skills/src/hooks/pre-commit-review.js.';
         console.log(JSON.stringify({
+            hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
             decision: 'block',
             reason,
-            systemMessage: 'PRE_COMMIT_GATE: ' + reason +
-                '. The hook itself crashed, so the commit cannot be checked. Report this; the ' +
-                'hook source is in sdlc-claude-skills/src/hooks/pre-commit-review.js.',
+            systemMessage: message,
         }));
     } catch (_) { /* nothing more we can do */ }
     process.exit(0);
@@ -67,6 +71,7 @@ const { execFileSync, spawnSync } = require('child_process');
 const timingLog = require('./timing-log');
 const tddOrder = require('./lib/tdd-order');
 const commitCommand = require('./lib/commit-command');
+const hookOutput = require('./lib/hook-output');
 const gitRead = require('./lib/git-read');
 const { cmd, agent, skill } = require('./lib/plugin-names');
 
@@ -606,13 +611,19 @@ function readStagedTestDiff(testPaths, isAmend, toplevel) {
             base = [empty.out.trim()];
         }
     }
+    return readTestDiff(['--cached', ...base], testPaths, cwd);
+}
+
+// `git diff -U0 <revs> -- <testPaths>`, with the flags readStagedTestDiff
+// describes. Returns { text, error }; text is null on any failure.
+function readTestDiff(revs, testPaths, cwd) {
     const env = { ...process.env };
     delete env.GIT_DIFF_OPTS;
     delete env.GIT_EXTERNAL_DIFF;
     try {
-        const text = execFileSync('git', ['-c', 'core.quotePath=false', '--literal-pathspecs', 'diff', '--cached',
+        const text = execFileSync('git', ['-c', 'core.quotePath=false', '--literal-pathspecs', 'diff', ...revs,
             '--no-color', '--text', '--no-ext-diff', '--no-textconv', '--no-renames',
-            '--src-prefix=a/', '--dst-prefix=b/', '-U0', ...base, '--', ...testPaths], {
+            '--src-prefix=a/', '--dst-prefix=b/', '-U0', '--', ...testPaths], {
             encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: DIFF_MAX_BUFFER_BYTES, cwd, env,
         });
         return { text, error: null };
@@ -623,6 +634,39 @@ function readStagedTestDiff(testPaths, isAmend, toplevel) {
             : (stderr || String((e && e.message) || e)).split('\n')[0].slice(0, 200);
         return { text: null, error };
     }
+}
+
+// Was the commit before the one being made a test-only commit that added test
+// code (tddOrder.isTestOnlyCommit)? That commit is HEAD, or HEAD~1 for an amend,
+// which rewrites HEAD. This lets a change split into two commits, test first,
+// pass: the implementation commit alone has no test path and reads as `no_tests`.
+// Only the commit directly before counts, so one test commit licenses one more.
+// A merge is never test-only. Any read that fails answers false, which leaves
+// the `no_tests` block standing.
+//
+// Args:
+//   isAmend: the command amends HEAD.
+//   toplevel: the repository's toplevel, where repo-relative paths resolve.
+// Returns:
+//   boolean.
+function priorCommitIsTestOnly(isAmend, toplevel) {
+    const cwd = toplevel || undefined;
+    const rev = gitRead.gitRead(['rev-list', '--parents', '-n', '1', isAmend ? 'HEAD~1' : 'HEAD', '--'], { cwd });
+    if (rev.out === null || !rev.out.trim()) return false;
+    const [commit, ...parents] = rev.out.trim().split(/\s+/);
+    if (parents.length > 1) return false;
+    let parent = parents[0];
+    if (!parent) {
+        const empty = gitRead.gitRead(['hash-object', '-t', 'tree', '/dev/null'], { cwd });
+        if (empty.out === null || !empty.out.trim()) return false;
+        parent = empty.out.trim();
+    }
+    const names = gitRead.gitRead(['diff', '--name-only', '-z', '--no-renames', parent, commit], { cwd });
+    if (names.out === null) return false;
+    const paths = gitRead.splitNul(names.out);
+    const testPaths = paths.filter(tddOrder.isTestFile);
+    if (testPaths.length === 0) return false;
+    return tddOrder.isTestOnlyCommit(paths, readTestDiff([parent, commit], testPaths, cwd).text);
 }
 
 function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
@@ -689,6 +733,10 @@ function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
             reason: 'test-diff-unreadable: ' + (testDiffError || 'unknown'),
         };
     }
+    // Two commits, test first: the test is in the commit before, not this one.
+    if (result.status === 'no_tests' && priorCommitIsTestOnly(isAmend, toplevel)) {
+        return { action: 'continue', reason: 'status:test-committed-first' };
+    }
     if (result.status === 'code_first' || result.status === 'no_tests') {
         return {
             action: 'block',
@@ -724,7 +772,7 @@ function main() {
     // the hook.end event for the timing log, then exit. Lock and marker
     // writes stay at the call sites, since each check decides differently.
     function block(via, reason, systemMessage) {
-        console.log(JSON.stringify({ decision: 'block', reason, systemMessage }));
+        console.log(JSON.stringify(hookOutput.deny(reason, systemMessage)));
         endHook('block', { via });
         process.exit(0);
     }
@@ -889,15 +937,16 @@ function main() {
             reason = 'TDD gate: no_tests commit blocked. Impl files were ' +
                 'touched but the test diff adds no non-comment line.';
             remedy = ' Add a paired test for the change before committing; an empty test file, ' +
-                'blank lines or comments do not count.';
+                'blank lines or comments do not count. A test committed on its own in the ' +
+                'commit just before also counts.';
         } else {
             const detail = (tddGate.firstTestPath && tddGate.firstImplPath)
                 ? ' Impl ' + sanitizePath(tddGate.firstImplPath) +
                   ' was edited before test ' + sanitizePath(tddGate.firstTestPath) + '.'
                 : '';
             reason = 'TDD gate: code_first commit blocked.' + detail;
-            remedy = ' Split the commit so the test edit goes in first, or amend ' +
-                'the test before the impl edit.';
+            remedy = ' Split the commit: stage and commit the test on its own first, then ' +
+                'the implementation as the next commit.';
         }
         if (!noVerdict) {
             writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'tdd-order: ' + tddGate.status);
@@ -1140,7 +1189,9 @@ function main() {
     let reason;
     if (markerFresh && markerBody === '') {
         reason = 'Review marker is empty. Run ' + REVIEW_CMD + ' --fresh and write the marker with the printf command below if the review passes.';
-    } else if (markerFresh && markerBody && markerBody.split('\n')[0] !== 'PASS') {
+    } else if (markerFresh && markerBody && !['PASS', 'BLOCK'].includes(markerBody.split('\n')[0])) {
+        // BLOCK is this hook's own repeat marker, not a review: reading it as one
+        // said a review had failed when none had run.
         reason = 'Last review did not pass the review gate (marker body: ' + markerBody.split('\n')[0] + '). Fix the failing items and rerun ' + REVIEW_CMD + ' --fresh.';
     } else if (markerFresh && markerBody && markerBody.split('\n').length < 3) {
         reason = 'Review marker has no hashes (a legacy one-line PASS no longer approves). Rerun the review and write the marker with the printf command below.';

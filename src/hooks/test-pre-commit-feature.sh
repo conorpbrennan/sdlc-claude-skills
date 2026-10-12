@@ -394,6 +394,7 @@ chmod +x "$SHIM18/git"
 out=$(cd "$REPO18" && printf '{"tool_input":{"command":"git commit -m msg"}}' \
     | PATH="$SHIM18:$PATH" node "$HOOK" 2>&1)
 assert_contains "stage failure -> block" "$out" '"decision":"block"'
+assert_contains "stage failure -> PreToolUse deny" "$out" '"permissionDecision":"deny"'
 assert_contains "stage failure names the record" "$out" "could not be staged"
 assert_contains "stage failure reports git's own error" \
     "$out" "simulated stage failure"

@@ -484,6 +484,37 @@ assert('a quoted header path still counts its test code', withDiff(['src/billing
     '--- "a/tests/test_\\"q\\".py"\n+++ "b/tests/test_\\"q\\".py"\n@@ -1,0 +2 @@\n+def test_q():\n'),
     'not_applicable');
 
+// ------------------------------------------- the test committed on its own ---
+// The snippet says a change may be split into two commits, test first. The first
+// passed as not_applicable; the second, implementation only, was blocked as
+// no_tests every time, because the classifier saw only the staged paths. The hook
+// now asks whether the commit before the one being made was a test-only commit
+// that added test code. isTestOnlyCommit answers that from its paths and diff.
+console.log('\nA test-only commit licenses the implementation commit after it:');
+const realTest = fileDiff('tests/test_app.py', ['def test_app():', '    assert app() == 2'], { isNew: true });
+assert('test only, adds test code',
+    tdd.isTestOnlyCommit(['tests/test_app.py'], realTest), true);
+assert('test plus non-code files (a feature record) still counts',
+    tdd.isTestOnlyCommit(['tests/test_app.py', 'features/app.md', 'README.md'], realTest), true);
+assert('test plus implementation is not a test-only commit',
+    tdd.isTestOnlyCommit(['tests/test_app.py', 'src/other.py'], realTest), false);
+assert('no test path is not a test-only commit',
+    tdd.isTestOnlyCommit(['README.md'], ''), false);
+assert('no paths at all is not a test-only commit', tdd.isTestOnlyCommit([], ''), false);
+assert('an empty test file does not count',
+    tdd.isTestOnlyCommit(['tests/test_app.py'], fileDiff('tests/test_app.py', [], { isNew: true })), false);
+assert('a comment-only test change does not count',
+    tdd.isTestOnlyCommit(['tests/test_app.py'], fileDiff('tests/test_app.py', ['# TODO: test app'])), false);
+assert('an unreadable diff does not count', tdd.isTestOnlyCommit(['tests/test_app.py'], null), false);
+{
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tdd-split-'));
+    const cfg = path.join(dir, 'tdd-mandate.json');
+    fs.writeFileSync(cfg, JSON.stringify({ exempt_paths: ['scripts/'] }));
+    assert('a configured exempt path is not implementation',
+        tdd.isTestOnlyCommit(['tests/test_app.py', 'scripts/gen.py'], realTest, { configPath: cfg }), true);
+    fs.rmSync(dir, { recursive: true, force: true });
+}
+
 console.log('\n=================');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

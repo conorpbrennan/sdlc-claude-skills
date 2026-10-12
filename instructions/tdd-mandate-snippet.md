@@ -16,7 +16,9 @@ An unverifiable order is not an excuse for a missing test.
 
 So the working order for any code change is: write the failing test, then the
 implementation, then stage both together. Splitting them across two commits also
-works, test commit first.
+works: commit the test alone first (it must add test code), then the
+implementation as the very next commit. That is also the way out of a
+`code_first` block.
 
 **What is exempt.** Anything the review gate would not call code. The rule is
 inverted rather than a second list: if a path is not in `SOURCE_EXTENSIONS`
