@@ -14,7 +14,14 @@
 process.on('uncaughtException', (e) => {
     const reason = 'Pre-commit hook enforce-co-author failed: ' +
         String((e && e.message) || e).split('\n')[0].slice(0, 200);
-    try { console.log(JSON.stringify({ decision: 'block', reason })); } catch (_) { /* nothing more */ }
+    // The lib/hook-output.js deny shape, inline: no require has run yet.
+    try {
+        console.log(JSON.stringify({
+            hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason },
+            decision: 'block',
+            reason,
+        }));
+    } catch (_) { /* nothing more */ }
     process.exit(0);
 });
 
@@ -22,6 +29,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { tokenize, parseGitSegment, inspectCommitArgs, findDirectoryChange } = require('./lib/commit-command');
+const hookOutput = require('./lib/hook-output');
 
 // A trailer is a line of its own, starting at the margin: a mention inside a
 // sentence is not one, and git reads an indented line as a continuation.
@@ -40,7 +48,7 @@ function approve() {
 }
 
 function block(reason) {
-    console.log(JSON.stringify({ decision: 'block', reason }));
+    console.log(JSON.stringify(hookOutput.deny(reason)));
     process.exit(0);
 }
 

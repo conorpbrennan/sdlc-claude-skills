@@ -1031,6 +1031,16 @@ try {
         r.systemMessage || '', 'node "' + path.join(__dirname, 'timing-log.js') + '" review.completed');
     assertFalse('block message does not assume ~/.claude/hooks',
         /(\$HOME|~)\/\.claude\/hooks/.test(r.systemMessage || ''));
+    // Claude sees permissionDecisionReason, not systemMessage (checked against the
+    // harness 2026-10-12). The recipe it must run has to be in what it sees.
+    {
+        const seen = (r.hookSpecificOutput || {}).permissionDecisionReason || '';
+        assert('the block is a PreToolUse deny', (r.hookSpecificOutput || {}).permissionDecision, 'deny');
+        assertContains('Claude sees the short reason', seen, 'Code review required before commit');
+        assertContains('Claude sees the review command', seen, '/sdlc:code-review-pre-commit');
+        assertContains('Claude sees the marker recipe', seen, "printf 'PASS\\n%s\\n%s\\n%s'");
+        assertContains('Claude sees the timing command', seen, 'review.completed');
+    }
 
     cleanLock();
     writeMarker('');
@@ -1043,6 +1053,20 @@ try {
     r = runHook('git commit -m x');
     assert('blocks on FAIL marker body', r.decision, 'block');
     assertContains('FAIL-body block cites FAIL in reason', r.reason || '', 'FAIL');
+
+    // The hook's own BLOCK marker is not a review. Nothing writes a non-PASS review
+    // marker, so reading BLOCK as "did not pass" told Claude a review had failed
+    // when none had run. A BLOCK for an older diff (no 30 s repeat) asks for review.
+    cleanLock();
+    writeMarker('BLOCK\n0000000000000000000000000000000000000000\ntdd-order: no_tests\nnone');
+    r = runHook('git commit -m x');
+    assert('blocks after an earlier BLOCK marker', r.decision, 'block');
+    assertFalse('an earlier BLOCK marker is not called a failed review', /did not pass/.test(r.reason || ''));
+    assertContains('an earlier BLOCK marker asks for the review', r.reason || '', 'Code review required before commit');
+    cleanLock();
+    writeMarker('BLOCK\n0000000000000000000000000000000000000000\nreview-required: Code review required before commit\nnone');
+    r = runHook('git commit -m x');
+    assertContains('its own review-required BLOCK asks for the review', r.reason || '', 'Code review required before commit');
 
     cleanLock();
     writeMarker('PASS');
@@ -1679,6 +1703,7 @@ try {
             g(['update-ref', 'HEAD', parent]);
         }
         // The amend's own staged change: the implementation only.
+        fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
         fs.writeFileSync(path.join(dir, 'src', 'app.py'), 'def app():\n    return 2\n', 'utf-8');
         g(['add', '--', 'src/app.py']);
         return dir;
@@ -1692,11 +1717,44 @@ try {
         ['amend of a non-root commit whose test is in HEAD: passes', [{ 'README.md': 'x\n' }, { ...APP, ...REAL_TEST }], false],
         ['amend of a root commit whose HEAD test is empty: no_tests', [{ ...APP, ...EMPTY_TEST }], true],
         // The parent already had the real test; the amended commit adds nothing to it.
-        ['amend whose test predates HEAD: no_tests', [{ ...REAL_TEST }, { ...APP, 'tests/test_app.py': REAL_TEST['tests/test_app.py'] + '\n' }], true],
+        // The parent also carries other code, so it is not a test-only commit, which
+        // would license the commit after it (the two-commit cases below).
+        ['amend whose test predates HEAD: no_tests',
+            [{ ...REAL_TEST, 'src/other.py': 'def other():\n    return 1\n' },
+                { ...APP, 'tests/test_app.py': REAL_TEST['tests/test_app.py'] + '\n' }], true],
     ]) {
         const dir = buildRepo(commits);
         try {
             r = runMandate({}, { ...AMEND, cwd: dir });
+            assert(name, tddBlocked(r), wantBlocked);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
+
+    // Two commits, test first. The snippet promises it works; the implementation
+    // commit was blocked as no_tests every time, because only its staged paths
+    // were read. The commit before the one being made -- HEAD, or HEAD~1 for an
+    // amend -- now licenses it when it was test-only and added test code.
+    console.log('\n[INT] An implementation commit after a test-only commit:');
+    const PLAIN = { command: 'git commit -m x' };
+    const OTHER_IMPL = { 'src/other.py': 'def other():\n    return 1\n' };
+    for (const [name, commits, cmdOpts, wantBlocked] of [
+        ['impl after a test-only HEAD: passes', [{ 'README.md': 'x\n' }, REAL_TEST], PLAIN, false],
+        ['impl after a test-only root commit: passes', [REAL_TEST], PLAIN, false],
+        ['impl after a test-only HEAD carrying a feature record: passes',
+            [{ 'README.md': 'x\n' }, { ...REAL_TEST, 'features/app.md': '# App\n' }], PLAIN, false],
+        ['impl after a HEAD whose test is empty: no_tests', [{ 'README.md': 'x\n' }, EMPTY_TEST], PLAIN, true],
+        ['impl after a HEAD with test and other impl: no_tests',
+            [{ 'README.md': 'x\n' }, { ...REAL_TEST, ...OTHER_IMPL }], PLAIN, true],
+        // Only the commit directly before counts: one test commit licenses one commit.
+        ['impl two commits after the test: no_tests', [REAL_TEST, { 'README.md': 'x\n' }], PLAIN, true],
+        ['impl with no earlier commit: no_tests', [], PLAIN, true],
+        ['amend of the impl commit after a test-only commit: passes', [REAL_TEST, APP], AMEND, false],
+    ]) {
+        const dir = buildRepo(commits);
+        try {
+            r = runMandate({}, { ...cmdOpts, cwd: dir });
             assert(name, tddBlocked(r), wantBlocked);
         } finally {
             fs.rmSync(dir, { recursive: true, force: true });

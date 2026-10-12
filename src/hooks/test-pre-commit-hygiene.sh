@@ -148,6 +148,19 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+# Claude sees permissionDecisionReason, not systemMessage: the failing check's
+# name and output must be in what it sees, or it cannot fix them.
+if echo "$OUT" | node -e 'const j = JSON.parse(require("fs").readFileSync(0, "utf-8"));
+    const h = j.hookSpecificOutput || {};
+    process.exit(h.permissionDecision === "deny" && /always-fail/.test(h.permissionDecisionReason || "") ? 0 : 1);'; then
+    echo "PASS: the deny reason Claude sees names the failing check"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: the deny reason Claude sees does not name the failing check"
+    echo "  Got: $OUT"
+    FAIL=$((FAIL + 1))
+fi
+
 # ---------------------------------------------------------------------------
 # Case 4: Marker fresh and hash matches -> approve without running checks
 # A check that would write a sentinel file is used; sentinel must NOT appear

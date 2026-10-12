@@ -3,6 +3,7 @@
 // Shares lock file with stop-review-trigger.js to prevent double-blocking
 const fs = require('fs');
 const reviewMarkers = require('./lib/review-markers');
+const hookOutput = require('./lib/hook-output');
 
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const LOCK_MAX_AGE_MS = 5 * 60 * 1000;
@@ -65,13 +66,10 @@ try {
     // Lock write failure is non-fatal
 }
 
-console.log(JSON.stringify({
-    decision: 'block',
-    reason: 'Post-commit code review pending',
-    // Name the real paths. The old text said `touch ~/.claude-last-review`, which
-    // created a file in $HOME that no gate reads -- the commit gate's marker is
-    // the per-repository one, so the remedy quietly did nothing.
-    systemMessage: 'POST_COMMIT_REVIEW: Run /code-review --fresh on: ' + pendingFiles +
+// Name the real paths. The old text said `touch ~/.claude-last-review`, which
+// created a file in $HOME that no gate reads -- the commit gate's marker is
+// the per-repository one, so the remedy quietly did nothing.
+console.log(JSON.stringify(hookOutput.deny('Post-commit code review pending',
+    'POST_COMMIT_REVIEW: Run /code-review --fresh on: ' + pendingFiles +
         '. After the review completes, run: rm -f ' + PENDING_FILE +
-        ' (this record is for this repository and worktree only).'
-}));
+        ' (this record is for this repository and worktree only).')));
