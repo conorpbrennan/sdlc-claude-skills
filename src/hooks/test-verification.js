@@ -277,6 +277,22 @@ assert('a rename reports both the new and the old path', afterMove.includes('mov
 assert('a rename does not leak the old path as a bogus entry', afterMove.every(p => !p.startsWith('R') || p.endsWith('.js')), true);
 assert('null outside any repository', verification.dirtyPaths(path.join(sb, 'nowhere-at-all')), null);
 
+// The verifier's agent file is the single source of the report format. Its one
+// fenced block that holds the `| # | Result | Evidence |` header is the example;
+// it is found by that header, and the file must hold exactly one such block, so
+// a second example cannot drift from the parser.
+console.log('\nThe verifier agent\'s example report:');
+const VERIFIER_AGENT = fs.readFileSync(path.join(__dirname, '..', '..', 'agents', 'verifier.md'), 'utf-8');
+const exampleBlocks = (VERIFIER_AGENT.match(/^```[^\n]*\n[\s\S]*?^```$/gm) || [])
+    .filter(b => /^\|\s*#\s*\|\s*Result\s*\|\s*Evidence\s*\|\s*$/m.test(b));
+assert('agents/verifier.md holds exactly one fenced block with the report table', exampleBlocks.length, 1);
+const exampleText = (exampleBlocks[0] || '').replace(/^```[^\n]*\n/, '').replace(/\n```$/, '');
+const exampleRows = (exampleText.match(/^\|\s*\d+\s*\|/gm) || []).length;
+assert('the example has at least one row', exampleRows > 0, true);
+const exampleParsed = verification.parseReport(exampleText, exampleRows);
+assert('the example parses to PASS', exampleParsed.verdict, 'PASS');
+assert('the example parses with no problems', exampleParsed.problems, []);
+
 fs.rmSync(sb, { recursive: true, force: true });
 
 console.log('\n==================');

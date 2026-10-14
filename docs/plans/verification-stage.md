@@ -867,6 +867,8 @@ Below the bar, folded in at one clause each: the header's revision and step coun
 
 **Step 5, 2026-10-14 (implementer, conservative option taken).** `isPrCreate` needed the wrapper-argument rule and the reserved-word list from `commit-command.js`. Taken: export `WRAPPER_WORDS` and `SHELL_RESERVED_WORDS` unchanged and import them, rather than export `commandWord` (it returns a word, not the index the scan needs). Two small patterns are restated in `pr-command.js`, not lists: the `NAME=value` assignment regex and the wrapper duration regex `^\d+[smhd]?$` (both are inline in `commit-command.js` and cannot be imported without changing it). Wrapper arguments are skipped only when they are flags or durations, the same shape `findDirectoryChange` accepts; `sudo -u root gh pr create` is a named ADVISORY gap, as are `bash -c`, `$GH`, `gh --repo x pr create` and a quoted `"gh"` word.
 
+**Step 4, 2026-10-14 (implementer, conservative option taken).** (a) `BARE_INVOCATION` in `src/test-plugin-layout.js` now lists `verify`, with a catch assertion; `/sdlc:verify` and paths stay passing. Inside the step's file set. (b) The step says state the reviewer's read-only constraints in full, but the reviewer's "do not run the repository's own hooks or install scripts" would forbid the verifier's job (hook stdin criteria). Taken: install and uninstall scripts stay forbidden; a hook or script a criterion names runs only against a scratch repository under `mktemp -d`. (c) The example block is found by its table header and the test asserts exactly one such fenced block exists. (d) `commands/verify.md` has a `description` frontmatter and a `$ARGUMENTS` heading, as `feature-new.md` does.
+
 ## 10. As built
 
 (Written last, from the tracker.)

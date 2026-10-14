@@ -2,8 +2,8 @@
 
 RUN: docs/plans/verification-stage.md, revision 3. Branch: verification-stage (cut from origin/main 98ff0f2). Started: 2026-10-14.
 BUDGET: steps 0-8 per §5. Spent: step 0, about 10 minutes.
-IN FLIGHT: step 5 review round 1 (sdlc:code-reviewer).
-TREE: staged step 5 with the step 3 tracker block, reports 3-review-1, 5-implementer-1, the plan (§9 step 5), the feature record's history line. Worktrees open: wt-5-r1.
+IN FLIGHT: step 4 review round 1 (sdlc:code-reviewer).
+TREE: staged step 4 with the step 5 tracker block, reports 5-review-1, 4-implementer-1, the plan (§9 step 4), the feature record's history line. Worktrees open: wt-4-r1.
 
 Owner confirmations, 2026-10-14: D8, D9, Q2 and D1 confirmed as written.
 Q2 widened by the owner at the step 2 break (19:57): "commit every step on PASS from now". From step 3 the orchestrator commits on a review PASS. A review FAIL still stops for the owner after two rounds. The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
@@ -57,9 +57,20 @@ STEP 3: PASS
   budget:  1 implementer pass + 1 review round, of 1 + 1-2
   advisory not actioned: on FAIL a non-ENOENT marker-delete error leaves a stale PASS marker beside a FAIL record (filesystem fault, outside the threat model).
 
-STEP 5: IN FLIGHT
+STEP 5: PASS
+  commit:  3dbf51d (committed on PASS)
+  reviews: code-reviewer, round 1, PASS, under 1 minute
   gate:    test-pr-command 35/0; test-commit-command 297/0 (baseline); GUARDS 34/0, 128/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
-  reports: reports/5-implementer-1.md
+  reports: reports/5-implementer-1.md, reports/5-review-1.md
+  stage:   pr-command.js, test-pr-command.js, commit-command.js (exports), plugin.json (1.0.9 -> 1.0.10), the plan (§9), this tracker, reports 3-review-1, 5-implementer-1, feature record history line
+  budget:  1 implementer pass + 1 review round, of 1 + 1
+
+STEP 4: IN FLIGHT
+  gate:    test-plugin-layout 130/0; test-verification 108/0; claude plugin validate . exit 0 (warnings: pre-existing, commands/feature-new.md has no frontmatter); GUARDS 34/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
+  reports: reports/4-implementer-1.md
+  files:   as declared, plus the plan's §9
+  disagreements: code-reviewer.md's "do not run the repository's own hooks" relaxed for the verifier to scratch repositories under mktemp -d; install/uninstall ban kept.
+  decisions:     `verify` added to BARE_INVOCATION; example found by its table header, exactly one; verify.md frontmatter shape (plan §9, step 4)
   files:   as declared (commit-command.js: module.exports line only), plus the plan's §9
   disagreements: none
   decisions:     exports WRAPPER_WORDS and SHELL_RESERVED_WORDS; NAME=value and duration regexes restated (not lists); five named ADVISORY gaps (plan §9, step 5)
