@@ -17,8 +17,10 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- agents/verifier.md
 - commands/feature-new.md
 - commands/feature.md
+- commands/verify.md
 - docs/plans/verification-stage-tracker.md
 - docs/plans/verification-stage.md
 - docs/plans/verification-stage/reports/0-review-1.md
@@ -29,7 +31,9 @@
 - docs/plans/verification-stage/reports/2-review-1.md
 - docs/plans/verification-stage/reports/3-implementer-1.md
 - docs/plans/verification-stage/reports/3-review-1.md
+- docs/plans/verification-stage/reports/4-implementer-1.md
 - docs/plans/verification-stage/reports/5-implementer-1.md
+- docs/plans/verification-stage/reports/5-review-1.md
 - src/hooks/lib/commit-command.js
 - src/hooks/lib/feature-file.js
 - src/hooks/lib/pr-command.js
@@ -41,8 +45,19 @@
 - src/hooks/test-record-verification.js
 - src/hooks/test-review-markers.js
 - src/hooks/test-verification.js
+- src/test-plugin-layout.js
 
 ## History
+
+- 2026-10-14 `3dbf51d` — Detect gh pr create in a Bash command
+  - .claude-plugin/plugin.json
+  - docs/plans/verification-stage-tracker.md
+  - docs/plans/verification-stage.md
+  - docs/plans/verification-stage/reports/3-review-1.md
+  - docs/plans/verification-stage/reports/5-implementer-1.md
+  - src/hooks/lib/commit-command.js
+  - src/hooks/lib/pr-command.js
+  - src/hooks/test-pr-command.js
 
 - 2026-10-14 `b22aced` — Record a verifier report into the feature record and the verify marker
   - .claude-plugin/plugin.json
