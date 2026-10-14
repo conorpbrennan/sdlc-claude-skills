@@ -12,6 +12,7 @@ __pycache__/
 
 # Installed config is seeded from the .example files; never commit the live copy
 .claude/hygiene-repos.json
+.claude/verify-repos.json
 .claude/review-policy.json
 
 # settings.json backups written by install.sh / uninstall.sh

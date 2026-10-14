@@ -75,6 +75,32 @@ console.log('\ncheckStaged:');
     fs.rmSync(s.dir, { recursive: true, force: true });
 }
 
+console.log('\nfeature-record-only commits:');
+{
+    // Stages `files` (path -> content) beside the unchanged manifest, then runs the CLI.
+    const runCheck = (files) => {
+        const s = scratch('1.0.0');
+        for (const [rel, text] of Object.entries(files)) {
+            fs.mkdirSync(path.dirname(path.join(s.dir, rel)), { recursive: true });
+            fs.writeFileSync(path.join(s.dir, rel), text);
+        }
+        if (Object.keys(files).length) s.git('add', ...Object.keys(files));
+        const r = spawnSync('node', [SCRIPT, 'check'], { cwd: s.dir, encoding: 'utf-8' });
+        fs.rmSync(s.dir, { recursive: true, force: true });
+        return r;
+    };
+    let r = runCheck({ 'features/x.md': '# x\n' });
+    ok('only a feature record staged, version unchanged: exit 0', r.status === 0, r);
+    r = runCheck({ 'features/x.md': '# x\n', 'a.js': '1;\n' });
+    ok('a feature record plus a source file, version unchanged: exit 1', r.status === 1, r);
+    r = runCheck({});
+    ok('nothing staged, version unchanged: exit 1', r.status === 1, r);
+    r = runCheck({ 'features/x.txt': 'x\n' });
+    ok('a non-markdown file under features/ is not exempt', r.status === 1, r);
+    r = runCheck({ 'features/x.md': '# x\n', 'docs/y.md': '# y\n' });
+    ok('a feature record plus a doc outside features/ is not exempt', r.status === 1, r);
+}
+
 console.log('\nbumpPatch:');
 {
     const s = scratch('1.2.9');

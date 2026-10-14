@@ -35,4 +35,17 @@ function deny(reason, message) {
     return out;
 }
 
-module.exports = { deny };
+// Builds the allow-with-a-notice output: the tool call proceeds and the user
+// sees the message. Claude does not see `systemMessage` (see the header), so a
+// notice is for the person at the keyboard. It carries no `decision` and no
+// `permissionDecision`, so nothing in it can block.
+//
+// Args:
+//   message: the text shown to the user.
+// Returns:
+//   the object to print with JSON.stringify: { systemMessage }.
+function notice(message) {
+    return { systemMessage: message };
+}
+
+module.exports = { deny, notice };

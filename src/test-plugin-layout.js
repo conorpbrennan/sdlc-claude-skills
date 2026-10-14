@@ -39,6 +39,7 @@ const EXPECTED_WIRING = {
                 ['command', 'pending-review-gate.js', 2000],
                 ['command', 'enforce-co-author.js', 1000],
                 ['command', 'pre-commit-hygiene.js', 200000],
+                ['command', 'pre-pr-verify.js', 2000],
             ],
         },
     ],
@@ -283,8 +284,8 @@ for (const dir of skillDirs) {
 console.log('\nAgents at the plugin layout paths:');
 const agentFiles = listDir(AGENTS_DIR)
     .filter(e => e.isFile() && e.name.endsWith('.md')).map(e => e.name).sort();
-assert('agents/ holds the two review agents', agentFiles,
-    ['code-reviewer-deep.md', 'code-reviewer.md']);
+assert('agents/ holds the two review agents and the verifier', agentFiles,
+    ['code-reviewer-deep.md', 'code-reviewer.md', 'verifier.md']);
 for (const file of agentFiles) {
     const name = frontmatterName(path.join(AGENTS_DIR, file));
     assert(`agents/${file} has a name`, typeof name === 'string' && name.length > 0, true);
@@ -469,7 +470,7 @@ assert('no hook literal outside plugin-names.js spells sdlc:', spellsPlugin, [])
 console.log('\nEvery name Claude is told to invoke is namespaced:');
 // A slash command or skill named bare: `/feature-new`, but not
 // `/sdlc:feature-new` or a path such as `skills/plan-spec/`.
-const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec)\b/m;
+const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec|verify)\b/m;
 const SUBAGENT_VALUE = /subagent_type:\s*"([^"]+)"/g;
 const SKILL_VALUE = /skill:\s*"([^"]+)"/g;
 const BUILT_IN_AGENTS = ['general-purpose'];
@@ -479,6 +480,7 @@ const ALLOWLISTED_PREFIXES = ['skills/plan-spec/fixtures/', 'src/hooks/test-'];
 const ALLOWLISTED_LINES = [['skills/plan-spec/check_citations.py', 'slash commands (`/feature-new`)']];
 
 assert('BARE_INVOCATION catches a bare command', BARE_INVOCATION.test('run `/feature-new x`'), true);
+assert('BARE_INVOCATION catches a bare /verify', BARE_INVOCATION.test('run `/verify`'), true);
 assert('BARE_INVOCATION passes a namespaced command', BARE_INVOCATION.test('run `/sdlc:feature-new x`'), false);
 assert('BARE_INVOCATION passes a path', BARE_INVOCATION.test('see skills/plan-spec/SKILL.md'), false);
 
