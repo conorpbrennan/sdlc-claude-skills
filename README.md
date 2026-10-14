@@ -28,11 +28,13 @@ Claude Code after installing.
 
 Plugin components are namespaced, so commands and skills are invoked with
 the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
-`/sdlc:review-timing`, `/sdlc:plan-spec` and `/sdlc:code-review-pre-commit`.
-The review agents are `sdlc:code-reviewer` and `sdlc:code-reviewer-deep`.
+`/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:plan-spec` and
+`/sdlc:code-review-pre-commit`. The review agents are `sdlc:code-reviewer` and
+`sdlc:code-reviewer-deep`; the verification agent is `sdlc:verifier`.
 
 Your own config stays in `~/.claude/`, and the plugin never writes to it:
-`tdd-mandate.json`, `review-policy.json` and `hygiene-repos.json`. Each is
+`tdd-mandate.json`, `review-policy.json`, `hygiene-repos.json` and
+`verify-repos.json`. Each is
 optional. See [Configuration](#configuration) and the `.claude/*.json.example`
 templates.
 
@@ -118,10 +120,17 @@ Check the manifests before pushing with `claude plugin validate .`.
     │                                        ends in TDD_GATE: PASS|FAIL
     ├─ FAIL ──►   /code-review-implementer ─► fix items, re-review
     └─ PASS ──►   write marker, hand back to the user to commit
+    │
+    ▼  (once per branch, after the last commit)
+  verify          /sdlc:verify ─► verifier sub-agent ─► VERIFY_GATE: PASS|FAIL
+    │                             recorder writes ## Verification + marker
+    ▼
+  pull request    gh pr create (gated per repo by pre-pr-verify.js)
 ```
 
 A completed review never commits on your behalf. It writes the marker; the
-commit stays your command.
+commit stays your command. Verification is the same: `/sdlc:verify` changes
+the feature record and writes its marker, and the commit and the PR stay yours.
 
 ---
 
@@ -137,9 +146,13 @@ into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
 | `.claude-plugin/plugin.json`, `marketplace.json` | read by `/plugin` | the `sdlc` plugin, served by the `sdlc-claude-skills` marketplace |
 | `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer` | the three workflow skills |
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
+| `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
 | `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new` | slash commands |
+| `commands/verify.md` | `/sdlc:verify` | dispatches the verifier, then runs the recorder |
 | `hooks/hooks.json` | registered while the plugin is enabled | wires `src/hooks/*.js` to events through `${CLAUDE_PLUGIN_ROOT}` |
 | `src/hooks/*.js`, `src/hooks/lib/*.js` (not `test-*`) | run in place from the cache | the gates and their shared helpers |
+| `src/hooks/pre-pr-verify.js` | PreToolUse on `Bash` | the `gh pr create` gate, per repo |
+| `src/hooks/record-verification.js` | run by `/sdlc:verify` | turns a verifier report into the `## Verification` section and the marker |
 | `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired |
 | `tools/*.py` | run in place, found by `/sdlc:review-timing` | timing analyser |
 | `.claude/*.json.example` | templates only | thresholds, repo opt-ins, TDD exemptions |
@@ -193,7 +206,8 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/commit-prep [--skip-tests]` | Runs ruff + pytest + coverage before you stage, so hygiene and review failures collapse into one round-trip. Never stages or commits. |
 | `/review-timing [--days N] [--repo PATH] [--json]` | Fast-path hit rate, per-gate breakdown, p50/p95 on coverage regen and diff-cover. |
 | `/feature <slug>` / `/feature list` | Recall prior context for a feature branch. |
-| `/feature-new <slug> "<requirement>"` | Seed or update `features/<slug>.md`. |
+| `/feature-new <slug> "<requirement>" ["<criterion>" ...]` | Seed or update `features/<slug>.md`, including its 2–5 `## Acceptance` criteria. |
+| `/verify` | Check the branch against its `## Acceptance` criteria: dispatches the `verifier` sub-agent, then records the result in the feature record and, on PASS, writes `.git/.claude-last-verify`. Needs a clean tree. Never commits or opens the PR. |
 
 ---
 
@@ -211,6 +225,7 @@ in order, cheapest rejection first.
 | `pending-review-gate.js` | PreToolUse | Dormant — nothing writes its marker today |
 | `enforce-co-author.js` | PreToolUse | Attribution trailer |
 | `pre-commit-hygiene.js` | PreToolUse | ruff + pytest in opted-in repos |
+| `pre-pr-verify.js` | PreToolUse | On `gh pr create` in a repo listed in `verify-repos.json`: a notice (advisory, the default) or a block (enforce) when the verification is missing or stale |
 | `post-commit-notify.js`, `claude-attribution-note.js`, `post-commit-feature.js` | PostToolUse | Notification, attribution note, sha-stamped feature history |
 
 `stop-review-trigger.js` and `post-commit-review.js` ship but are not wired.
@@ -383,6 +398,26 @@ run pytest-cov itself — it polls for the parallel hygiene hook to refresh
 it (120s default, `COV_WAIT_TIMEOUT_MS` to override) and blocks if no cov
 check is configured or the wait times out.
 
+### `~/.claude/verify-repos.json`
+Per-repo opt-in for `pre-pr-verify.js`, keyed by git toplevel:
+`{ "version": 1, "repos": { "<toplevel>": { "mode": "advisory" } } }`.
+Seeded from `.claude/verify-repos.json.example`. A repo not listed is not
+gated.
+
+- `advisory` (the default, and what a missing `mode` means): `gh pr create`
+  runs. When the verification is missing or stale, the user sees a notice.
+  Claude does not see it; Claude learns the rule from the session
+  instructions.
+- `enforce`: the same states block `gh pr create` until `/sdlc:verify`
+  passes. A config that cannot be read blocks too, because the mode cannot be
+  known.
+
+The marker is keyed on the code tree without `features/*.md`, plus the
+acceptance criteria. Committing the feature record that `/sdlc:verify` writes
+keeps it fresh. Any other committed change, or a criteria edit, makes it
+stale. Only `gh pr create` is gated: not `git push`, not `gh pr merge`, not a
+PR opened from the web.
+
 ### `~/.claude/review-policy.json`
 Per-repo fast-path tuning for `pre-commit-review.js`:
 `presentational_paths`, `trivial_line_threshold`, `diff_cover_threshold`,
@@ -516,6 +551,11 @@ cleanup runs, leaving `features/pre-commit-hook-test.md` and
 
 Every suite passes. Run them from a clone with history, not from this repo
 before its first commit — see the note above.
+
+`test-pre-commit-review.js` also reads this repository's HEAD. Its TDD-mandate
+fixtures run with no transcript, so the hook's split rule asks whether HEAD is
+a test-only commit. While HEAD holds test files and nothing else that is code,
+10 of its cases fail. They pass again once HEAD carries implementation.
 
 `test-stop-hook.sh` used to fail 3 of 14 and is now 14/14. The cause was the review
 markers living in `$HOME`: the suite backed up, deleted and restored the user's real

@@ -97,6 +97,14 @@ fs.writeFileSync(a.lock, new Date().toISOString());
 assert('a lock in the main worktree is invisible in the linked one', fs.existsSync(w.lock), false);
 fs.unlinkSync(a.lock);
 
+console.log('\nThe verification marker:');
+assert('verify sits inside the git dir', a.verify.startsWith(path.resolve(repoA, '.git') + path.sep), true);
+assert('verify keeps the documented name', path.basename(a.verify), '.claude-last-verify');
+assert('VERIFY_MARKER_NAME is exported', markers.VERIFY_MARKER_NAME, '.claude-last-verify');
+assert('verify differs between repos', a.verify === b.verify, false);
+assert('verify differs from the main worktree in a linked one', a.verify === w.verify, false);
+assert('linked verify path goes under worktrees/', w.verify.includes(path.join('worktrees', 'linked')), true);
+
 console.log('\nOutside a repository:');
 const notRepo = path.join(sb, 'plain-dir');
 fs.mkdirSync(notRepo);
@@ -107,6 +115,7 @@ assert('offers no marker path', n.marker, null);
 // caller is expected to no-op instead.
 assert('offers no lock path', n.lock, null);
 assert('offers no pending path', n.pending, null);
+assert('offers no verify path', n.verify, null);
 
 console.log('\nUnreadable git state is not mistaken for "no repo":');
 const broken = markers.markerPaths(path.join(sb, 'does-not-exist-at-all'));
@@ -116,6 +125,7 @@ const broken = markers.markerPaths(path.join(sb, 'does-not-exist-at-all'));
 assert('an unreadable git state is NOT notARepo', broken.notARepo, false);
 assert('and it records why', typeof broken.error, 'string');
 assert('no paths offered', broken.marker, null);
+assert('no verify path offered', broken.verify, null);
 
 fs.rmSync(sb, { recursive: true, force: true });
 
