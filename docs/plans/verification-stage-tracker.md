@@ -1,12 +1,13 @@
 # Tracker: verification stage
 
 RUN: docs/plans/verification-stage.md, revision 3. Branch: verification-stage (cut from origin/main 98ff0f2). Started: 2026-10-14.
-BUDGET: steps 0-8 per §5. Spent: step 0, about 10 minutes.
-IN FLIGHT: step 7 review round 1 (sdlc:code-reviewer).
-TREE: staged step 7 with the step 6 tracker block, reports 6-review-1, 7-implementer-1, the plan (§9 step 7), the feature record's history line. Worktrees open: wt-7-r1.
+BUDGET: steps 0-8 per §5. Spent: one implementer pass and one review round per step, 1-7; no step used a fix round or the deep rerun. Step 1 re-ran round 1 once, after its marker expired.
+IN FLIGHT: step 8. Docs commit (this block lands in it), then the dogfood verification, then the feature-record commit. Nothing touches the plan or this tracker after the docs commit (D4).
+TREE: staged step 8's docs with the step 7 tracker block, reports 7-review-1 and 8-review-1, the plan (§10), the feature record's history line. Worktrees open: none.
 
 Owner confirmations, 2026-10-14: D8, D9, Q2 and D1 confirmed as written.
-Q2 widened by the owner at the step 2 break (19:57): "commit every step on PASS from now". From step 3 the orchestrator commits on a review PASS. A review FAIL still stops for the owner after two rounds. The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
+The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
+Q2 widened by the owner at the step 2 break (19:57): "commit every step on PASS from now". From step 3 the orchestrator commits on a review PASS. A review FAIL still stops for the owner after two rounds.
 
 Baseline re-run on the branch before step 0: every suite matches §4's counts, 0 failed.
 
@@ -86,12 +87,22 @@ STEP 6: PASS
   budget:  1 implementer pass + 1 review round, of 1 + 2
   after commit: test-pre-commit-review.js back to 472/0 at 4d5dab1, confirming the HEAD-dependent diagnosis
 
-STEP 7: IN FLIGHT
+STEP 7: PASS
+  commit:  b7301b5 (committed on PASS)
+  reviews: code-reviewer, round 1, PASS, under 1 minute
   gate:    test-plugin-version 27/0; GUARDS 35/0, 133/0, 67/0, 24/0, 73/0 (re-run by the orchestrator, same)
-  reports: reports/7-implementer-1.md
+  reports: reports/7-implementer-1.md, reports/7-review-1.md
+  stage:   tools/plugin-version.js, tools/test-plugin-version.js, CLAUDE.md, plugin.json (1.0.12 -> 1.0.13), the plan (§9), this tracker, reports 6-review-1, 7-implementer-1, feature record history line
+  budget:  1 implementer pass + 1 review round, of 1 + 1
   files:   as declared (CLAUDE.md: three lines in the version bullet), plus the plan's §9
   disagreements: none
   decisions:     read error never exempts; empty staged list not exempt; path list read before the manifest; two extra over-exemption tests (plan §9, step 7)
+
+STEP 8: IN FLIGHT (docs commit carries this block; its sha is recorded in the feature record's `## Verification` heading)
+  docs:    README.md (namespaced names, config list, loop diagram verify stage, installed-where rows for agents/verifier.md, commands/verify.md, pre-pr-verify.js, record-verification.js, commands table, hooks table, verify-repos.json section, test-pre-commit-review HEAD note), CLAUDE.md (What ships here: three rows), instructions/feature-workflow-snippet.md (one bullet, 95 characters added; session context 8,442 of the 8,500 limit)
+  gate:    test-session-start-instructions 73/0; test-plugin-layout 133/0; GUARDS green
+  reviews: orchestrator by hand (§21.2), round 1, PASS; reports/8-review-1.md
+  then:    dogfood verification of HEAD by a general-purpose agent carrying agents/verifier.md's body (the installed 1.0.4 plugin has no sdlc:verifier); `node src/hooks/record-verification.js --report <file>`; the feature record committed alone with no version bump (step 7); the hook run on a PR-create payload with this repo listed in enforce mode in a scratch VERIFY_REPOS_CONFIG. Results are in features/verification-stage.md and the PR, not here: editing this file afterwards would stale the verification.
   files:   as declared, plus the plan's §9
   disagreements: baseline 0 failed does not hold while HEAD is 91c6468; cause corrected by the orchestrator in plan §9 (g)
   decisions:     six, (a)-(f), recorded in plan §9 (step 6)

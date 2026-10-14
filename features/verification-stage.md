@@ -63,6 +63,16 @@
 
 ## History
 
+- 2026-10-14 `b7301b5` — Let a features-only commit pass the plugin-version check
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - docs/plans/verification-stage-tracker.md
+  - docs/plans/verification-stage.md
+  - docs/plans/verification-stage/reports/6-review-1.md
+  - docs/plans/verification-stage/reports/7-implementer-1.md
+  - tools/plugin-version.js
+  - tools/test-plugin-version.js
+
 - 2026-10-14 `4d5dab1` — Check verification before gh pr create, advisory by default
   - .claude-plugin/plugin.json
   - .claude/verify-repos.json.example
