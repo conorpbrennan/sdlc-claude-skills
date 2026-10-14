@@ -829,4 +829,4 @@ function blockMessage(reason) {
         'prose from a command: write that file with a file tool instead of the shell.';
 }
 
-module.exports = { classifyCommitCommand, indexUnreliableReason, directoryChangeReason, blockMessage, splitSegments, tokenize, parseGitSegment, inspectCommitArgs, expandCommitLongOption, findDirectoryChange };
+module.exports = { classifyCommitCommand, indexUnreliableReason, directoryChangeReason, blockMessage, splitSegments, tokenize, parseGitSegment, inspectCommitArgs, expandCommitLongOption, findDirectoryChange, WRAPPER_WORDS, SHELL_RESERVED_WORDS };

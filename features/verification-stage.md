@@ -28,16 +28,30 @@
 - docs/plans/verification-stage/reports/2-implementer-1.md
 - docs/plans/verification-stage/reports/2-review-1.md
 - docs/plans/verification-stage/reports/3-implementer-1.md
+- docs/plans/verification-stage/reports/3-review-1.md
+- docs/plans/verification-stage/reports/5-implementer-1.md
+- src/hooks/lib/commit-command.js
 - src/hooks/lib/feature-file.js
+- src/hooks/lib/pr-command.js
 - src/hooks/lib/review-markers.js
 - src/hooks/lib/verification.js
 - src/hooks/record-verification.js
 - src/hooks/test-feature-file.js
+- src/hooks/test-pr-command.js
 - src/hooks/test-record-verification.js
 - src/hooks/test-review-markers.js
 - src/hooks/test-verification.js
 
 ## History
+
+- 2026-10-14 `b22aced` — Record a verifier report into the feature record and the verify marker
+  - .claude-plugin/plugin.json
+  - docs/plans/verification-stage-tracker.md
+  - docs/plans/verification-stage.md
+  - docs/plans/verification-stage/reports/2-review-1.md
+  - docs/plans/verification-stage/reports/3-implementer-1.md
+  - src/hooks/record-verification.js
+  - src/hooks/test-record-verification.js
 
 - 2026-10-14 `98b7973` — Own the verification marker, hashes, report parsing and section rendering in one module
   - .claude-plugin/plugin.json
