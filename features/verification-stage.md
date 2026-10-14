@@ -26,14 +26,30 @@
 - docs/plans/verification-stage/reports/1-review-1.md
 - docs/plans/verification-stage/reports/1-review-1b.md
 - docs/plans/verification-stage/reports/2-implementer-1.md
+- docs/plans/verification-stage/reports/2-review-1.md
+- docs/plans/verification-stage/reports/3-implementer-1.md
 - src/hooks/lib/feature-file.js
 - src/hooks/lib/review-markers.js
 - src/hooks/lib/verification.js
+- src/hooks/record-verification.js
 - src/hooks/test-feature-file.js
+- src/hooks/test-record-verification.js
 - src/hooks/test-review-markers.js
 - src/hooks/test-verification.js
 
 ## History
+
+- 2026-10-14 `98b7973` — Own the verification marker, hashes, report parsing and section rendering in one module
+  - .claude-plugin/plugin.json
+  - docs/plans/verification-stage-tracker.md
+  - docs/plans/verification-stage.md
+  - docs/plans/verification-stage/reports/1-review-1.md
+  - docs/plans/verification-stage/reports/1-review-1b.md
+  - docs/plans/verification-stage/reports/2-implementer-1.md
+  - src/hooks/lib/review-markers.js
+  - src/hooks/lib/verification.js
+  - src/hooks/test-review-markers.js
+  - src/hooks/test-verification.js
 
 - 2026-10-14 `e3cda69` — Parse the feature record's Acceptance section and replace its Verification section
   - .claude-plugin/plugin.json
