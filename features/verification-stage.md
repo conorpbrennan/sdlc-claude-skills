@@ -16,7 +16,15 @@
 
 ## Files involved
 
-<!-- populated on commit -->
+- .claude-plugin/plugin.json
+- commands/feature-new.md
+- commands/feature.md
+- docs/plans/verification-stage-tracker.md
+- docs/plans/verification-stage.md
+- docs/plans/verification-stage/reports/0-review-1.md
+- docs/plans/verification-stage/reports/1-implementer-1.md
+- src/hooks/lib/feature-file.js
+- src/hooks/test-feature-file.js
 
 ## History
 

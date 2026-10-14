@@ -21,6 +21,26 @@ const { SOURCE_EXTENSIONS, EXCLUDE_PATTERNS } = sourceFiles;
 
 const PLACEHOLDER = '<!-- populated on commit -->';
 
+const ACCEPTANCE_HEADING = '## Acceptance';
+const VERIFICATION_HEADING = '## Verification';
+const CRITERION_LINE = /^\d+\.\s+(.+)$/;
+
+// Offsets of the section whose heading line starts with `heading`: `start` is the
+// heading's first character, `end` the first character of the next line that starts
+// with `## ` (a `### ` line does not), or the end of the content. Null when absent.
+function sectionBounds(content, heading) {
+    const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const open = new RegExp('^' + escaped, 'm').exec(content);
+    if (!open) return null;
+    const afterHeading = content.indexOf('\n', open.index);
+    if (afterHeading === -1) return { start: open.index, end: content.length };
+    const next = /^## /m.exec(content.slice(afterHeading + 1));
+    return {
+        start: open.index,
+        end: next ? afterHeading + 1 + next.index : content.length,
+    };
+}
+
 // A branch is "feature work" if it is not a trunk branch, not a release
 // branch, and not one of Claude Code's generated worktree branches. Worktree
 // branches are exempt because they are machine-named and short-lived — gating
@@ -142,7 +162,34 @@ function prependHistory(content, entry) {
     return content.replace(/\s*$/, '\n\n## History\n\n' + entry + '\n');
 }
 
+// The acceptance criteria: each `N. text` line under "## Acceptance", up to the next
+// `## ` heading, trimmed, in file order. Not renumbered, because the text order is
+// what the verification hash covers. [] when the heading or any numbered line is absent.
+function parseAcceptance(content) {
+    const bounds = sectionBounds(content, ACCEPTANCE_HEADING);
+    if (!bounds) return [];
+    const body = content.slice(bounds.start, bounds.end).split('\n').slice(1);
+    const criteria = [];
+    for (const line of body) {
+        const m = CRITERION_LINE.exec(line.trim());
+        if (m) criteria.push(m[1].trim());
+    }
+    return criteria;
+}
+
+// Replace the "## Verification" block (heading line to the next `## ` heading or end
+// of file) with `section`, which starts "## Verification" and ends with a newline.
+// With no such block, append it after one blank line. Every other section stays
+// byte-identical, "## History" included.
+function replaceVerification(content, section) {
+    const bounds = sectionBounds(content, VERIFICATION_HEADING);
+    if (!bounds) return content.replace(/\s*$/, '') + '\n\n' + section;
+    const tail = content.slice(bounds.end);
+    return content.slice(0, bounds.start) + section + (tail ? '\n' + tail : '');
+}
+
 module.exports = {
+    ACCEPTANCE_HEADING,
     BLOCKLIST_BRANCHES,
     SOURCE_EXTENSIONS,
     EXCLUDE_PATTERNS,
@@ -162,4 +209,6 @@ module.exports = {
     setLastUpdated,
     mergeFilesInvolved,
     prependHistory,
+    parseAcceptance,
+    replaceVerification,
 };

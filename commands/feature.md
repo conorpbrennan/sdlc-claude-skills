@@ -33,6 +33,8 @@ seed those with `/sdlc:feature-new <slug> "<requirement>"`.
    - Requirement
    - Started / Last updated
    - Branch
+   - Acceptance criteria, numbered, when the record has any
+   - First line of `## Verification`, when the record has that section
    - Files involved
    - Most recent 5 history entries (the file may contain many — truncate)
 3. If the matching file's `**Requirement**:` line starts with `_TBD`:
