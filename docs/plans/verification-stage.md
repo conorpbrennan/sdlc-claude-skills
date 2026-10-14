@@ -847,6 +847,15 @@ Below the bar, folded in at one clause each: the header's revision and step coun
 - `replaceVerification` writes `section` then one blank line before the next heading, or `section` alone at end of file. Appending trims trailing whitespace first, then adds one blank line.
 - A "later" answer to `/sdlc:feature-new` leaves an existing `## Acceptance` section alone, so real criteria are never replaced by the placeholder.
 
+**Step 2, 2026-10-14 (implementer, conservative option taken).**
+
+- `codeTreeHash` returns null when no non-feature entry remains after the filter (a repo of only `features/*.md`), as well as on a read error or no HEAD. A constant hash of nothing is never a tree.
+- `dirtyPaths` runs `status --porcelain -z --untracked-files=all`, so a new `features/` directory lists its files and is filtered; a rename or copy contributes both its new and old path.
+- `parseReport` reads a PASS row with blank evidence as UNVERIFIED and adds one problem for it, not two. A result word that is not exactly `PASS`, `FAIL` or `UNVERIFIED` (case-sensitive) is read as UNVERIFIED with a problem. The trailer is valid only as the last non-blank line; the report's own FAIL trailer adds a problem.
+- `renderSection` collapses a newline in a cell to a space, uses the first row for a repeated number, and renders a PASS row with blank evidence as UNVERIFIED even if a caller passes one.
+- `readMarker` returns null for a body missing its tree or acceptance line, not only for a non-PASS first line.
+- `verification.js` requires `feature-file` as `require(path.join(__dirname, 'feature-file'))`, because `src/test-plugin-layout.js` reads the literal `./feature-file` as a bare `/feature` command.
+
 ## 10. As built
 
 (Written last, from the tracker.)
