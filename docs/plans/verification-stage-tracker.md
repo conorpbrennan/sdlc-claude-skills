@@ -2,8 +2,8 @@
 
 RUN: docs/plans/verification-stage.md, revision 3. Branch: verification-stage (cut from origin/main 98ff0f2). Started: 2026-10-14.
 BUDGET: steps 0-8 per §5. Spent: step 0, about 10 minutes.
-IN FLIGHT: step 6 review round 1 (sdlc:code-reviewer).
-TREE: staged step 6 with the step 4 tracker block, reports 4-review-1, 6-implementer-1, the plan (§9 step 6 with the orchestrator's correction), the feature record's history line. Worktrees open: wt-6-r1.
+IN FLIGHT: step 7 review round 1 (sdlc:code-reviewer).
+TREE: staged step 7 with the step 6 tracker block, reports 6-review-1, 7-implementer-1, the plan (§9 step 7), the feature record's history line. Worktrees open: wt-7-r1.
 
 Owner confirmations, 2026-10-14: D8, D9, Q2 and D1 confirmed as written.
 Q2 widened by the owner at the step 2 break (19:57): "commit every step on PASS from now". From step 3 the orchestrator commits on a review PASS. A review FAIL still stops for the owner after two rounds. The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
@@ -77,9 +77,21 @@ STEP 4: PASS
   disagreements: code-reviewer.md's "do not run the repository's own hooks" relaxed for the verifier to scratch repositories under mktemp -d; install/uninstall ban kept.
   decisions:     `verify` added to BARE_INVOCATION; example found by its table header, exactly one; verify.md frontmatter shape (plan §9, step 4)
 
-STEP 6: IN FLIGHT
+STEP 6: PASS
+  commit:  4d5dab1 (committed on PASS)
+  reviews: code-reviewer, round 1, PASS, under 1 minute; claimed red not run by the reviewer, confirmed by the orchestrator in the review worktree before the marker
   gate:    test-pre-pr-verify 58/0; test-hook-output 24/0; test-plugin-layout 133/0; claude plugin validate . exit 0; full baseline: 30 of 31 suites 0 failed, test-pre-commit-review 462/10 (HEAD-dependent, see run notes; same at HEAD without step 6); GUARDS green (re-run by the orchestrator, same)
-  reports: reports/6-implementer-1.md
+  reports: reports/6-implementer-1.md, reports/6-review-1.md
+  stage:   pre-pr-verify.js, test-pre-pr-verify.js, hook-output.js, test-hook-output.js, test-plugin-layout.js, hooks/hooks.json, .claude/verify-repos.json.example, .gitignore, plugin.json (1.0.11 -> 1.0.12), the plan (§9), this tracker, reports 4-review-1, 6-implementer-1, feature record history line
+  budget:  1 implementer pass + 1 review round, of 1 + 2
+  after commit: test-pre-commit-review.js back to 472/0 at 4d5dab1, confirming the HEAD-dependent diagnosis
+
+STEP 7: IN FLIGHT
+  gate:    test-plugin-version 27/0; GUARDS 35/0, 133/0, 67/0, 24/0, 73/0 (re-run by the orchestrator, same)
+  reports: reports/7-implementer-1.md
+  files:   as declared (CLAUDE.md: three lines in the version bullet), plus the plan's §9
+  disagreements: none
+  decisions:     read error never exempts; empty staged list not exempt; path list read before the manifest; two extra over-exemption tests (plan §9, step 7)
   files:   as declared, plus the plan's §9
   disagreements: baseline 0 failed does not hold while HEAD is 91c6468; cause corrected by the orchestrator in plan §9 (g)
   decisions:     six, (a)-(f), recorded in plan §9 (step 6)

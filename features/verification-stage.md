@@ -19,6 +19,7 @@
 - .claude-plugin/plugin.json
 - .claude/verify-repos.json.example
 - .gitignore
+- CLAUDE.md
 - agents/verifier.md
 - commands/feature-new.md
 - commands/feature.md
@@ -38,6 +39,8 @@
 - docs/plans/verification-stage/reports/5-implementer-1.md
 - docs/plans/verification-stage/reports/5-review-1.md
 - docs/plans/verification-stage/reports/6-implementer-1.md
+- docs/plans/verification-stage/reports/6-review-1.md
+- docs/plans/verification-stage/reports/7-implementer-1.md
 - hooks/hooks.json
 - src/hooks/lib/commit-command.js
 - src/hooks/lib/feature-file.js
@@ -55,8 +58,25 @@
 - src/hooks/test-review-markers.js
 - src/hooks/test-verification.js
 - src/test-plugin-layout.js
+- tools/plugin-version.js
+- tools/test-plugin-version.js
 
 ## History
+
+- 2026-10-14 `4d5dab1` — Check verification before gh pr create, advisory by default
+  - .claude-plugin/plugin.json
+  - .claude/verify-repos.json.example
+  - .gitignore
+  - docs/plans/verification-stage-tracker.md
+  - docs/plans/verification-stage.md
+  - docs/plans/verification-stage/reports/4-review-1.md
+  - docs/plans/verification-stage/reports/6-implementer-1.md
+  - hooks/hooks.json
+  - src/hooks/lib/hook-output.js
+  - src/hooks/pre-pr-verify.js
+  - src/hooks/test-hook-output.js
+  - src/hooks/test-pre-pr-verify.js
+  - src/test-plugin-layout.js
 
 - 2026-10-14 `91c6468` — Add the verifier agent and the /sdlc:verify command
   - .claude-plugin/plugin.json

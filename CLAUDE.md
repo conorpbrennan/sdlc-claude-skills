@@ -32,6 +32,9 @@ edit made there is lost on the next update, and it never reaches the repo.
   whose staged version is not above HEAD's; it runs from this repo's entry in
   `~/.claude/hygiene-repos.json`. Two branches that each bump will conflict
   on that line at merge; keep the higher number and bump once more.
+  A commit that carries only `features/*.md` records is exempt: it ships no
+  plugin content, and the verification marker depends on it leaving the
+  version alone.
 - `./uninstall.sh` removes a pre-plugin deployment from `~/.claude/` (the
   one-time migration); `--dry-run` shows what it would do. It reads its
   legacy wiring from `legacy/hooks-config.json`.
