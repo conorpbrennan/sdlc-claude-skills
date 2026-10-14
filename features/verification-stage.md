@@ -140,3 +140,15 @@
   - docs/plans/verification-stage/reports/1-implementer-1.md
   - src/hooks/lib/feature-file.js
   - src/hooks/test-feature-file.js
+
+## Verification — 2026-10-14 @ 2710d9b
+
+| # | Criterion | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | In a scratch repo listed in verify-repos.json with mode enforce, `gh pr create` with no verification marker is denied, and the deny reason names /sdlc:verify; with mode advisory the same command is allowed and a systemMessage names /sdlc:verify. | PASS | Hook run with cwd in a scratch repo and no marker. Enforce printed `permissionDecision":"deny"` with reason `...No PASS verification marker. ... Fix: run /sdlc:verify.` Advisory printed only `{"systemMessage":"PRE_PR_VERIFY: verification is missing. ... Fix: run /sdlc:verify. The PR is allowed anyway (advisory mode)."}`, with no deny. |
+| 2 | A verifier report whose trailer is VERIFY_GATE: PASS but which has an UNVERIFIED or FAIL row is recorded as FAIL, exits 1, and leaves no marker. | PASS | Reports with `VERIFY_GATE: PASS` and a FAIL row, then an UNVERIFIED row, fed to `record-verification.js --report`. Each gave `exit=1`. Output ended `**Verdict**: FAIL` / `VERIFY_GATE: FAIL`. `.git/.claude-last-verify` did not exist after either run. |
+| 3 | After a recorded PASS, committing only the feature record keeps the hook silent; committing a change to any other tracked file makes the hook report the verification as stale. | PASS | An all-PASS report gave `exit=0` and the marker existed. After committing only `features/feat-x.md` (enforce mode) the hook printed `{"decision":"approve"}`. After committing a change to `code.js` it printed a deny with `verification is stale. Changed since the last verification: the code tree.` |
+| 4 | In a repo not listed in verify-repos.json, the hook's whole output for `gh pr create` is `{"decision":"approve"}`, with no systemMessage and no permissionDecision, and it spawns no git process. | PASS | Unlisted scratch repo, enforce config for another repo, `git` shim first on PATH. The hook printed exactly `{"decision":"approve"}`. The sentinel file the shim creates did not exist. |
+| 5 | The `## Acceptance` block written by /sdlc:feature-new's template is read back by parseAcceptance as the same criteria, in order. | PASS | I extracted the `## Acceptance` block from the `commands/feature-new.md` template. `parseAcceptance` returned `["<criterion>","<criterion>"]`. With the two placeholders filled in, it returned `["Alpha works.","Beta works."]`. |
+
+**Verdict**: PASS
