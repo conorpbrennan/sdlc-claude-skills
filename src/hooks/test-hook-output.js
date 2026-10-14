@@ -66,6 +66,14 @@ console.log('\n[UNIT] deny() with no message:');
     assert('no systemMessage key', Object.prototype.hasOwnProperty.call(out, 'systemMessage'), false);
 }
 
+console.log('\n[UNIT] notice() is allow-with-a-notice: a systemMessage and no decision:');
+{
+    const out = hookOutput.notice('x');
+    assert('exactly a systemMessage', out, { systemMessage: 'x' });
+    assert('no decision key', Object.prototype.hasOwnProperty.call(out, 'decision'), false);
+    assert('no hookSpecificOutput key', Object.prototype.hasOwnProperty.call(out, 'hookSpecificOutput'), false);
+}
+
 // Guard: a wired PreToolUse hook that builds the legacy block object by hand
 // sends Claude the short reason only, which is the bug this file exists for.
 // The crash handlers are registered before any require, so they cannot use the

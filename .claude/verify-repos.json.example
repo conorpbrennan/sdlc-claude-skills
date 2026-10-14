@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "_comment": "Per-repo opt-in for pre-pr-verify.js, which checks verification before gh pr create. Install to ~/.claude/verify-repos.json. Keys are git toplevel paths with forward slashes, e.g. /home/you/dev/your-repo. A repo not listed is not gated. mode is advisory (the PR is allowed and the user sees a notice) or enforce (the PR is blocked until verification is fresh). A missing mode means advisory. Set \"mode\": \"enforce\" to block.",
+  "repos": {
+    "/home/you/dev/your-repo": { "mode": "advisory" }
+  }
+}
