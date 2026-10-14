@@ -875,4 +875,34 @@ Below the bar, folded in at one clause each: the header's revision and step coun
 
 ## 10. As built
 
-(Written last, from the tracker.)
+Written from the tracker, 2026-10-14, before step 8's dogfood run.
+
+| Step | Commit | Review | Notes |
+|---|---|---|---|
+| 0 | 1778c08 | by hand, PASS | criteria frozen; record written by hand (`/sdlc:feature-new` not invocable in-session) |
+| 1 | e3cda69 | code-reviewer r1 PASS (re-run once) | marker expired waiting for the owner (10-minute TTL); round 1 re-ran on the same diff |
+| 2 | 98b7973 | code-reviewer r1 PASS | six mutations each turned the suite red |
+| 3 | b22aced | code-reviewer r1 PASS | |
+| 5 | 3dbf51d | code-reviewer r1 PASS | overlapped with step 3's review |
+| 4 | 91c6468 | code-reviewer r1 PASS | |
+| 6 | 4d5dab1 | code-reviewer r1 PASS | red confirmed by the orchestrator (reviewer did not run it) |
+| 7 | b7301b5 | code-reviewer r1 PASS | |
+| 8 | docs commit, then the feature-record commit | by hand | dogfood result in `features/verification-stage.md` |
+
+No step needed a fix round or the deep rerun. Version 1.0.5 -> 1.0.14 (one bump per commit; the step 8 feature-record commit carries none, per D8).
+
+**Deviations from the plan as written.**
+
+- Q2 widened at the step 2 break: the owner authorised committing on every PASS.
+- Step 4 relaxed `agents/code-reviewer.md`'s "do not run the repository's own hooks" for the verifier: a named hook or script may run only against a scratch repository under `mktemp -d`.
+- Step 4 added `verify` to `BARE_INVOCATION` in `src/test-plugin-layout.js`.
+- Step 8's snippet line is shorter than the plan's example (it drops the `## Acceptance` clause) to keep headroom.
+
+**Gaps found during the run, not fixed here.**
+
+- `src/test-plugin-layout.js` `BARE_INVOCATION` reads the literal `./feature-file` as a bare `/feature` command. `verification.js` uses `path.join(__dirname, 'feature-file')`.
+- `test-pre-commit-review.js` depends on this repository's HEAD: while HEAD is a test-only commit by `isTestOnlyCommit`, 10 cases fail (seen at 91c6468, gone at 4d5dab1). Its fixtures should get a scratch HEAD. Step 4's gate did not run that suite.
+- The installed plugin (1.0.4) shows Claude only "Code review required before commit", not the marker recipe; the orchestrator read it by running the installed hook directly. Fixed upstream in PR #15; reaches users on the next `/plugin update`.
+- A broken `verify-repos.json` blocks `gh pr create` in every repo, listed or not (config error precedes the D9 match). Per spec; worth a note when editing that file.
+- On a FAIL, a non-ENOENT error deleting the marker leaves an old PASS marker beside a FAIL record (filesystem fault).
+- The verifier's "PASS needs a quoted command" rule is held by its prompt; `parseReport` checks only that evidence is non-empty.

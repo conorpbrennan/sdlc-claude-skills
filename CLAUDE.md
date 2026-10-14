@@ -49,7 +49,10 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `code-review-pre-commit` skill | `skills/code-review-pre-commit/SKILL.md` |
 | `code-review-implementer` skill | `skills/code-review-implementer/SKILL.md` |
 | `code-reviewer` / `code-reviewer-deep` agents | `agents/` |
+| `verifier` agent (read-only, outside-in) | `agents/verifier.md` |
 | `/commit-prep`, `/review-timing`, `/feature`, `/feature-new` | `commands/` |
+| `/verify` and its recorder | `commands/verify.md`, `src/hooks/record-verification.js` |
+| `gh pr create` gate (advisory by default) | `src/hooks/pre-pr-verify.js` |
 | Pre/post-commit hooks and their libs | `src/hooks/` |
 | Plugin manifests and hook wiring | `.claude-plugin/`, `hooks/hooks.json` |
 | Legacy-install removal (`uninstall.sh`) | `src/unmerge-*.js`, `src/lib/`, `legacy/` |
