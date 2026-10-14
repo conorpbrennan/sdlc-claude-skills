@@ -856,6 +856,15 @@ Below the bar, folded in at one clause each: the header's revision and step coun
 - `readMarker` returns null for a body missing its tree or acceptance line, not only for a non-PASS first line.
 - `verification.js` requires `feature-file` as `require(path.join(__dirname, 'feature-file'))`, because `src/test-plugin-layout.js` reads the literal `./feature-file` as a bare `/feature` command.
 
+**Step 3, 2026-10-14 (implementer, conservative option taken).**
+
+- The record path is `features/<branch>.md` under the repo top level (`locateRepo().toplevel`), whatever directory the CLI is run from. A branch that fails `isFeatureBranch`, including a detached HEAD with no record, exits 2.
+- A missing or unreadable report file, a missing `--report` argument and any other throw exit 2 before the first write. A report that exists but does not parse is a FAIL (exit 1), because `parseReport` never throws and never returns PASS for it.
+- All checks run before the first write: criteria, dirty paths, tree hash, marker path, short sha and report parse. The only writes are the record, then the marker (PASS) or the marker delete (FAIL).
+- The `unverified` count in `verify.completed` is `criteria - pass rows - fail rows`, so a criterion with no row counts as unverified.
+- The script uses `require(path.join(__dirname, 'lib', 'feature-file'))` for the same layout-guard reason as step 2.
+- A FAIL whose marker delete throws (not ENOENT) exits 2 with the record already written. The delete cannot be made safe ahead of the record write without breaking the plan's order.
+
 ## 10. As built
 
 (Written last, from the tracker.)
