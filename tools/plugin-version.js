@@ -14,6 +14,8 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { gitRead, splitNul } = require('../src/hooks/lib/git-read.js');
+const { isFeatureFile } = require('../src/hooks/lib/feature-file.js');
 
 const MANIFEST = '.claude-plugin/plugin.json';
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
@@ -52,8 +54,16 @@ function versionAt(cwd, spec) {
 //   cwd: the repository whose staged commit is checked.
 // Returns:
 //   { ok, reason }: ok when the staged manifest's version is semver and above
-//   HEAD's (any semver passes over no previous version); reason says why not.
+//   HEAD's (any semver passes over no previous version), or when every staged
+//   path is a features/*.md record (no plugin content ships); reason says why
+//   not. An unreadable path list is never ok.
 function checkStaged(cwd) {
+    const paths = gitRead(['diff', '--cached', '--name-only', '-z'], { cwd });
+    if (paths.out === null) {
+        return { ok: false, reason: 'Could not list the staged paths: ' + paths.error };
+    }
+    const files = splitNul(paths.out);
+    if (files.length > 0 && files.every(isFeatureFile)) return { ok: true, reason: null };
     const staged = versionAt(cwd, ':' + MANIFEST);
     if (staged === null || !SEMVER_RE.test(staged)) {
         return { ok: false, reason: 'The staged ' + MANIFEST + ' has no semver version (got ' +
