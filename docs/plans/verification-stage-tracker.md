@@ -2,8 +2,8 @@
 
 RUN: docs/plans/verification-stage.md, revision 3. Branch: verification-stage (cut from origin/main 98ff0f2). Started: 2026-10-14.
 BUDGET: steps 0-8 per §5. Spent: step 0, about 10 minutes.
-IN FLIGHT: step 1, review round 1 (sdlc:code-reviewer).
-TREE: staged step 1 (with the tracker, the plan and reports 0-review-1, 1-implementer-1). Handoff file deleted.
+IN FLIGHT: step 2, review round 1 (sdlc:code-reviewer).
+TREE: staged step 2 with the step 1 tracker block, reports 1-review-1, 1-review-1b, 2-implementer-1, the plan (§9 step 2) and the feature record's history line. Worktrees open: one per review round, removed after.
 
 Owner confirmations, 2026-10-14: D8, D9, Q2 and D1 confirmed as written. The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
 
@@ -19,3 +19,26 @@ STEP 0: PASS
   disagreements: `/sdlc:feature-new` is not invocable in this session, so the record was written by hand to the command's stub template, plus the Acceptance section.
   decisions:     none
   budget:  about 10 of 10 minutes
+
+STEP 1: PASS
+  commit:  e3cda69 (owner said "commit it")
+  gate:    test-feature-file 19/0; post-commit-feature 26/0; pre-commit-feature 57/0; session-start-feature 28/0; GUARDS 31/0, 125/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
+  reviews: code-reviewer, round 1, PASS, about 1 minute; marker expired (10-minute TTL) before the commit, so round 1 re-ran on the same diff, PASS, under 1 minute
+  reports: reports/1-implementer-1.md, reports/1-review-1.md, reports/1-review-1b.md
+  stage:   src/hooks/lib/feature-file.js, src/hooks/test-feature-file.js, commands/feature-new.md, commands/feature.md, .claude-plugin/plugin.json (1.0.6 -> 1.0.7), the plan (first commit; §9 step 1 entry), this tracker, reports/0-review-1.md, reports/1-implementer-1.md; features/verification-stage.md restaged by the feature hook
+  files:   as declared
+  disagreements: the installed plugin (1.0.4) shows Claude only "Code review required before commit"; the marker recipe was read by running the installed pre-commit-review.js on the same payload.
+  decisions:     four, recorded in plan §9 (example block shape, prefix heading match, spacing, "later" keeps existing criteria)
+  budget:  1 implementer pass + 1 review round, of 1 + 1-2
+
+Run notes:
+  - The marker TTL is 10 minutes. A PASS left waiting for the owner longer than that needs a fresh round-1 review of the same diff (step 1). Owner told at step 2.
+  - The installed plugin (1.0.4) shows Claude only "Code review required before commit". Read the recipe by running the installed `pre-commit-review.js` on a commit payload, more than 30 seconds after the block.
+  - Guard gap, not fixed in this plan: `src/test-plugin-layout.js` `BARE_INVOCATION` reads the literal `./feature-file` as a bare `/feature` command (`.` before the slash). Code inside `src/hooks/lib/` that requires feature-file uses `path.join(__dirname, 'feature-file')`.
+
+STEP 2: IN FLIGHT
+  gate:    test-verification 104/0; test-review-markers 33/0; GUARDS 32/0, 126/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
+  reports: reports/2-implementer-1.md
+  files:   as declared, plus the plan's §9 (always permitted)
+  disagreements: the BARE_INVOCATION false positive above; all-feature-files tree gives a null hash; one problem per evidence-less PASS row.
+  decisions:     six, recorded in plan §9 (step 2)

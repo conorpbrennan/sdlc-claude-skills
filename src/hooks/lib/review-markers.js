@@ -36,9 +36,13 @@ const SESSION_MARKER_NAME = '.claude-last-session-review';
 const POST_LOCK_NAME = '.claude-post-review-in-progress';
 const PENDING_NAME = '.claude-pending-review';
 
-// { gitDir, toplevel, notARepo, error, marker, lock, pending }
+// The verification stage's marker (lib/verification.js owns its body). Its own name
+// for the same reason as above: it must never be the same file as the commit gate's.
+const VERIFY_MARKER_NAME = '.claude-last-verify';
+
+// { gitDir, toplevel, notARepo, error, marker, lock, sessionMarker, postLock, pending, verify }
 //
-// The three paths are null whenever the repository could not be located, whether
+// The paths are null whenever the repository could not be located, whether
 // because there is none or because git could not be read. A caller must not
 // substitute a shared location in that case: no repository means no bookkeeping,
 // so the hook should do nothing rather than reach for a global file.
@@ -56,6 +60,7 @@ function markerPaths(cwd) {
             sessionMarker: null,
             postLock: null,
             pending: null,
+            verify: null,
         };
     }
     // `--git-dir` is relative ('.git') in a main worktree and absolute in a linked
@@ -71,6 +76,7 @@ function markerPaths(cwd) {
         sessionMarker: path.join(base, SESSION_MARKER_NAME),
         postLock: path.join(base, POST_LOCK_NAME),
         pending: path.join(base, PENDING_NAME),
+        verify: path.join(base, VERIFY_MARKER_NAME),
     };
 }
 
@@ -80,5 +86,6 @@ module.exports = {
     SESSION_MARKER_NAME,
     POST_LOCK_NAME,
     PENDING_NAME,
+    VERIFY_MARKER_NAME,
     markerPaths,
 };
