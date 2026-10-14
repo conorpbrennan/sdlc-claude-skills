@@ -2,8 +2,8 @@
 
 RUN: docs/plans/verification-stage.md, revision 3. Branch: verification-stage (cut from origin/main 98ff0f2). Started: 2026-10-14.
 BUDGET: steps 0-8 per §5. Spent: step 0, about 10 minutes.
-IN FLIGHT: step 3 review round 1 (sdlc:code-reviewer); step 5 implementer round 1 (overlap allowed, §4).
-TREE: staged step 3 with the step 2 tracker block, reports 2-review-1, 3-implementer-1, the plan (§9 step 3), the feature record's history line. Unstaged: step 5 work in progress. Worktrees open: wt-3-r1 (step 3, round 1).
+IN FLIGHT: step 5 review round 1 (sdlc:code-reviewer).
+TREE: staged step 5 with the step 3 tracker block, reports 3-review-1, 5-implementer-1, the plan (§9 step 5), the feature record's history line. Worktrees open: wt-5-r1.
 
 Owner confirmations, 2026-10-14: D8, D9, Q2 and D1 confirmed as written.
 Q2 widened by the owner at the step 2 break (19:57): "commit every step on PASS from now". From step 3 the orchestrator commits on a review PASS. A review FAIL still stops for the owner after two rounds. The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
@@ -48,9 +48,21 @@ STEP 2: PASS
   disagreements: the BARE_INVOCATION false positive above; all-feature-files tree gives a null hash; one problem per evidence-less PASS row.
   decisions:     six, recorded in plan §9 (step 2)
 
-STEP 3: IN FLIGHT
+STEP 3: PASS
+  commit:  b22aced (committed on PASS, standing authorisation)
+  reviews: code-reviewer, round 1, PASS, under 1 minute
   gate:    test-record-verification 35/0; test-verification 104/0; GUARDS 33/0, 127/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
-  reports: reports/3-implementer-1.md
+  reports: reports/3-implementer-1.md, reports/3-review-1.md
+  stage:   record-verification.js, test-record-verification.js, plugin.json (1.0.8 -> 1.0.9), the plan (§9), this tracker, reports 2-review-1, 3-implementer-1, feature record history line
+  budget:  1 implementer pass + 1 review round, of 1 + 1-2
+  advisory not actioned: on FAIL a non-ENOENT marker-delete error leaves a stale PASS marker beside a FAIL record (filesystem fault, outside the threat model).
+
+STEP 5: IN FLIGHT
+  gate:    test-pr-command 35/0; test-commit-command 297/0 (baseline); GUARDS 34/0, 128/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
+  reports: reports/5-implementer-1.md
+  files:   as declared (commit-command.js: module.exports line only), plus the plan's §9
+  disagreements: none
+  decisions:     exports WRAPPER_WORDS and SHELL_RESERVED_WORDS; NAME=value and duration regexes restated (not lists); five named ADVISORY gaps (plan §9, step 5)
   files:   as declared, plus the plan's §9 (always permitted)
   disagreements: none
   decisions:     five, recorded in plan §9 (step 3)

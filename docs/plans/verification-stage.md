@@ -865,6 +865,8 @@ Below the bar, folded in at one clause each: the header's revision and step coun
 - The script uses `require(path.join(__dirname, 'lib', 'feature-file'))` for the same layout-guard reason as step 2.
 - A FAIL whose marker delete throws (not ENOENT) exits 2 with the record already written. The delete cannot be made safe ahead of the record write without breaking the plan's order.
 
+**Step 5, 2026-10-14 (implementer, conservative option taken).** `isPrCreate` needed the wrapper-argument rule and the reserved-word list from `commit-command.js`. Taken: export `WRAPPER_WORDS` and `SHELL_RESERVED_WORDS` unchanged and import them, rather than export `commandWord` (it returns a word, not the index the scan needs). Two small patterns are restated in `pr-command.js`, not lists: the `NAME=value` assignment regex and the wrapper duration regex `^\d+[smhd]?$` (both are inline in `commit-command.js` and cannot be imported without changing it). Wrapper arguments are skipped only when they are flags or durations, the same shape `findDirectoryChange` accepts; `sudo -u root gh pr create` is a named ADVISORY gap, as are `bash -c`, `$GH`, `gh --repo x pr create` and a quoted `"gh"` word.
+
 ## 10. As built
 
 (Written last, from the tracker.)
