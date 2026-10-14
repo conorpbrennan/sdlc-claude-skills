@@ -2,8 +2,8 @@
 
 RUN: docs/plans/verification-stage.md, revision 3. Branch: verification-stage (cut from origin/main 98ff0f2). Started: 2026-10-14.
 BUDGET: steps 0-8 per §5. Spent: step 0, about 10 minutes.
-IN FLIGHT: step 4 review round 1 (sdlc:code-reviewer).
-TREE: staged step 4 with the step 5 tracker block, reports 5-review-1, 4-implementer-1, the plan (§9 step 4), the feature record's history line. Worktrees open: wt-4-r1.
+IN FLIGHT: step 6 review round 1 (sdlc:code-reviewer).
+TREE: staged step 6 with the step 4 tracker block, reports 4-review-1, 6-implementer-1, the plan (§9 step 6 with the orchestrator's correction), the feature record's history line. Worktrees open: wt-6-r1.
 
 Owner confirmations, 2026-10-14: D8, D9, Q2 and D1 confirmed as written.
 Q2 widened by the owner at the step 2 break (19:57): "commit every step on PASS from now". From step 3 the orchestrator commits on a review PASS. A review FAIL still stops for the owner after two rounds. The leftover staged `features/tdd-split-commit-gate.md` history entry on `tdd-split-commit-gate` was dropped.
@@ -35,6 +35,7 @@ STEP 1: PASS
 Run notes:
   - The marker TTL is 10 minutes. A PASS left waiting for the owner longer than that needs a fresh round-1 review of the same diff (step 1). Owner told at step 2.
   - The installed plugin (1.0.4) shows Claude only "Code review required before commit". Read the recipe by running the installed `pre-commit-review.js` on a commit payload, more than 30 seconds after the block.
+  - Suite-isolation gap, not fixed in this plan: `test-pre-commit-review.js` stages its fixtures in this repository with no transcript, so the hook's split rule (`isTestOnlyCommit` on HEAD) reads the real HEAD. While HEAD is a test-only commit (step 4's 91c6468: test `.js` plus `.md`), 10 TDD-mandate cases fail (462/10). Bisected: 472/0 at 98ff0f2 through 3dbf51d. Step 4's gate did not run that suite, so it surfaced in step 6's full baseline. Clears once HEAD carries implementation.
   - Guard gap, not fixed in this plan: `src/test-plugin-layout.js` `BARE_INVOCATION` reads the literal `./feature-file` as a bare `/feature` command (`.` before the slash). Code inside `src/hooks/lib/` that requires feature-file uses `path.join(__dirname, 'feature-file')`.
 
 STEP 2: PASS
@@ -65,12 +66,23 @@ STEP 5: PASS
   stage:   pr-command.js, test-pr-command.js, commit-command.js (exports), plugin.json (1.0.9 -> 1.0.10), the plan (§9), this tracker, reports 3-review-1, 5-implementer-1, feature record history line
   budget:  1 implementer pass + 1 review round, of 1 + 1
 
-STEP 4: IN FLIGHT
+STEP 4: PASS
+  commit:  91c6468 (committed on PASS)
+  reviews: code-reviewer, round 1, PASS, under 1 minute
   gate:    test-plugin-layout 130/0; test-verification 108/0; claude plugin validate . exit 0 (warnings: pre-existing, commands/feature-new.md has no frontmatter); GUARDS 34/0, 67/0, 19/0, 73/0 (re-run by the orchestrator, same)
-  reports: reports/4-implementer-1.md
+  reports: reports/4-implementer-1.md, reports/4-review-1.md
+  stage:   agents/verifier.md, commands/verify.md, test-plugin-layout.js, test-verification.js, plugin.json (1.0.10 -> 1.0.11), the plan (§9), this tracker, reports 5-review-1, 4-implementer-1, feature record history line
+  budget:  1 implementer pass + 1 review round, of 1 + 1-2
   files:   as declared, plus the plan's §9
   disagreements: code-reviewer.md's "do not run the repository's own hooks" relaxed for the verifier to scratch repositories under mktemp -d; install/uninstall ban kept.
   decisions:     `verify` added to BARE_INVOCATION; example found by its table header, exactly one; verify.md frontmatter shape (plan §9, step 4)
+
+STEP 6: IN FLIGHT
+  gate:    test-pre-pr-verify 58/0; test-hook-output 24/0; test-plugin-layout 133/0; claude plugin validate . exit 0; full baseline: 30 of 31 suites 0 failed, test-pre-commit-review 462/10 (HEAD-dependent, see run notes; same at HEAD without step 6); GUARDS green (re-run by the orchestrator, same)
+  reports: reports/6-implementer-1.md
+  files:   as declared, plus the plan's §9
+  disagreements: baseline 0 failed does not hold while HEAD is 91c6468; cause corrected by the orchestrator in plan §9 (g)
+  decisions:     six, (a)-(f), recorded in plan §9 (step 6)
   files:   as declared (commit-command.js: module.exports line only), plus the plan's §9
   disagreements: none
   decisions:     exports WRAPPER_WORDS and SHELL_RESERVED_WORDS; NAME=value and duration regexes restated (not lists); five named ADVISORY gaps (plan §9, step 5)

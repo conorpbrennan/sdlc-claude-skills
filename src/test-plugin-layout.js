@@ -39,6 +39,7 @@ const EXPECTED_WIRING = {
                 ['command', 'pending-review-gate.js', 2000],
                 ['command', 'enforce-co-author.js', 1000],
                 ['command', 'pre-commit-hygiene.js', 200000],
+                ['command', 'pre-pr-verify.js', 2000],
             ],
         },
     ],

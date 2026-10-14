@@ -60,6 +60,11 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-commit-hygiene.js\"",
             "timeout": 200000
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-pr-verify.js\"",
+            "timeout": 2000
           }
         ]
       }
