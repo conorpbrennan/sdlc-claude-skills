@@ -29,7 +29,7 @@ const EXPECTED_WIRING = {
         { matcher: null, hooks: [['command', 'session-start-feature.js', 2000]] },
     ],
     UserPromptSubmit: [
-        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 1000]] },
+        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 1000], ['command', 'orchestrator-mode.js', 1000]] },
     ],
     PreToolUse: [
         {
@@ -42,6 +42,8 @@ const EXPECTED_WIRING = {
                 ['command', 'pre-pr-verify.js', 2000],
             ],
         },
+        { matcher: 'Agent', hooks: [['command', 'agent-tier-gate.js', 1000]] },
+        { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [['command', 'orchestrator-mode.js', 1000]] },
     ],
     PostToolUse: [
         {
@@ -51,6 +53,7 @@ const EXPECTED_WIRING = {
                 ['command', 'post-commit-feature.js', 3000],
             ],
         },
+        { matcher: 'Read|Bash|Skill|Agent', hooks: [['command', 'orchestrator-mode.js', 2000]] },
     ],
 };
 const PLUGIN_COMMAND = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/src\/hooks\/([A-Za-z0-9._-]+\.js)"$/;

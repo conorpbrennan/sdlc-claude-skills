@@ -2,7 +2,7 @@
 name: code-review-pre-commit
 description: Runs the pre-commit review a PRE_COMMIT_REVIEW hook block asks for - one sdlc:code-reviewer (or, with --deep, sdlc:code-reviewer-deep) sub-agent on the staged diff, ending in the TDD_GATE trailer, then writes the marker with the printf command from the block message - or, on a gap-patching block, patches the uncovered lines. Not for ad-hoc PR or branch review; use the built-in code-review for that.
 user_invocable: true
-arg_spec: "[files|staged] [--fresh] [--deep]"
+arg_spec: "[files|staged] [--fresh] [--deep] [--model <haiku|sonnet|opus>]"
 ---
 
 # Pre-commit review
@@ -31,25 +31,37 @@ name is historical.
 
 ```
 /sdlc:code-review-pre-commit --fresh            # what the hook asks for: one sub-agent on the staged diff
-/sdlc:code-review-pre-commit --fresh --deep     # adversarial reviewer on Opus (sdlc:code-reviewer-deep)
+/sdlc:code-review-pre-commit --fresh --deep     # adversarial reviewer (sdlc:code-reviewer-deep) on its configured model
+/sdlc:code-review-pre-commit --fresh --model <haiku|sonnet|opus>   # one-off model for this round
 /sdlc:code-review-pre-commit staged             # scope: staged changes (the default and only automatic scope)
 /sdlc:code-review-pre-commit src/file.py        # scope: one file's staged portion
 ```
 
-`--deep` selects `sdlc:code-reviewer-deep` (Opus). It is for the rerun after
-a FAIL, never for round 1: round 1 is always `sdlc:code-reviewer` (Sonnet),
+`--deep` selects `sdlc:code-reviewer-deep`, on the configured model
+(default Opus; see `sdlc-review.json`). It is for the rerun after a FAIL,
+never for round 1: round 1 is always `sdlc:code-reviewer` (default Sonnet),
 whatever the change, and the hook refuses a round-1 marker from the deep
 reviewer.
+
+`--model <haiku|sonnet|opus>` is a one-off override of the configured model
+for this one round. It does not change the agent, and it is recorded in the
+timing log (`source=override`).
 
 <review-protocol>
 
 <mode-selection>
 - Hook block whose message names **gap-patching** → `<gap-patching-mode>`
   below. One sub-agent only.
-- Otherwise → dispatch exactly ONE sub-agent:
-  `subagent_type: "sdlc:code-reviewer"`, or
-  `subagent_type: "sdlc:code-reviewer-deep"` when `--deep` is given or
-  the rounds policy selects it. Do not dispatch a Plan agent. Pass the
+- Otherwise → resolve the model, then dispatch exactly ONE sub-agent.
+  Before dispatching, run
+  `node "<path from the block message>/review-config-cli.js" review --round <n>`
+  (add `--model <m>` when the user passed `--model <m>` to this skill). It
+  prints one JSON line. Pass its `model` as the Agent call's `model`
+  parameter, and its `agent` with the `sdlc:` prefix as `subagent_type`:
+  `sdlc:code-reviewer` for round 1, `sdlc:code-reviewer-deep` for a rerun
+  (`--deep` or the rounds policy). Read `source` and `warnings` from the
+  same line: keep `source` for the timing log and mention any warning to
+  the user. Do not dispatch a Plan agent. Pass the
   sub-agent the repository path, the diff target (the staged diff unless
   files were named), the commit's stated intent in one paragraph, and,
   on a rerun, the previous round's open items with what changed.
@@ -71,12 +83,16 @@ hunk and nothing more, per its own definition.
 The block message states this policy; it is repeated here so a manual run
 follows it too.
 
-- Round 1 runs `sdlc:code-reviewer`, whatever the change. Do not pass
+- Round 1 runs `sdlc:code-reviewer` on the configured model (default
+  Sonnet; see `sdlc-review.json`), whatever the change. Do not pass
   `--deep` on round 1; the hook refuses a `code-reviewer-deep:round1` marker.
-- Any FAIL reruns on `sdlc:code-reviewer-deep` after the fix.
-- After two FAILs, stop. Do not dispatch a third review. Show the open
-  items and ask the user to choose: fix and rerun, or accept with the gap
-  named in the commit message. On accept, the user writes the marker.
+- Any FAIL reruns on `sdlc:code-reviewer-deep` after the fix, on the
+  configured model (default Opus).
+- After `maxRounds` FAILs (default 2), stop. Do not dispatch another review.
+  Show the open items and ask the user to choose: fix and rerun, or accept
+  with the gap named in the commit message. On accept, the user writes the
+  marker. The hook refuses a marker for a round above the cap; raising
+  `maxRounds` in `sdlc-review.json` is the owner's call.
 
 The marker's fourth line records the bare agent name, without the `sdlc:`
 prefix, and the round (`code-reviewer-deep:round2:PASS`), so the next
@@ -99,15 +115,18 @@ block message and the timing log can say where a change stands.
   hook's own events (the hooks never see the report). Run the timing
   command exactly as the block message gives it, filling in the
   placeholders. The hook builds it from its own location, so its path to
-  `timing-log.js` is right wherever the plugin is installed:
+  `timing-log.js` is right wherever the plugin is installed. Fill `model`
+  and `source` from the `review-config-cli.js` line used for the dispatch:
 
   ```bash
-  node "<path from the block message>/timing-log.js" review.completed agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"
+  node "<path from the block message>/timing-log.js" review.completed agent=<code-reviewer|code-reviewer-deep> round=<n> model=<m> source="<source>" verdict=<PASS|FAIL> critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"
   ```
 
-  A manual run with no block message: use `./src/hooks/timing-log.js`
-  inside the `sdlc-claude-skills` source repo, else the newest
-  `~/.claude/plugins/cache/*/sdlc/*/src/hooks/timing-log.js`.
+  A manual run with no block message: use `./src/hooks/timing-log.js` and
+  `./src/hooks/review-config-cli.js` inside the `sdlc-claude-skills` source
+  repo, else the newest
+  `~/.claude/plugins/cache/*/sdlc/*/src/hooks/timing-log.js` and
+  `.../review-config-cli.js`.
 
 - The review is done when the trailer is the last line of the report,
   the event is recorded and, on PASS, the four-line marker is written.

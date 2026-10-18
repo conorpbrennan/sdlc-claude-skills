@@ -42,7 +42,11 @@ function writeTddExemptCfg() {
 function cleanTddExemptCfg() { try { fs.unlinkSync(TDD_EXEMPT_CFG); } catch (e) {} }
 
 function runHook(command, extraEnv = {}, opts = {}) {
-    const isolation = opts.realMandate ? {} : { TDD_MANDATE_CONFIG: TDD_EXEMPT_CFG };
+    const isolation = {
+        ...(opts.realMandate ? {} : { TDD_MANDATE_CONFIG: TDD_EXEMPT_CFG }),
+        // No user review config unless a case points the layer at one.
+        SDLC_REVIEW_CONFIG_USER: path.join(TMP_DIR, 'no-such-user-review-config.json'),
+    };
     const result = spawnSync('node', [HOOK_PATH], {
         input: JSON.stringify({ tool_input: { command }, ...(opts.input || {}) }),
         encoding: 'utf-8',
@@ -1150,11 +1154,15 @@ try {
     assertContains('recipe recomputes the diff hash with the shared pipeline', r.systemMessage || '', '$(' + gitReadLib.HASH_PIPELINE + ')');
     assertContains('recipe uses printf', r.systemMessage || '', "printf 'PASS");
     assertContains('recipe writes the absolute marker path', r.systemMessage || '', MARKER);
-    assertContains('message states the rounds policy', r.systemMessage || '', 'After two FAILs stop');
+    assertContains('message states the rounds policy', r.systemMessage || '', 'After 2 FAILs stop');
     assertContains('policy puts round 1 on code-reviewer always', r.systemMessage || '',
-        'Round 1 is always sdlc:code-reviewer');
+        'Round 1: sdlc:code-reviewer on sonnet (default)');
     assertContains('policy puts every rerun on code-reviewer-deep', r.systemMessage || '',
-        'rerun with --deep (sdlc:code-reviewer-deep');
+        'rerun with --deep: sdlc:code-reviewer-deep on opus (default)');
+    assertContains('policy states the cap', r.systemMessage || '', 'Cap: 2 rounds');
+    assertContains('message gives the path of review-config-cli.js', r.systemMessage || '',
+        path.join(__dirname, 'review-config-cli.js'));
+    assertContains('timing command records model and source', r.systemMessage || '', 'model=<m> source="<source>"');
     // The dummy is a new file: its two lines plus one opaque count on each side
     // for the whole-file add (round 2, item 3).
     assertContains('message reports non-trivial line counts', r.systemMessage || '', '(3 non-trivial lines added, 1 removed)');
@@ -1176,6 +1184,88 @@ try {
             assert('marker written by the recipe approves the retry', r.decision, 'approve');
             assertContains('marker carries the agent tag', readMarker() || '', 'code-reviewer:round1:PASS');
         }
+    }
+
+
+    console.log('\n[INT] Review config: block message, round cap, bad config (temp repo):');
+    {
+        const scratch = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-cfg-')));
+        let n = 0;
+        // A fresh repo with one staged code file, exempt from the TDD mandate.
+        function cfgRepo(repoCfgText) {
+            const dir = path.join(scratch, 'repo' + (++n));
+            fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+            execFileSync('git', ['init', '-q'], { cwd: dir });
+            if (repoCfgText !== null) fs.writeFileSync(path.join(dir, '.claude', 'sdlc-review.json'), repoCfgText);
+            fs.writeFileSync(path.join(dir, 'app.py'), 'def f():\n    return 1\n');
+            execFileSync('git', ['add', 'app.py'], { cwd: dir });
+            const exempt = path.join(scratch, 'exempt' + n + '.json');
+            fs.writeFileSync(exempt, JSON.stringify({ exempt_repos: [dir] }));
+            const hash = execSync(require(path.join(__dirname, 'lib', 'git-read.js')).HASH_PIPELINE,
+                { encoding: 'utf-8', cwd: dir, shell: true }).trim();
+            return {
+                dir, hash,
+                run: () => runHook('git commit -m x',
+                    { TDD_MANDATE_CONFIG: exempt, TIMING_LOG_PATH: path.join(scratch, 'timing.jsonl') }, { cwd: dir }),
+                marker: body => fs.writeFileSync(path.join(dir, '.git', '.claude-last-review'), body),
+            };
+        }
+
+        let t = cfgRepo(JSON.stringify({
+            round1: 'haiku', round2: 'sonnet', rules: [{ paths: ['app.py'], round2: 'opus' }], maxRounds: 3,
+        }));
+        r = t.run();
+        assert('configured repo still blocks for review', r.decision, 'block');
+        assertContains('block names the round-1 model and its layer', r.systemMessage || '',
+            'Round 1: sdlc:code-reviewer on haiku (repo config)');
+        assertContains('block names the deep model and the rule that set it', r.systemMessage || '',
+            'fix and rerun with --deep: sdlc:code-reviewer-deep on opus (rule app.py (repo config))');
+        assertContains('block states the configured cap', r.systemMessage || '', 'Cap: 3 rounds');
+        assertContains('block still forbids --deep on round 1', r.systemMessage || '', 'do not pass --deep on round 1');
+        assertContains('block gives the config CLI path', r.systemMessage || '',
+            'node "' + path.join(__dirname, 'review-config-cli.js') + '" review --round <n>');
+        assertFalse('no warnings sentence for a clean config', /Config warnings/.test(r.systemMessage || ''));
+
+        // Round cap: a round-3 marker is refused under the default cap of 2.
+        t = cfgRepo(null);
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer-deep:round3:PASS');
+        r = t.run();
+        assert('round-3 marker is refused under the default cap', r.decision, 'block');
+        assertContains('cap block says round 3 exceeds the cap of 2', r.reason || '', 'round 3 exceeds the cap of 2');
+        assertContains('cap block says the cap is the default', r.reason || '', 'default');
+        assertContains('cap block hands the decision to the owner', r.systemMessage || '', 'maxRounds');
+        assertContains('cap block offers acceptance with the gap named', r.systemMessage || '', 'commit message');
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer-deep:round2:PASS');
+        assert('round-2 marker is accepted under the default cap', t.run().decision, 'approve');
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer:round1:PASS');
+        assert('round-1 marker is accepted under the default cap', t.run().decision, 'approve');
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer-deep');
+        assert('a tag with no round keeps today\'s behaviour', t.run().decision, 'approve');
+
+        // ... and accepted when the repo config raises maxRounds to 3.
+        t = cfgRepo(JSON.stringify({ maxRounds: 3 }));
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer-deep:round3:PASS');
+        assert('round-3 marker is accepted when the repo sets maxRounds 3', t.run().decision, 'approve');
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer-deep:round4:PASS');
+        r = t.run();
+        assert('round-4 marker is refused under maxRounds 3', r.decision, 'block');
+        assertContains('refusal names the repo cap', r.reason || '', 'round 4 exceeds the cap of 3');
+        assertContains('refusal names the config file as the layer', r.reason || '', 'sdlc-review.json');
+
+        // Bad config never blocks and never crashes: defaults plus a warning.
+        t = cfgRepo('{ not json');
+        r = t.run();
+        assert('bad config still gives the normal review block', r.decision, 'block');
+        assertContains('bad config falls back to the default round-1 model', r.systemMessage || '',
+            'Round 1: sdlc:code-reviewer on sonnet (default)');
+        assertContains('bad config falls back to the default deep model', r.systemMessage || '',
+            'sdlc:code-reviewer-deep on opus (default)');
+        assertContains('bad config adds a one-sentence warning', r.systemMessage || '', 'Config warnings:');
+        assertContains('the warning names the invalid JSON', r.systemMessage || '', 'invalid JSON');
+        t.marker('PASS\n' + t.hash + '\nnone\ncode-reviewer-deep:round2:PASS');
+        assert('bad config does not stop a valid marker approving', t.run().decision, 'approve');
+
+        fs.rmSync(scratch, { recursive: true, force: true });
     }
 
     // =====================================================================

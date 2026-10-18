@@ -28,6 +28,11 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/enforce-review-implementer.js\"",
             "timeout": 1000
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/orchestrator-mode.js\"",
+            "timeout": 1000
           }
         ]
       }
@@ -67,6 +72,26 @@
             "timeout": 2000
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/agent-tier-gate.js\"",
+            "timeout": 1000
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/orchestrator-mode.js\"",
+            "timeout": 1000
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit"
       }
     ],
     "PostToolUse": [
@@ -89,6 +114,16 @@
             "timeout": 3000
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/orchestrator-mode.js\"",
+            "timeout": 2000
+          }
+        ],
+        "matcher": "Read|Bash|Skill|Agent"
       }
     ]
   }
