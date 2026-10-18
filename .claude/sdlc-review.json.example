@@ -1,0 +1,12 @@
+{
+  "_comment": "Model steering. Copy to <repo>/.claude/sdlc-review.json (this repo) or ~/.claude/sdlc-review.json (all repos). Every key is optional; the values shown are the defaults. Models: haiku, sonnet, opus. Rules apply to the round they name; among matching rules the strongest model wins.",
+  "round1": "sonnet",
+  "round2": "opus",
+  "maxRounds": 2,
+  "planReview": { "source": "opus", "consistency": "sonnet", "cap": 3 },
+  "orchestrator": { "bashNudge": 8 },
+  "rules": [
+    { "paths": ["src/hooks/**"], "round2": "opus" },
+    { "paths": ["*.md", "**/*.md", "docs/**"], "round1": "sonnet", "round2": "sonnet" }
+  ]
+}

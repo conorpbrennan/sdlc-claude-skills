@@ -755,7 +755,7 @@ time a phase-level review looked. That is the case for per-commit.
 **Rule.** Round one on the everyday reviewer (Sonnet), whatever the change.
 Any rerun after a FAIL on the deep reviewer (Opus). After two FAILs, stop
 and ask. The heavy tier
-(Opus) is for the plan text and the signed spec, where a defect costs an
+(Opus) is for the plan's source rounds and the signed spec, where a defect costs an
 amendment; it earned its cost there twice, which is why it is the default
 there and an escalation, not a default, on a 50-line diff. The loop it runs
 in, before the first step is dispatched, is §2a.
@@ -893,8 +893,8 @@ without reading the redacted text, and they matched cell for cell.
    implementer (§18.3).
 5. Run the hooks' own tests before the run and after any hook install (§12).
 6. Budget by the measured cost: roughly one implementer plus two reviewer
-   rounds per step, Sonnet for the gate, the heavy tier only for the plan and
-   the spec (§9).
+   rounds per step, Sonnet for the gate, the heavy tier only for the plan's source
+   rounds and the spec (§9).
 7. Declare each step's file set in the plan, so the orchestrator can decide
    overlap by reading it rather than by guessing; reviewers in a worktree
    always; commits from the index only, in step order (§7a).
