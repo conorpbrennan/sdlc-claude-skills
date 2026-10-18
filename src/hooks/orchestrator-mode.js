@@ -21,13 +21,14 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { deny } = require('./lib/hook-output');
 const { resolveOrchestrator } = require('./lib/review-config');
+const { PLUGIN, cmd } = require('./lib/plugin-names');
 
 const STATE_DIR_ENV = 'SDLC_ORCHESTRATOR_STATE_DIR';
 const DEFAULT_NUDGE = 8;
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-const DENY_REASON = 'Orchestrator mode: the main session does not edit source. Write a brief and dispatch a Sonnet sub-agent (Agent tool, model: "sonnet"). If the owner wants this edit made inline, ask them to run /sdlc:orchestrate off.';
+const DENY_REASON = 'Orchestrator mode: the main session does not edit source. Write a brief and dispatch a Sonnet sub-agent (Agent tool, model: "sonnet"). If the owner wants this edit made inline, ask them to run ' + cmd('orchestrate') + ' off.';
 
 // A basename with "handoff" in it, or any path with "tracker" in it, ending .md.
 const HANDOFF_FILE = /handoff[^/]*\.md$/i;
@@ -36,7 +37,7 @@ const TRACKER_FILE = /tracker.*\.md$/i;
 const READ_HANDOFF_CMD = /\b(?:cat|head|tail|less|sed\s+-n)\b[^|;&]*?(?:[^\s/|;&]*handoff[^\s/|;&]*|[^\s|;&]*tracker[^\s|;&]*)\.md\b/i;
 
 // The slash command the owner types.
-const SWITCH_PROMPT = /^\s*\/(?:sdlc:)?orchestrate\s+(on|off|status)\b/;
+const SWITCH_PROMPT = new RegExp('^\\s*\\/(?:' + PLUGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':)?orchestrate\\s+(on|off|status)\\b');
 
 // Bash commands that are orchestration, not inline investigation. The git
 // subcommand is built from two pieces so the commit classifier does not trip on
@@ -211,8 +212,8 @@ function onUserPromptSubmit(input) {
     if (!m) return null;
     if (m[1] !== 'status') {
         writeState(input.session_id, m[1] === 'on'
-            ? newState(true, false, 'owner: /sdlc:orchestrate on')
-            : newState(false, true, 'owner: /sdlc:orchestrate off'));
+            ? newState(true, false, 'owner: ' + cmd('orchestrate') + ' on')
+            : newState(false, true, 'owner: ' + cmd('orchestrate') + ' off'));
     }
     // Tell Claude the state, so the command never needs to know its own session id.
     return {

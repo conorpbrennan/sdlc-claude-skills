@@ -1,5 +1,8 @@
 // Tests for agent-tier-gate.js: the PreToolUse gate on the Agent tool that keeps
 // volume work on Sonnet. Spawns the hook with stdin JSON and checks stdout.
+// Drop git's repository-locating variables (src/test-suite-isolation.js).
+require('./lib/isolate-git-env.js').isolateGitEnv();
+
 const path = require('path');
 const { spawnSync } = require('child_process');
 

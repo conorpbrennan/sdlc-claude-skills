@@ -26,6 +26,7 @@
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-review-config.js
 - src/hooks/test-timing-log.js
+- src/test-plugin-layout.js
 - tools/model-spend.js
 - tools/test-model-spend.js
 
