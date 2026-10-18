@@ -26,6 +26,16 @@
 
 ## History
 
+- 2026-10-18 `53783bd` — Trim oversized whole-file Reads inside sub-agents
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - README.md
+  - hooks/hooks.json
+  - src/hooks/lib/read-trim.js
+  - src/hooks/read-trim.js
+  - src/hooks/test-read-trim.js
+  - src/test-plugin-layout.js
+
 - 2026-10-18 `2baf7cd` — Cap reviewer turns and stop forcing allow on a budget-only rewrite
   - .claude-plugin/plugin.json
   - README.md
