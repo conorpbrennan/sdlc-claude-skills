@@ -11,10 +11,14 @@
 - .claude-plugin/plugin.json
 - CLAUDE.md
 - README.md
+- agents/code-reviewer-deep.md
+- agents/code-reviewer.md
+- skills/code-review-pre-commit/SKILL.md
 - src/hooks/agent-tier-gate.js
 - src/hooks/lib/context-budget.js
 - src/hooks/test-agent-tier-gate.js
 - src/hooks/test-context-budget.js
+- src/test-plugin-layout.js
 
 ## History
 

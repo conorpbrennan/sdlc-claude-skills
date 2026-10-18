@@ -31,6 +31,7 @@ the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
 `/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:plan-spec` and
 `/sdlc:code-review-pre-commit`. The review agents are `sdlc:code-reviewer` and
 `sdlc:code-reviewer-deep`; the verification agent is `sdlc:verifier`.
+Both reviewers carry a `maxTurns` cap (75 and 60) that only cuts runaways; a report cut off without its `TDD_GATE` trailer counts as FAIL.
 
 Your own config stays in `~/.claude/`, and the plugin never writes to it:
 `tdd-mandate.json`, `review-policy.json`, `hygiene-repos.json` and

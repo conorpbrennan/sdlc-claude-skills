@@ -95,7 +95,13 @@ for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan']) {
 const both = call({ subagent_type: 'Plan', prompt: 'look', description: 'd', run_in_background: true });
 assert('tier rewrite and budget in one updatedInput', updated(both),
     { subagent_type: 'Plan', prompt: 'look\n\n' + BUDGET_BLOCK, description: 'd', run_in_background: true, model: 'sonnet' });
-assert('budget alone emits allow', decision(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })), 'allow');
+assert('budget alone emits updatedInput and no permissionDecision',
+    [updated(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })) !== undefined,
+        decision(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' }))], [true, undefined]);
+assert('opus with reason: budget alone, no permissionDecision',
+    decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: why' })), undefined);
+assert('tier rewrite plus budget still allows', decision(both), 'allow');
+assert('deny is unchanged', decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'x' })), 'deny');
 assert('model untouched when only budget', updated(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })).model, 'haiku');
 assert('opus with reason gets budget, model kept',
     updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: why' })).model, 'opus');

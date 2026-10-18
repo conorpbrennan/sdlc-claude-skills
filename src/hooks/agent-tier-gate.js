@@ -36,6 +36,16 @@ function allowWith(updatedInput) {
     };
 }
 
+// Builds an output that rewrites the input and states no permission decision.
+//
+// Args:
+//   updatedInput: the full tool input to run with.
+// Returns:
+//   the object to print.
+function updateOnly(updatedInput) {
+    return { hookSpecificOutput: { hookEventName: 'PreToolUse', updatedInput } };
+}
+
 // Decides what to print for one Agent call: the tier decision, then the
 // context-budget append on top of it. One hook writes updatedInput so two
 // rewrites cannot clobber each other.
@@ -53,7 +63,10 @@ function decide(toolInput) {
         const base = tier ? tier.hookSpecificOutput.updatedInput : toolInput;
         const prompt = withBudget(base.prompt);
         if (prompt === null) return tier;
-        return allowWith({ ...base, prompt });
+        // A tier rewrite already carries allow. A budget-only append carries
+        // updatedInput alone: probed on claude -p, the sub-agent saw the appended
+        // text with no permissionDecision, so the user's own prompt rules still apply.
+        return tier ? allowWith({ ...base, prompt }) : updateOnly({ ...base, prompt });
     } catch (e) {
         // Fail open: the budget is a nicety; the tier decision stands as it was.
         return tier;
@@ -76,8 +89,9 @@ function decideTier(toolInput) {
     // "inherit" runs the sub-agent on the parent's model (Opus) with no stated reason,
     // so it counts as no model at all.
     if (!model || model.toLowerCase() === 'inherit') {
-        // allow skips an interactive permission prompt for this Agent call; acceptable
-        // because the rewrite only lowers the model tier.
+        // allow skips an interactive permission prompt for this Agent call, and
+        // deny rules still win. Accepted here: the rewrite only lowers the model
+        // tier, and the rewrite needs a decision on the model change.
         return allowWith({ ...toolInput, model: 'sonnet' });
     }
     if (EXPENSIVE_MODEL.test(model)) {
