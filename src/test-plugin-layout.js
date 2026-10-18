@@ -610,6 +610,16 @@ assert('the deep reviewer reads the path it was handed',
 assert('the deep reviewer fails closed when the base criteria cannot be read',
     /cannot be read[\s\S]{0,300}TDD_GATE: FAIL/.test(DEEP_AGENT), true);
 
+console.log('\nThe reviewers carry a maxTurns safety net:');
+// Evidence (Sep-Oct runs): code-reviewer max 57 turns, deep max 39. The caps cut runaways only.
+const REVIEWER_TURN_CAPS = { 'code-reviewer.md': 75, 'code-reviewer-deep.md': 60 };
+for (const [file, cap] of Object.entries(REVIEWER_TURN_CAPS)) {
+    const text = fs.readFileSync(path.join(AGENTS_DIR, file), 'utf-8');
+    const front = (text.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
+    const m = front.match(/^maxTurns:\s*(\d+)\s*$/m);
+    assert(file + ' frontmatter has maxTurns: ' + cap, m ? Number(m[1]) : null, cap);
+}
+
 console.log(`\n===================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
