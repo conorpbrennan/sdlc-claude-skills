@@ -10,19 +10,28 @@
 
 - .claude-plugin/plugin.json
 - .claude/sdlc-review.json
+- commands/orchestrate.md
 - hooks/hooks.json
 - instructions/claude-md-snippet.md
 - skills/code-review-pre-commit/SKILL.md
 - src/hooks/agent-tier-gate.js
 - src/hooks/lib/review-config.js
+- src/hooks/orchestrator-mode.js
 - src/hooks/pre-commit-review.js
 - src/hooks/review-config-cli.js
 - src/hooks/test-agent-tier-gate.js
+- src/hooks/test-orchestrator-mode.js
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-review-config.js
 - src/hooks/test-timing-log.js
 
 ## History
+
+- 2026-10-18 `8e5ceee` — Gate Opus sub-agent dispatches on a stated TIER reason
+  - .claude-plugin/plugin.json
+  - hooks/hooks.json
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/test-agent-tier-gate.js
 
 - 2026-10-18 `590982f` — Name the configured reviewers in the gate and enforce the round cap
   - .claude-plugin/plugin.json

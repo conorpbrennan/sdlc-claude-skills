@@ -64,6 +64,13 @@ assert('missing model rewritten to sonnet', rewritten.out, {
         updatedInput: { subagent_type: 'Explore', prompt: 'look', description: 'd', model: 'sonnet' },
     },
 });
+for (const m of ['inherit', 'INHERIT', ' inherit ']) {
+    const r = call({ subagent_type: 'Plan', model: m, prompt: 'x' });
+    assert(`inherit rewritten to sonnet: ${JSON.stringify(m)}`, r.out.hookSpecificOutput.updatedInput.model, 'sonnet');
+}
+for (const m of [42, true, ['opus'], {}]) {
+    assert(`non-string model passes through: ${JSON.stringify(m)}`, call({ subagent_type: 'Plan', model: m, prompt: 'x' }).out, '');
+}
 assert('missing type rewritten', decision(call({ prompt: 'x' })), 'allow');
 assert('sonnet passes', call({ subagent_type: 'Plan', model: 'sonnet', prompt: 'x' }).out, '');
 assert('haiku passes', call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' }).out, '');
