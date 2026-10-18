@@ -12,7 +12,7 @@
 // State is one JSON file per session. Threat model: honest habit, not adversarial
 // input, so any error prints nothing and exits 0. Unreadable state means off.
 //
-// Also: `orchestrator-mode.js --status <session_id>` prints the recorded state.
+// Also (debugging): `orchestrator-mode.js --status <session_id>` prints the recorded state.
 'use strict';
 
 const fs = require('fs');
@@ -51,6 +51,9 @@ const ORCHESTRATION_CMD = new RegExp(
 const ALLOWED_PATH_PARTS = [/tracker/i, /\/run\/reports\//, /\/reports\//, /brief/i];
 const FEATURE_RECORD = /\/features\/[^/]+\.md$/;
 const PLAN_DIR = /\/plans\//;
+// A plan document by name: plan.md, my-plan.md, v2.plan.md, PLAN-x.md. Not "planner.md".
+const PLAN_BASENAME = /(^|[-_.])plan([-_.]|$)/i;
+const PLAN_UPPER_PREFIX = /^PLAN/;
 const MEMORY_DIR = /\/\.claude\/projects\/[^/]+\/memory\//;
 
 // Args: none.
@@ -130,15 +133,16 @@ function isOrchestration(command) {
 //   cwd: the session's working directory, for relative paths.
 // Returns: true when the main session may write there while the mode is on.
 function isAllowedPath(filePath, cwd) {
-    const p = path.resolve(cwd || '/', filePath);
-    const base = path.basename(p);
+    // Normalise separators first so every pattern below only has to know "/".
+    const p = path.resolve(cwd || '/', filePath).replace(/\\/g, '/');
+    const base = p.slice(p.lastIndexOf('/') + 1);
     if (/handoff/i.test(base)) return true;
     if (ALLOWED_PATH_PARTS.some((re) => re.test(p))) return true;
     if (FEATURE_RECORD.test(p)) return true;
-    if (p.endsWith('.md') && (PLAN_DIR.test(p) || /plan/i.test(base))) return true;
+    if (p.endsWith('.md') && (PLAN_DIR.test(p) || PLAN_BASENAME.test(base) || PLAN_UPPER_PREFIX.test(base))) return true;
     if (MEMORY_DIR.test(p)) return true;
-    const tmp = os.tmpdir();
-    return p.startsWith(tmp + path.sep) || p.startsWith('/tmp/');
+    const tmp = os.tmpdir().replace(/\\/g, '/');
+    return p.startsWith(tmp + '/') || p.startsWith('/tmp/');
 }
 
 // Args:
@@ -204,11 +208,28 @@ function onPreToolUse(input) {
 
 function onUserPromptSubmit(input) {
     const m = SWITCH_PROMPT.exec(String(input.prompt || ''));
-    if (!m || m[1] === 'status') return null;
-    writeState(input.session_id, m[1] === 'on'
-        ? newState(true, false, 'owner: /sdlc:orchestrate on')
-        : newState(false, true, 'owner: /sdlc:orchestrate off'));
-    return null;
+    if (!m) return null;
+    if (m[1] !== 'status') {
+        writeState(input.session_id, m[1] === 'on'
+            ? newState(true, false, 'owner: /sdlc:orchestrate on')
+            : newState(false, true, 'owner: /sdlc:orchestrate off'));
+    }
+    // Tell Claude the state, so the command never needs to know its own session id.
+    return {
+        hookSpecificOutput: {
+            hookEventName: 'UserPromptSubmit',
+            additionalContext: stateSummary(readState(input.session_id)),
+        },
+    };
+}
+
+// Args:
+//   s: the state object, or null.
+// Returns: the one line the owner's switch or status prompt reports.
+function stateSummary(s) {
+    if (!s) return 'Orchestrator mode: off (no state for this session).';
+    const n = Number.isInteger(s.inlineSinceDispatch) ? s.inlineSinceDispatch : 0;
+    return `Orchestrator mode: ${s.on ? 'on' : 'off'} (trigger: ${s.trigger}, since ${s.since}, ${n} inline commands since the last dispatch).`;
 }
 
 // Args:
