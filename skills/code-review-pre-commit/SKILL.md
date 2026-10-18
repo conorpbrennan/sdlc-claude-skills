@@ -107,6 +107,8 @@ block message and the timing log can say where a change stands.
   path; do not compose a marker command by hand. Then stop. Do
   **not** commit: staging and committing are the user's separate
   commands, and a completed review does not grant permission for either.
+- A report whose last line is not a `TDD_GATE` trailer (for example a run
+  stopped at its turn limit) is treated as `TDD_GATE: FAIL`: write no marker.
 - `TDD_GATE: FAIL` → do not write the marker. Surface the failing items.
   With the user's permission, fix them (`/sdlc:code-review-implementer
   critical important` applies the numbered items), then rerun per the
@@ -155,7 +157,8 @@ Thresholds: <from the block message: diff-cover N%, branch M%>
    commit cannot carry.
 3. Run: pytest --cov=<pkg> --cov-branch --cov-report=xml -q
 4. Run: diff-cover coverage.xml --compare-branch=HEAD --fail-under=<N>
-5. List every test file you created or changed.
+5. List every test file you created or changed, and end the report with
+   `git diff --stat` and the pytest summary line.
 6. If diff-cover exits 0, per-file branch coverage on changed files is
    >= M%, and `git check-ignore` exits 1 for every test file you listed,
    print `GAP_PATCH: PASS` as the last line of your report.

@@ -30,7 +30,10 @@ branch name become hyphens.
    the template below verbatim. The filename must contain `HANDOFF`: that is
    what turns orchestrator mode on when the next session reads the file. The
    main session may write it while the mode is on.
-5. Print the path and the one line to paste: `read <path>`. Add the
+5. Measure the file: `wc -c <path>`. Over 8,000 characters, trim it with
+   the Edit tool until it is under, then measure again. Cut copied detail
+   first (see Rules).
+6. Print the path and the one line to paste: `read <path>`. Add the
    not-ignored warning from step 3 if it applies.
 
 ## Template
@@ -42,6 +45,7 @@ Every section is required. Write `none` where there is nothing to say.
 
 Work picked up from this handoff runs in sub-agents. The main session reads this file, writes step briefs,
 dispatches implementers (model: "sonnet"), runs the review, and commits. It does not edit source or investigate inline.
+It trusts implementer reports and does not poll (see `/sdlc:orchestrate`).
 
 ## Next action
 <the single next thing to do, concrete enough to do without reading anything else: the dispatch to make with the
@@ -68,8 +72,11 @@ brief's path, or the exact command to run>
 
 ## Rules
 
-- Keep the file under 60 lines. History lives in the tracker and in earlier
-  handoffs: link to it, do not copy it.
+- Keep the file under about 8,000 characters (step 5 measures it). A
+  fresh session reads it whole and re-reads it on every turn, so size is
+  cost. It carries pointers, current state and the next action, not copies.
+  Detail lives in the plan, tracker, feature record and commit messages:
+  link to it, do not copy it.
 - Never paste client data, credentials or identifiers into it.
 - Next action is one action. If two things are next, pick the first and put
   the second in Decisions or the tracker.
