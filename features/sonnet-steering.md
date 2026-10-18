@@ -11,6 +11,7 @@
 - .claude-plugin/plugin.json
 - .claude/sdlc-review.json
 - commands/handoff.md
+- commands/model-spend.md
 - commands/orchestrate.md
 - hooks/hooks.json
 - instructions/claude-md-snippet.md
@@ -25,8 +26,17 @@
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-review-config.js
 - src/hooks/test-timing-log.js
+- tools/model-spend.js
+- tools/test-model-spend.js
 
 ## History
+
+- 2026-10-18 `a279f5c` — Add /sdlc:handoff and fix orchestrator path checks on Windows
+  - .claude-plugin/plugin.json
+  - commands/handoff.md
+  - commands/orchestrate.md
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-orchestrator-mode.js
 
 - 2026-10-18 `1e095d2` — Add orchestrator mode: the main session dispatches, it does not edit
   - .claude-plugin/plugin.json
