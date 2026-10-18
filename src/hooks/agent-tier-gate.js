@@ -28,8 +28,14 @@ function decide(toolInput) {
     const type = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type.trim() : '';
     if (!GATED_TYPES.has(type.toLowerCase())) return null;
 
+    // A non-string model is odd input: leave the call alone (fail open).
+    if (toolInput.model !== undefined && toolInput.model !== null && typeof toolInput.model !== 'string') return null;
     const model = typeof toolInput.model === 'string' ? toolInput.model.trim() : '';
-    if (!model) {
+    // "inherit" runs the sub-agent on the parent's model (Opus) with no stated reason,
+    // so it counts as no model at all.
+    if (!model || model.toLowerCase() === 'inherit') {
+        // allow skips an interactive permission prompt for this Agent call; acceptable
+        // because the rewrite only lowers the model tier.
         return {
             hookSpecificOutput: {
                 hookEventName: 'PreToolUse',
