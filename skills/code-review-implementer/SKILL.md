@@ -66,7 +66,8 @@ RULES:
 5. Do not stage or commit. Do not touch the index. Do not run the
    repository's hooks or install scripts.
 6. Report per item: fixed / skipped (why) / partial (what remains), the
-   files changed, and the test command and result.
+   files changed, and the exact test command with its pass/fail summary
+   line. End with `git diff --stat` of what you changed.
 ```
 </delegation>
 

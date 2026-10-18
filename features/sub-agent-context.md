@@ -18,4 +18,11 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-18 `5876e9f` — Append a context budget to generic sub-agent briefs
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - README.md
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/lib/context-budget.js
+  - src/hooks/test-agent-tier-gate.js
+  - src/hooks/test-context-budget.js

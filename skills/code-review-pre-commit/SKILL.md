@@ -155,7 +155,8 @@ Thresholds: <from the block message: diff-cover N%, branch M%>
    commit cannot carry.
 3. Run: pytest --cov=<pkg> --cov-branch --cov-report=xml -q
 4. Run: diff-cover coverage.xml --compare-branch=HEAD --fail-under=<N>
-5. List every test file you created or changed.
+5. List every test file you created or changed, and end the report with
+   `git diff --stat` and the pytest summary line.
 6. If diff-cover exits 0, per-file branch coverage on changed files is
    >= M%, and `git check-ignore` exits 1 for every test file you listed,
    print `GAP_PATCH: PASS` as the last line of your report.
