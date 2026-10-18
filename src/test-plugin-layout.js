@@ -54,6 +54,7 @@ const EXPECTED_WIRING = {
             ],
         },
         { matcher: 'Read|Bash|Skill|Agent', hooks: [['command', 'orchestrator-mode.js', 2000]] },
+        { matcher: 'Read', hooks: [['command', 'read-trim.js', 2000]] },
     ],
 };
 const PLUGIN_COMMAND = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/src\/hooks\/([A-Za-z0-9._-]+\.js)"$/;

@@ -124,6 +124,16 @@
           }
         ],
         "matcher": "Read|Bash|Skill|Agent"
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/read-trim.js\"",
+            "timeout": 2000
+          }
+        ]
       }
     ]
   }
