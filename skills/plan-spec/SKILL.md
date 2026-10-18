@@ -57,6 +57,8 @@ gates never scale down; the paperwork does.
 4. **Size each step against §17's four tests.** One step is one reviewable
    diff, one commit, one GATE, one implementer pass. A step that fails a
    test splits, and the split is written into the plan before dispatch.
+   That includes a step an implementer could not finish in about 40 tool
+   calls (§17); the plan review flags it.
 5. **Run the review loop (§2a).** See below.
 
 ### The pre-run review loop (§2a)
