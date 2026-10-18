@@ -63,9 +63,17 @@ gates never scale down; the paperwork does.
 
 Iterate until one of two conditions, then dispatch step one.
 
-- One **fresh** independent reviewer per round, heavy tier, given the
-  document and **exactly one input** to hold it against (§21.4's prompt). Do
-  not tell it what earlier rounds found, what changed, or which round it is.
+- One **fresh** independent reviewer per round, given the document and
+  **exactly one input** to hold it against (§21.4's prompt). Do not tell it
+  what earlier rounds found, what changed, or which round it is.
+- **The tier follows the input.** A source round (the document held against
+  source, spec, or code at HEAD) runs on Opus and its prompt carries
+  `TIER: opus: plan source review`. An internal-consistency round runs on
+  Sonnet. Models and default cap come from `sdlc-review.json`
+  (`planReview.source`, `planReview.consistency`, `planReview.cap`; defaults
+  opus, sonnet, 3), read with
+  `node <plugin>/src/hooks/review-config-cli.js plan-review`. The owner's
+  declared cap (§2) wins over the config default.
 - Disposition every finding as the round closes — folded in, or rejected
   with the reason — into §20.8, before the next round starts.
 - **Stop on: no new criteria** (every finding names a defect class already
@@ -110,10 +118,16 @@ Per step:
 
 1. **Dispatch the implementer** with §21.1's prompt: the step verbatim, the
    working constraints verbatim, what landed before it, and the preceding
-   step's NEXT. It does not stage and does not commit.
-2. **Read the report in full** (§19) and write it to
-   `run/reports/<step>-implementer-<round>.md`. Append DISAGREEMENTS and
-   DECISIONS to the tracker before dispatching anything else.
+   step's NEXT. It does not stage and does not commit. It runs on Sonnet
+   (§9) and the dispatch says so: `subagent_type: "general-purpose"`,
+   `model: "sonnet"`. An Opus implementer needs the owner's OK recorded in
+   §20.2 and a `TIER: opus: <reason>` line in the prompt; the
+   `agent-tier-gate` hook denies an Opus dispatch without it.
+2. **Read the report in full** (§19). The implementer wrote it to
+   `run/reports/<step>-implementer-<round>.md` (a fix agent, to
+   `<step>-fix-<round>.md`) and returned the path plus a five-line summary;
+   you do not write it. Append DISAGREEMENTS and DECISIONS to the tracker
+   before dispatching anything else.
 3. **Stage everything** — the step's files, the plan if DECISIONS-OPEN was
    written, the previous step's tracker block and reports — then **attempt
    the commit once and expect the block.** That block message is the only
@@ -141,6 +155,13 @@ Per step:
    error to work around. Never absorb the work into the step that provoked
    it — that is how a file set grows during implementation (§17).
 8. **Close the step against §18.1's five conditions**, then the next.
+
+Running a plan puts the main session in **orchestrator mode** (the
+`orchestrator-mode` hook; §7). It denies main-session edits outside handoffs,
+trackers, reports, plans, briefs, feature records and memory, and nudges
+after 8 inline commands since the last dispatch. Investigation that chases a
+failure is a dispatch, not an inline run. `/sdlc:orchestrate off` is the
+owner's switch.
 
 Overlap the review of step N with the implementation of N+1 only when their
 file sets are disjoint (§7a), and never two implementers or two reviewers at

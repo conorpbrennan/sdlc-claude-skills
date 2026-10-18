@@ -27,6 +27,15 @@
 
 ## History
 
+- 2026-10-18 `1e095d2` — Add orchestrator mode: the main session dispatches, it does not edit
+  - .claude-plugin/plugin.json
+  - commands/orchestrate.md
+  - hooks/hooks.json
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-agent-tier-gate.js
+  - src/hooks/test-orchestrator-mode.js
+
 - 2026-10-18 `8e5ceee` — Gate Opus sub-agent dispatches on a stated TIER reason
   - .claude-plugin/plugin.json
   - hooks/hooks.json
