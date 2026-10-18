@@ -155,14 +155,22 @@ console.log('off blocks re-triggering; the owner can switch on again');
 console.log('UserPromptSubmit');
 {
     const sid = newSession();
-    assert('on prints nothing', prompt(sid, '/orchestrate on').out, '');
+    const ctx = (r) => r.out && r.out.hookSpecificOutput;
+    const on1 = ctx(prompt(sid, '/orchestrate on'));
+    assert('on reports state', [on1.hookEventName, /^Orchestrator mode: on \(trigger: owner: \/sdlc:orchestrate on, since \S+, 0 inline commands since the last dispatch\)\.$/.test(on1.additionalContext)], ['UserPromptSubmit', true]);
     assert('short form on', isOn(sid), true);
     prompt(sid, '/orchestrate off');
     assert('short form off', [readState(sid).on, readState(sid).off], [false, true]);
     prompt(sid, '/sdlc:orchestrate on');
     assert('long form on', isOn(sid), true);
-    prompt(sid, '/sdlc:orchestrate status');
-    assert('status changes nothing', isOn(sid), true);
+    turnOn(sid, { trigger: 'Read HANDOFF-9.md', inlineSinceDispatch: 4, since: '2026-02-02T00:00:00.000Z' });
+    const st = prompt(sid, '/sdlc:orchestrate status');
+    assert('status changes nothing', [isOn(sid), readState(sid).inlineSinceDispatch], [true, 4]);
+    assert('status line', st.out.hookSpecificOutput.additionalContext, 'Orchestrator mode: on (trigger: Read HANDOFF-9.md, since 2026-02-02T00:00:00.000Z, 4 inline commands since the last dispatch).');
+    assert('off reports off', /^Orchestrator mode: off \(trigger: owner: \/sdlc:orchestrate off,/.test(prompt(sid, '/orchestrate off').out.hookSpecificOutput.additionalContext), true);
+    const nostate = newSession();
+    assert('status with no state', prompt(nostate, '/orchestrate status').out.hookSpecificOutput.additionalContext, 'Orchestrator mode: off (no state for this session).');
+    prompt(sid, '/sdlc:orchestrate on');
     prompt(sid, '/sdlc:orchestrate off extra words');
     assert('trailing words allowed', readState(sid).off, true);
     const s2 = newSession();
@@ -214,6 +222,28 @@ console.log('allowed paths while on');
     ];
     for (const p of allowed) {
         assert(`allow ${p}`, pre(sid, 'Write', { file_path: p }).out, '');
+    }
+    // Windows-style separators resolve the same way as POSIX ones.
+    const winAllowed = [
+        'proj\\features\\sonnet-steering.md',
+        'proj\\run\\reports\\s1.md',
+        'proj\\plans\\steps.md',
+        'proj\\docs\\plans\\sonnet.md',
+        `${home}\\.claude\\projects\\-home-u-proj\\memory\\note.md`,
+    ];
+    for (const p of winAllowed) {
+        assert(`allow backslash ${p}`, pre(sid, 'Write', { file_path: p }, { cwd: '/home/u' }).out, '');
+    }
+    assert('backslash source path denied', decision(pre(sid, 'Write', { file_path: 'proj\\src\\app.js' }, { cwd: '/home/u' })), 'deny');
+    assert('backslash features non-md denied', decision(pre(sid, 'Write', { file_path: 'proj\\features\\x.js' }, { cwd: '/home/u' })), 'deny');
+    // A .md is a plan only under plans/ or by a basename that names a plan.
+    for (const p of ['/home/u/dev/proj/PLAN.md', '/home/u/dev/proj/PLAN-sonnet.md', '/home/u/dev/proj/plan.md',
+        '/home/u/dev/proj/notes/my_plan.md', '/home/u/dev/proj/commands/plan-x.md', '/home/u/dev/proj/v2.plan.md']) {
+        assert(`plan basename allowed ${p}`, pre(sid, 'Write', { file_path: p }).out, '');
+    }
+    for (const p of ['/home/u/dev/proj/skills/plan-spec/SKILL.md', '/home/u/dev/proj/commands/planner.md',
+        '/home/u/dev/proj/docs/explanation.md', '/home/u/dev/proj/skills/plan-spec/README.md']) {
+        assert(`plan-ish source doc denied ${p}`, decision(pre(sid, 'Write', { file_path: p })), 'deny');
     }
     assert('features non-md denied', decision(pre(sid, 'Write', { file_path: '/home/u/dev/proj/features/x.js' })), 'deny');
     assert('plans non-md denied', decision(pre(sid, 'Write', { file_path: '/home/u/dev/proj/plans/x.js' })), 'deny');

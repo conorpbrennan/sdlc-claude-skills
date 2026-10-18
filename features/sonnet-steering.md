@@ -10,6 +10,7 @@
 
 - .claude-plugin/plugin.json
 - .claude/sdlc-review.json
+- commands/handoff.md
 - commands/orchestrate.md
 - hooks/hooks.json
 - instructions/claude-md-snippet.md
