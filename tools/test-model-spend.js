@@ -9,6 +9,9 @@
 // outside the window, and sub-agents are tied back to the Agent call that made them.
 'use strict';
 
+// Drop git's repository-locating variables (src/test-suite-isolation.js).
+require('../src/hooks/lib/isolate-git-env.js').isolateGitEnv();
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
