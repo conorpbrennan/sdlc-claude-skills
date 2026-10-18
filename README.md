@@ -375,6 +375,18 @@ the hygiene path that means a retry waits for fresh coverage again, up to
 
 ---
 
+## Model steering
+
+- **Goal.** The main Opus session orchestrates. Volume work (building, reviewing, investigating) runs on Sonnet. Opus is used where it is stated on purpose: plans, plan source review, round-2 code review.
+- **`sdlc-review.json`** sets the models. Layers, weakest first: built-in defaults, `~/.claude/sdlc-review.json`, `<repo>/.claude/sdlc-review.json`, path rules, then a one-off `--model` on `/sdlc:code-review-pre-commit`. A rule is `{ "paths": [...], "round1": "<model>", "round2": "<model>" }`. Rules from both files apply, and the strongest matching model wins (opus, then sonnet, then haiku). Copy `.claude/sdlc-review.json.example`; every key is optional.
+- **Keys.** `round1` (default sonnet) and `round2` (default opus) are the models for the first review and for reruns. Round 1 always runs `code-reviewer`, later rounds `code-reviewer-deep`: only the model is configurable. `maxRounds` (default 2) is enforced by the gate: it refuses a marker for a higher round. `planReview.source` (opus), `planReview.consistency` (sonnet) and `planReview.cap` (3) steer the `plan-spec` review rounds. `orchestrator.bashNudge` (8) is the nudge threshold below. The gate message names the reviewer and model it expects.
+- **Globs.** `**/*.md` does not match a root-level file such as `README.md`. List `*.md` too, as the example does.
+- **A bad file never blocks.** Invalid JSON or an invalid value is ignored with a one-line warning, and the next layer applies.
+- **`agent-tier-gate.js`** (PreToolUse on `Agent`). An Opus or Fable dispatch needs a `TIER: opus: <reason>` line in its prompt, or it is denied. A `general-purpose`, `Explore` or `Plan` dispatch with no model (or `inherit`) is rewritten to Sonnet. `sdlc:*` agents, `fork` and custom agents are untouched.
+- **Orchestrator mode** (`orchestrator-mode.js`). It turns on when the main session reads a handoff or tracker file (a `.md` named `*handoff*`, or with `tracker` in its path) or runs `plan-spec run`. While on, it denies Edit, Write, MultiEdit and NotebookEdit in the main session, except for handoffs, trackers, reports, briefs, plans, feature records, memory and temp files. After `bashNudge` inline Bash commands with no Agent dispatch in between, it adds a nudge to hand the work to a sub-agent. Commands such as `git add`, `git status`, `gh` and `printf` do not count. Sub-agents are never affected. `/sdlc:orchestrate on|off|status` is the owner's switch; after `off`, triggers do not turn it back on in that session.
+- **`/sdlc:handoff [slug]`** writes `tmp/HANDOFF-<slug>-<timestamp>.md` in a fixed form (next action, state, in flight, decisions, verified facts) and prints the line to paste into a fresh session. Reading that file turns orchestrator mode on there.
+- **`/sdlc:model-spend [--days N] [--json]`** reads `~/.claude/projects` transcripts and reports the Opus and Sonnet share of cost, main-session work versus orchestration, Opus sub-agents without a `TIER` line, and sessions that reached review round 3. List-price estimates, local files only.
+
 ## Configuration
 
 ### `~/.claude/hygiene-repos.json`

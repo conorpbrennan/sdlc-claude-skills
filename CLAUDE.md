@@ -57,6 +57,11 @@ edit made there is lost on the next update, and it never reaches the repo.
 | Plugin manifests and hook wiring | `.claude-plugin/`, `hooks/hooks.json` |
 | Legacy-install removal (`uninstall.sh`) | `src/unmerge-*.js`, `src/lib/`, `legacy/` |
 | Timing analyser | `tools/analyze-review-timing.py` |
+| Review config resolver and CLI (`sdlc-review.json`) | `src/hooks/lib/review-config.js`, `src/hooks/review-config-cli.js`, `.claude/sdlc-review.json.example` |
+| `agent-tier-gate` hook (Opus dispatch needs a TIER reason) | `src/hooks/agent-tier-gate.js` |
+| Orchestrator mode hook and `/sdlc:orchestrate` | `src/hooks/orchestrator-mode.js`, `commands/orchestrate.md` |
+| `/sdlc:handoff` | `commands/handoff.md` |
+| `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js` |
 
 See `README.md` for how the pieces fit together at run time.
 

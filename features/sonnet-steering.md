@@ -31,6 +31,12 @@
 
 ## History
 
+- 2026-10-18 `d29ce0c` — Add /sdlc:model-spend, a weekly spend report from local transcripts
+  - .claude-plugin/plugin.json
+  - commands/model-spend.md
+  - tools/model-spend.js
+  - tools/test-model-spend.js
+
 - 2026-10-18 `a279f5c` — Add /sdlc:handoff and fix orchestrator path checks on Windows
   - .claude-plugin/plugin.json
   - commands/handoff.md

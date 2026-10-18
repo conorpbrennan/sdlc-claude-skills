@@ -21,14 +21,17 @@ branch name become hyphens.
    - `git rev-parse --abbrev-ref HEAD`
    - `git log -1 --format='%h %s'`
    - `git status --short`
+   - `date +%Y-%m-%d-%H%M` (the timestamp for the filename)
 3. Create `tmp/` at the repo root if it is missing. Run
-   `git check-ignore tmp/`. If it is not ignored, tell the owner so. Do not
-   edit `.gitignore`.
-4. Write `tmp/HANDOFF-<slug>-<YYYY-MM-DD-HHMM>.md` with the Write tool, using
+   `git check-ignore tmp/`. If it is not ignored, say so in the message to
+   the owner: the handoff could be staged by accident. Do not edit
+   `.gitignore`.
+4. Write `tmp/HANDOFF-<slug>-<timestamp from step 2>.md` with the Write tool, using
    the template below verbatim. The filename must contain `HANDOFF`: that is
    what turns orchestrator mode on when the next session reads the file. The
    main session may write it while the mode is on.
-5. Print the path and the one line to paste: `read <path>`.
+5. Print the path and the one line to paste: `read <path>`. Add the
+   not-ignored warning from step 3 if it applies.
 
 ## Template
 
