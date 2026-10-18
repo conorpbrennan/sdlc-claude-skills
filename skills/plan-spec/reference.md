@@ -971,7 +971,7 @@ when the step is written — or, where a single revert is not enough, the
 revert order, what must be reverted with it, and why a partial revert is
 worse than none>
 
-BUDGET: <the wall clock this step is expected to cost and the number of
+BUDGET: <the tool calls (about 40 or fewer, §17), the wall clock this step is expected to cost and the number of
 reviewer rounds expected. The run's baseline: implementations ten to
 twenty-five minutes, reviews three to five, one implementer pass and one
 or two rounds (§7a). The field earns its place on the steps that break
@@ -1041,6 +1041,11 @@ implementer pass. The test an author applies before writing it:
   re-pinned numbers asserting against the old bytes, which is a red suite
   rather than a rollback. That is permitted and it is also a signal, since
   that step said in its own text that it was likely two commits.
+
+- An implementer finishes it in about 40 tool calls or fewer. Cost grows
+  with every turn, because the whole context is re-read each time: runs over
+  50 turns were 54% of implementer spend. A step expected to exceed 40 splits
+  before dispatch. The plan review flags any step that does.
 
 A step that fails any of these splits, and the split is written into the plan
 before dispatch, not discovered by the implementer. Two commits from one step
@@ -1496,6 +1501,9 @@ Rules for you specifically:
   signatures or its gate: stop before committing and propose the amendment
   (§18.4). The test is whether the step as written is still true after the
   choice.
+- End the report with the exact test command you ran, its pass/fail summary
+  line, and `git diff --stat` of what you changed (working tree).
+  The orchestrator trusts these and does not re-run them.
 - Write your report to `run/reports/<step id>-implementer-<round>.md` with
   the file tool, to this template, every field. Return the path plus a
   five-line summary, not the report (§19).
@@ -1568,7 +1576,8 @@ is §21.1 with three substitutions and nothing else new:
 1. The tree is the one the review failed in — the reviewer's worktree under
    §7a, otherwise the main tree with the diff still staged.
 2. The prompt carries, verbatim, the original implementer's report and the
-   review's findings.
+   review's findings. Its own report ends as §21.1 says: test command,
+   summary line, `git diff --stat`.
 3. The instruction replaces "implement this step" with: close these
    findings and nothing else. Re-run the step's whole GATE, not the failing
    condition. A fix that changes what the step delivers is §18.4 — stop and

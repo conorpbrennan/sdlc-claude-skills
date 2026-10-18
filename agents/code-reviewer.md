@@ -2,6 +2,7 @@
 name: code-reviewer
 description: Pre-commit scope reviewer on Sonnet. Reviews a staged diff (or a named diff range) against the four pillars in order (correct, tested, readable, optimized), reads only the containing function around each hunk, verifies risky hunks by executing them, and ends with the TDD_GATE trailer the pre-commit hook consumes. Use for the everyday per-commit gate.
 model: sonnet
+maxTurns: 75
 tools: Bash, Read, Grep, Glob
 ---
 

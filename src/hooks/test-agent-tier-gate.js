@@ -7,6 +7,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const HOOK = path.join(__dirname, 'agent-tier-gate.js');
+const { BUDGET_BLOCK, BUDGET_MARKER } = require('./lib/context-budget.js');
 const DENY_REASON = 'Opus dispatch without a stated reason. Opus is for plans, plan source review and judgement calls. Add a line "TIER: opus: <why>" to the prompt, or dispatch with model: "sonnet".';
 
 let passed = 0;
@@ -52,7 +53,7 @@ assert('deny empty reason text',
 
 console.log('gated types, opus with a reason');
 const withReason = (line, model) =>
-    call({ subagent_type: 'general-purpose', model: model || 'opus', prompt: `intro\n${line}\nmore` });
+    call({ subagent_type: 'general-purpose', model: model || 'opus', prompt: `intro\n${line}\nmore\n${BUDGET_MARKER}` });
 assert('allow colon form', withReason('TIER: opus: plan source review').out, '');
 assert('allow dash form', withReason('TIER: opus - judgement call').out, '');
 assert('allow lowercase tier', withReason('tier: Opus: why').out, '');
@@ -64,7 +65,7 @@ assert('missing model rewritten to sonnet', rewritten.out, {
     hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'allow',
-        updatedInput: { subagent_type: 'Explore', prompt: 'look', description: 'd', model: 'sonnet' },
+        updatedInput: { subagent_type: 'Explore', prompt: 'look\n\n' + BUDGET_BLOCK, description: 'd', model: 'sonnet' },
     },
 });
 for (const m of ['inherit', 'INHERIT', ' inherit ']) {
@@ -72,11 +73,11 @@ for (const m of ['inherit', 'INHERIT', ' inherit ']) {
     assert(`inherit rewritten to sonnet: ${JSON.stringify(m)}`, r.out.hookSpecificOutput.updatedInput.model, 'sonnet');
 }
 for (const m of [42, true, ['opus'], {}]) {
-    assert(`non-string model passes through: ${JSON.stringify(m)}`, call({ subagent_type: 'Plan', model: m, prompt: 'x' }).out, '');
+    assert(`non-string model passes through: ${JSON.stringify(m)}`, call({ subagent_type: 'Plan', model: m, prompt: BUDGET_MARKER }).out, '');
 }
 assert('missing type rewritten', decision(call({ prompt: 'x' })), 'allow');
-assert('sonnet passes', call({ subagent_type: 'Plan', model: 'sonnet', prompt: 'x' }).out, '');
-assert('haiku passes', call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' }).out, '');
+assert('sonnet passes', call({ subagent_type: 'Plan', model: 'sonnet', prompt: BUDGET_MARKER }).out, '');
+assert('haiku passes', call({ subagent_type: 'Plan', model: 'haiku', prompt: BUDGET_MARKER }).out, '');
 
 console.log('ungated types');
 for (const type of ['sdlc:code-reviewer-deep', 'sdlc:code-reviewer', 'fork', 'claude-code-guide',
@@ -84,6 +85,37 @@ for (const type of ['sdlc:code-reviewer-deep', 'sdlc:code-reviewer', 'fork', 'cl
     assert(`opus passes untouched, ${type}`, call({ subagent_type: type, model: 'opus', prompt: 'x' }).out, '');
     assert(`no model untouched, ${type}`, call({ subagent_type: type, prompt: 'x' }).out, '');
 }
+
+console.log('context budget');
+const updated = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificOutput.updatedInput;
+for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan']) {
+    const u = updated(call({ subagent_type: type, model: 'sonnet', prompt: 'do it' }));
+    assert(`budget appended once, type=${JSON.stringify(type)}`, u && u.prompt, 'do it\n\n' + BUDGET_BLOCK);
+}
+const both = call({ subagent_type: 'Plan', prompt: 'look', description: 'd', run_in_background: true });
+assert('tier rewrite and budget in one updatedInput', updated(both),
+    { subagent_type: 'Plan', prompt: 'look\n\n' + BUDGET_BLOCK, description: 'd', run_in_background: true, model: 'sonnet' });
+assert('budget alone emits updatedInput and no permissionDecision',
+    [updated(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })) !== undefined,
+        decision(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' }))], [true, undefined]);
+assert('opus with reason: budget alone, no permissionDecision',
+    decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: why' })), undefined);
+assert('tier rewrite plus budget still allows', decision(both), 'allow');
+assert('deny is unchanged', decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'x' })), 'deny');
+assert('model untouched when only budget', updated(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })).model, 'haiku');
+assert('opus with reason gets budget, model kept',
+    updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: why' })).model, 'opus');
+assert('idempotent when marker present',
+    call({ subagent_type: 'Plan', model: 'sonnet', prompt: 'x\n' + BUDGET_MARKER + '\nmore' }).out, '');
+assert('marker present still rewrites model',
+    updated(call({ subagent_type: 'Plan', prompt: 'x ' + BUDGET_MARKER })).prompt, 'x ' + BUDGET_MARKER);
+for (const type of ['sdlc:code-reviewer', 'fork', 'my-own-agent']) {
+    assert(`budget skipped, ${type}`, call({ subagent_type: type, model: 'sonnet', prompt: 'x' }).out, '');
+}
+for (const p of [undefined, '', '   ', 42, ['x'], null]) {
+    assert(`bad prompt untouched: ${JSON.stringify(p)}`, call({ subagent_type: 'Plan', model: 'sonnet', prompt: p }).out, '');
+}
+assert('deny carries no updatedInput', updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'x' })), undefined);
 
 console.log('fail open');
 assert('bad JSON', run('not json'), { status: 0, out: '' });
