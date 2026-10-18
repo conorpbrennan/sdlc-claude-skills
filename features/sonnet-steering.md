@@ -1,0 +1,78 @@
+# Sonnet Steering
+
+**Requirement**: Keep the main Opus session a thin orchestrator so volume work runs on Sonnet: deny inline source edits and nudge inline investigation in orchestrator mode, deny Opus sub-agent dispatches without a stated TIER reason, default plan-spec implementers to Sonnet, make reviewer models configurable per user, repo and path with the two-round cap enforced, and add /sdlc:handoff and /sdlc:model-spend.
+
+**Started**: 2026-10-18
+**Last updated**: 2026-10-18
+**Branch**: sonnet-steering
+
+## Files involved
+
+- .claude-plugin/plugin.json
+- .claude/sdlc-review.json
+- commands/handoff.md
+- commands/model-spend.md
+- commands/orchestrate.md
+- hooks/hooks.json
+- instructions/claude-md-snippet.md
+- skills/code-review-pre-commit/SKILL.md
+- src/hooks/agent-tier-gate.js
+- src/hooks/lib/review-config.js
+- src/hooks/orchestrator-mode.js
+- src/hooks/pre-commit-review.js
+- src/hooks/review-config-cli.js
+- src/hooks/test-agent-tier-gate.js
+- src/hooks/test-orchestrator-mode.js
+- src/hooks/test-pre-commit-review.js
+- src/hooks/test-review-config.js
+- src/hooks/test-timing-log.js
+- src/test-plugin-layout.js
+- tools/model-spend.js
+- tools/test-model-spend.js
+
+## History
+
+- 2026-10-18 `d29ce0c` — Add /sdlc:model-spend, a weekly spend report from local transcripts
+  - .claude-plugin/plugin.json
+  - commands/model-spend.md
+  - tools/model-spend.js
+  - tools/test-model-spend.js
+
+- 2026-10-18 `a279f5c` — Add /sdlc:handoff and fix orchestrator path checks on Windows
+  - .claude-plugin/plugin.json
+  - commands/handoff.md
+  - commands/orchestrate.md
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-orchestrator-mode.js
+
+- 2026-10-18 `1e095d2` — Add orchestrator mode: the main session dispatches, it does not edit
+  - .claude-plugin/plugin.json
+  - commands/orchestrate.md
+  - hooks/hooks.json
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-agent-tier-gate.js
+  - src/hooks/test-orchestrator-mode.js
+
+- 2026-10-18 `8e5ceee` — Gate Opus sub-agent dispatches on a stated TIER reason
+  - .claude-plugin/plugin.json
+  - hooks/hooks.json
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/test-agent-tier-gate.js
+
+- 2026-10-18 `590982f` — Name the configured reviewers in the gate and enforce the round cap
+  - .claude-plugin/plugin.json
+  - instructions/claude-md-snippet.md
+  - skills/code-review-pre-commit/SKILL.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/test-pre-commit-review.js
+  - src/hooks/test-review-config.js
+  - src/hooks/test-timing-log.js
+
+- 2026-10-18 `a5c9539` — Add a layered resolver for reviewer and plan-review models
+  - .claude-plugin/plugin.json
+  - .claude/sdlc-review.json
+  - src/hooks/lib/review-config.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/test-review-config.js

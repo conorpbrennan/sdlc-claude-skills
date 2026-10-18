@@ -1,0 +1,5 @@
+{
+  "rules": [
+    { "paths": ["src/hooks/**", "hooks/**"], "round2": "opus" }
+  ]
+}

@@ -270,9 +270,9 @@ answers change the text it is reviewing.
 
 **One iteration.**
 
-1. One independent reviewer, the heavy tier (§9 — Opus at the time of
-   writing), fresh context, given the document and exactly one input to hold
-   it against (§21.4). It is not told what the previous rounds found, what
+1. One independent reviewer, fresh context (tier per the amendment below:
+   Opus for a source round, Sonnet for a consistency round), given the
+   document and exactly one input to hold it against (§21.4). It is not told what the previous rounds found, what
    changed since, or that it is round n. A reviewer handed the prior findings
    reviews the fix list; a reviewer handed the document reviews the document.
 2. Every finding is dispositioned as the round closes: folded into the
@@ -334,6 +334,19 @@ starts. The plan's loop closes on READY; the spec's closes on the signature
 its plan rounds through the same CLI, with the agent field naming the tier
 rather than a step's reviewer — so that "eight rounds" is a record rather
 than a recollection.
+
+**Amendment, 18 Oct 2026: the tier follows the input.** In the week of 11-18
+Oct 2026 plan review ran 4-5 Opus rounds per plan, 44 runs in all, more than
+all code review combined. Most of those rounds held the document against
+itself, which does not need Opus. **Rule.** A *source* round holds the
+document against source, spec, or code at HEAD. It runs on Opus and its prompt
+carries `TIER: opus: plan source review`. An *internal-consistency* round
+holds the document against itself. It runs on Sonnet. A consistency round is
+still always followed by a source round (§2b). The two models and the default
+cap come from `sdlc-review.json` (`planReview.source`, `planReview.consistency`,
+`planReview.cap`; defaults opus, sonnet, 3). Read them with
+`node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap the owner
+declared (§2, §20.3) still wins over the config default.
 
 **Three failure modes, all seen.** *Churn*: each round's fix creates the next
 round's seam, and this document's fourth round found little else — seams
@@ -603,6 +616,16 @@ which supersedes the stricter reading of this sentence. The orchestrator holds
 the state — the tracker, §19a — and reads every report in full before
 dispatching the next.
 
+**Amendment, 18 Oct 2026: running a plan is orchestrator mode.** In the week
+of 11-18 Oct 2026 the main Opus session was 54% of spend, and 67% of its cost
+was inline work (reading, running, editing), not orchestration. **Rule.**
+Running a plan puts the main session in orchestrator mode, which the
+`orchestrator-mode` hook enforces. It denies main-session edits outside
+handoffs, trackers, reports, plans, briefs, feature records and memory, and it
+nudges after 8 inline commands since the last dispatch. Investigation that
+chases a failure or a difference is a dispatch, not an inline run. The owner's
+switch is `/sdlc:orchestrate off`.
+
 ## 7a. Where parallelism is allowed, and the rule that keeps it safe
 
 Decided mid-run, 3 Sep 2026, after twelve strictly sequential steps. The
@@ -732,7 +755,7 @@ time a phase-level review looked. That is the case for per-commit.
 **Rule.** Round one on the everyday reviewer (Sonnet), whatever the change.
 Any rerun after a FAIL on the deep reviewer (Opus). After two FAILs, stop
 and ask. The heavy tier
-(Opus) is for the plan text and the signed spec, where a defect costs an
+(Opus) is for the plan's source rounds and the signed spec, where a defect costs an
 amendment; it earned its cost there twice, which is why it is the default
 there and an escalation, not a default, on a 50-line diff. The loop it runs
 in, before the first step is dispatched, is §2a.
@@ -744,6 +767,16 @@ tier: a step written to §16 is execution, because §1 has already made the
 design. A step that looks as though it needs the heavy tier to build is a
 step the plan under-specified — spend the tier on the plan, where §2a is
 already spending it, not on the step.
+
+**Amendment, 18 Oct 2026: the dispatch states the tier.** In the week of
+11-18 Oct 2026, 17 implementer runs and 10 investigations went to Opus,
+because plans named the implementer tier as Opus or the dispatch named
+`model: "opus"`; the §21 prompts never stated a model, so nothing pushed the
+other way. **Rule.** The implementer runs on Sonnet, and the dispatch says so:
+`subagent_type: "general-purpose"`, `model: "sonnet"` (§21.1). An Opus
+implementer needs the owner's OK recorded in §20.2 and a
+`TIER: opus: <reason>` line in the prompt. The `agent-tier-gate` hook denies
+an Opus dispatch without that line.
 
 Reviewers are handed: the repo, the staged diff, the step's intent in one
 paragraph, the single owners it must not duplicate, the specific things to
@@ -860,8 +893,8 @@ without reading the redacted text, and they matched cell for cell.
    implementer (§18.3).
 5. Run the hooks' own tests before the run and after any hook install (§12).
 6. Budget by the measured cost: roughly one implementer plus two reviewer
-   rounds per step, Sonnet for the gate, the heavy tier only for the plan and
-   the spec (§9).
+   rounds per step, Sonnet for the gate, the heavy tier only for the plan's source
+   rounds and the spec (§9).
 7. Declare each step's file set in the plan, so the orchestrator can decide
    overlap by reading it rather than by guessing; reviewers in a worktree
    always; commits from the index only, in step order (§7a).
@@ -1197,13 +1230,21 @@ repository, beside the tracker, one directory for the run:
 
 ```
 run/tracker.md                                  (§19a)
-run/reports/<step id>-implementer-<round>.md    (this template)
-run/reports/<step id>-review-<round>.md         (the reviewer's report)
+run/reports/<step id>-implementer-<round>.md    (this template; the implementer writes it)
+run/reports/<step id>-fix-<round>.md            (a fix round's report, same template)
+run/reports/<step id>-review-<round>.md         (the reviewer's report; the orchestrator writes it)
 ```
 
-The orchestrator writes each file from the agent's final message as it
-arrives, before dispatching anything else, and they land with the tracker,
-one step behind (§19a). The tracker's step block names the files rather than
+**Amendment, 18 Oct 2026: the implementer writes its own report.** The
+orchestrator was copying implementer reports into files itself, paying Opus
+output rates for a copy. Now the implementer writes its report to
+`run/reports/<step id>-implementer-<round>.md` (a fix agent, to
+`<step id>-fix-<round>.md`) with the file tool, and returns the path plus a
+five-line summary (§21.1). The orchestrator reads that file in full and does
+not rewrite it. A reviewer is read-only (§10), so the orchestrator still
+writes `<step id>-review-<round>.md` from the reviewer's final message, before
+dispatching anything else. The files land with the tracker, one step behind
+(§19a). The tracker's step block names the files rather than
 repeating them, which is why it carries no RED FIRST, MEASUREMENTS or NEXT
 of its own. A prompt that says "verbatim" means from these files.
 
@@ -1305,7 +1346,9 @@ citing it.
    step.** The repository's class-level guard tests (§5), the commit
    protocol (§8) written out as the exact commit command that passes every
    gate this harness runs, the single owners nothing may reimplement, the
-   implementer's tier (§9), the no-client-data rule (§14), and anything true
+   implementer's tier (§9; the line defaults to "Sonnet (§9)", and an Opus
+   implementer needs the owner's OK recorded on that line), the no-client-data
+   rule (§14), and anything true
    of every step. A step repeating a working constraint is a step that will
    drift from it.
    Four facts about the harness belong here too, because a step is
@@ -1337,8 +1380,9 @@ citing it.
    step's file set and never counted against it: the plan itself (an
    implementer writes to its DECISIONS-OPEN, §18.5), the feature record (the
    commit machinery rewrites it mid-commit, see Terms), the tracker, and the
-   run's report directory (the orchestrator writes both, one step behind,
-   §19 and §19a). Each appears in some step's diff without being any step's
+   run's report directory (the orchestrator writes the tracker and the
+   review reports, one step behind; an implementer writes its own report
+   there; §19 and §19a). Each appears in some step's diff without being any step's
    work — nothing "rewrites" the tracker but the orchestrator, which is
    exactly why it needs naming here — and without this line every step's
    FILES field is a finding against itself (§19). If the plan tags its step
@@ -1409,6 +1453,11 @@ run is carrying in someone's memory (§19a).
 
 ### 21.1 The implementer
 
+Dispatch: `subagent_type: "general-purpose"`, `model: "sonnet"` (§9). The
+Agent call states both; the prompt below is what goes in its `prompt` field.
+An Opus implementer adds a `TIER: opus: <reason>` line to the prompt, and only
+with the owner's OK recorded in §20.2.
+
 ```
 You are implementing one step of <plan path>, revision <n>. You implement
 this step and nothing else.
@@ -1447,7 +1496,9 @@ Rules for you specifically:
   signatures or its gate: stop before committing and propose the amendment
   (§18.4). The test is whether the step as written is still true after the
   choice.
-- Report to this template, every field:
+- Write your report to `run/reports/<step id>-implementer-<round>.md` with
+  the file tool, to this template, every field. Return the path plus a
+  five-line summary, not the report (§19).
 <the §19 block>
 ```
 
@@ -1511,7 +1562,8 @@ reviews like one.
 ### 21.3 The fix
 
 Dispatched after a review FAIL (§18.3), including an overlapped one (§7a).
-It is §21.1 with three substitutions and nothing else new:
+Dispatch: `subagent_type: "general-purpose"`, `model: "sonnet"`, as §21.1. It
+is §21.1 with three substitutions and nothing else new:
 
 1. The tree is the one the review failed in — the reviewer's worktree under
    §7a, otherwise the main tree with the diff still staged.
@@ -1527,8 +1579,10 @@ dispatched into a fresh one (§7a). A fix agent leaves its edits unstaged in
 the worktree it was given, so a reused worktree would show round two the
 diff that failed.
 
-It reports to §19 with the round number, and the whole staged diff goes back
-for review, not the delta (§18.3).
+It reports to §19 with the round number, writing the report to
+`run/reports/<step id>-fix-<round>.md` and returning the path plus a five-line
+summary, as §21.1 says. The whole staged diff goes back for review, not the
+delta (§18.3).
 
 ### 21.4 The document review
 
@@ -1537,6 +1591,12 @@ for review, not the delta (§18.3).
 prompts above are all reviews of a diff. This is the fourth. Its verdict is
 READY or NOT YET with findings (see Terms), never PASS: there is no diff for a
 PASS to bind to.
+
+Dispatch: the model comes from the round's input (§2a). A source round runs on
+`model: "opus"` and its prompt carries a `TIER: opus: plan source review`
+line. An internal-consistency round runs on `model: "sonnet"`. Read both with
+`node <plugin>/src/hooks/review-config-cli.js plan-review`; the cap it prints
+is the default, and the owner's declared cap (§2) wins.
 
 ```
 You are reviewing <document path>, revision <n>, as a document. You are
