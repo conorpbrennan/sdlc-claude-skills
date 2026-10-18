@@ -74,6 +74,7 @@ const commitCommand = require('./lib/commit-command');
 const hookOutput = require('./lib/hook-output');
 const gitRead = require('./lib/git-read');
 const { cmd, agent, skill } = require('./lib/plugin-names');
+const reviewConfig = require('./lib/review-config');
 
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const BLOCK_MARKER_MAX_AGE_MS = 30 * 1000;
@@ -338,10 +339,63 @@ function markerRecipe(markerPath, coveragePath, tag) {
 // they are namespaced; the marker tag is a label and stays bare, which
 // TAG_NOTE says outright so a namespaced agent name does not leak into it.
 const REVIEW_CMD = cmd('code-review-pre-commit');
-const ROUNDS_POLICY = 'Round 1 is always ' + agent('code-reviewer') + ', whatever the change: do not pass ' +
-    '--deep on round 1. After a FAIL, fix and rerun with --deep (' + agent('code-reviewer-deep') + '). ' +
-    'After two FAILs stop, show the open items, ' +
-    'and ask the user to fix-and-rerun or to accept with the gap named in the commit message.';
+// Where the skill resolves each round's model, at this hook's own location
+// (like TIMING_CMD below), so it runs wherever the plugin is installed.
+const REVIEW_CONFIG_CMD = 'node "' + path.join(__dirname, 'review-config-cli.js') + '" review --round <n>';
+
+// Resolves rounds 1 and 2 for this repo and these staged paths. Never throws:
+// a resolver failure gives the built-in defaults and a warning, so a config
+// problem cannot block a commit.
+//
+// Args:
+//   repoRoot: repository root holding .claude/sdlc-review.json.
+//   stagedPaths: repo-relative staged paths, matched against rule globs.
+// Returns:
+//   { round1, round2, warnings }: each round is { agent, model, source,
+//   maxRounds }; warnings is an array of strings.
+function resolveRounds(repoRoot, stagedPaths) {
+    try {
+        const r1 = reviewConfig.resolveReview({ repoRoot, stagedPaths, round: 1 });
+        const r2 = reviewConfig.resolveReview({ repoRoot, stagedPaths, round: 2 });
+        const warnings = Array.from(new Set(r1.warnings.concat(r2.warnings)));
+        return { round1: r1, round2: r2, warnings };
+    } catch (e) {
+        const d = reviewConfig.DEFAULTS;
+        return {
+            round1: { agent: 'code-reviewer', model: d.round1, source: 'default', maxRounds: d.maxRounds },
+            round2: { agent: 'code-reviewer-deep', model: d.round2, source: 'default', maxRounds: d.maxRounds },
+            warnings: ['review config could not be resolved (' + (e && e.message) + '); defaults shown'],
+        };
+    }
+}
+
+// The rounds policy for one block: which agent and model run each round, the
+// cap, and what to do when it is reached. Round 1 never uses --deep.
+//
+// Args:
+//   rounds: the result of resolveRounds.
+// Returns:
+//   The policy sentence block for the block message.
+function roundsPolicy(rounds) {
+    const { round1: r1, round2: r2, warnings } = rounds;
+    const cap = r1.maxRounds;
+    return 'Round 1: ' + agent(r1.agent) + ' on ' + r1.model + ' (' + r1.source + '), whatever the change: ' +
+        'do not pass --deep on round 1. After a FAIL, fix and rerun with --deep: ' + agent(r2.agent) +
+        ' on ' + r2.model + ' (' + r2.source + '). Cap: ' + cap + ' rounds. ' +
+        'Resolve the model for a round with: ' + REVIEW_CONFIG_CMD + '. ' +
+        'After ' + cap + ' FAILs stop, show the open items, ' +
+        'and ask the user to fix-and-rerun or to accept with the gap named in the commit message.' +
+        (warnings.length ? ' Config warnings: ' + warnings.join('; ') + '.' : '');
+}
+
+// The round a marker tag records, from `code-reviewer-deep:round3:PASS`, or
+// null when the tag names no round (such a marker keeps its old meaning).
+const TAG_ROUND = /^code-reviewer(?:-deep)?:round(\d+)(?::|$)/;
+function tagRound(tag) {
+    const m = TAG_ROUND.exec(tag || '');
+    return m ? parseInt(m[1], 10) : null;
+}
+
 // Round 1 is the everyday reviewer's, so a deep reviewer's round-1 PASS does not
 // approve: it would let the costlier reviewer stand in for the gate's first pass.
 const DEEP_ROUND_ONE = /^code-reviewer-deep:round1(:|$)/;
@@ -351,8 +405,8 @@ const TAG_NOTE = ' (replace code-reviewer:round1 with the bare agent name, code-
 // plugin cache, a source checkout or a legacy install all hold timing-log.js
 // beside this file, so the path is right wherever the toolchain lives.
 const TIMING_CMD = 'node "' + path.join(__dirname, 'timing-log.js') + '" review.completed ' +
-    'agent=<code-reviewer|code-reviewer-deep> round=<n> verdict=<PASS|FAIL> critical=<n> important=<n> ' +
-    'advisory=<n> repo="$(git rev-parse --show-toplevel)"';
+    'agent=<code-reviewer|code-reviewer-deep> round=<n> model=<m> source="<source>" verdict=<PASS|FAIL> ' +
+    'critical=<n> important=<n> advisory=<n> repo="$(git rev-parse --show-toplevel)"';
 
 function writeMarker(markerPath, diffHash, covHash, tag) {
     try {
@@ -824,6 +878,9 @@ function main() {
 
     const toplevel = repo.toplevel;
     const policy = loadPolicy(toplevel);
+    // All staged paths, the set review-config-cli.js reads, so the message and
+    // the skill resolve the same rules. An unreadable index gives no paths.
+    const stagedForConfig = () => getAllStagedPaths() || [];
     const diffHash = getStagedDiffHash();
     const coveragePath = findCoverageXml(toplevel);
     const covHash = coveragePath ? getCoverageXmlHash(coveragePath) : 'none';
@@ -846,8 +903,27 @@ function main() {
                 const reason = 'Round 1 runs on ' + agent('code-reviewer') + ', not ' +
                     agent('code-reviewer-deep') + '. Rerun round 1 with ' + REVIEW_CMD + ' --fresh (no --deep).';
                 block('deep-round-one', reason,
-                    'PRE_COMMIT_REVIEW: ' + reason + ' ' + ROUNDS_POLICY + ' On TDD_GATE: PASS run exactly: ' +
+                    'PRE_COMMIT_REVIEW: ' + reason + ' ' + roundsPolicy(resolveRounds(toplevel, stagedForConfig())) +
+                    ' On TDD_GATE: PASS run exactly: ' +
                     markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') + TAG_NOTE + '.');
+            }
+            // The round cap: a marker for a round past maxRounds is not accepted.
+            // The lock stays, as for a deep round-1 marker. The owner decides.
+            const markerRoundNo = tagRound(parts[3]);
+            if (parts[1] === diffHash && parts[2] === covHash && markerRoundNo !== null) {
+                const rounds = resolveRounds(toplevel, stagedForConfig());
+                const cap = rounds.round1.maxRounds;
+                if (markerRoundNo > cap) {
+                    const layer = cap === reviewConfig.DEFAULTS.maxRounds
+                        ? 'the default'
+                        : 'set in ' + reviewConfig.CONFIG_NAME;
+                    const reason = 'Review round ' + markerRoundNo + ' exceeds the cap of ' + cap + ' (' + layer + ')';
+                    block('round-cap-exceeded', reason,
+                        'PRE_COMMIT_REVIEW: ' + reason + '. This marker is not accepted. The owner decides: ' +
+                        'fix the open items and accept with the gap named in the commit message, or raise ' +
+                        'maxRounds in ' + reviewConfig.CONFIG_NAME + ' (repo: .claude/' + reviewConfig.CONFIG_NAME +
+                        ', user: ~/.claude/' + reviewConfig.CONFIG_NAME + ').');
+                }
             }
             if (parts[1] === diffHash && parts[2] === covHash) {
                 // The review this lock was written for has passed: measure it
@@ -1202,7 +1278,7 @@ function main() {
     writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'review-required: ' + reason.split('\n')[0].slice(0, 120));
     block('review-required', reason,
         'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run ' + REVIEW_CMD + ' --fresh on the ' +
-        'staged files: ' + fileList + semanticNote + '. ' + ROUNDS_POLICY +
+        'staged files: ' + fileList + semanticNote + '. ' + roundsPolicy(resolveRounds(toplevel, stagedForConfig())) +
         ' On TDD_GATE: PASS run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
         TAG_NOTE + '. On TDD_GATE: FAIL do not write the marker. Either way, record the round by running ' +
         'exactly: ' + TIMING_CMD + ' (fill in the placeholders).');

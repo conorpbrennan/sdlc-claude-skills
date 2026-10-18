@@ -13,16 +13,29 @@ const path = require('path');
 const { gitRead, locateRepo, splitNul } = require('./lib/git-read.js');
 const { resolveReview, resolvePlanReview } = require('./lib/review-config.js');
 
+// A flag with no value (last on the line, or followed by another flag) is a
+// usage error, reported through `error`.
 function parseArgs(argv) {
-    const out = { cmd: argv[0], flags: {} };
+    const out = { cmd: argv[0], flags: {}, error: null };
     for (let i = 1; i < argv.length; i++) {
-        if (argv[i].startsWith('--')) out.flags[argv[i].slice(2)] = argv[++i];
+        if (!argv[i].startsWith('--')) continue;
+        const next = argv[i + 1];
+        if (next === undefined || next.startsWith('--')) {
+            out.error = argv[i] + ' needs a value';
+            continue;
+        }
+        out.flags[argv[i].slice(2)] = next;
+        i++;
     }
     return out;
 }
 
 function main(argv) {
-    const { cmd, flags } = parseArgs(argv);
+    const { cmd, flags, error } = parseArgs(argv);
+    if (error) {
+        console.error(error);
+        return 2;
+    }
     const warnings = [];
     let repoRoot = flags.repo ? path.resolve(flags.repo) : null;
     if (!repoRoot) {
@@ -41,8 +54,8 @@ function main(argv) {
         return 0;
     }
     if (cmd === 'review') {
-        const round = parseInt(flags.round, 10);
-        if (!Number.isInteger(round) || round < 1) {
+        const round = /^\d+$/.test(flags.round || '') ? parseInt(flags.round, 10) : 0;
+        if (round < 1) {
             console.error('review needs --round <n>, n >= 1');
             return 2;
         }

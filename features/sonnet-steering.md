@@ -10,10 +10,20 @@
 
 - .claude-plugin/plugin.json
 - .claude/sdlc-review.json
+- instructions/claude-md-snippet.md
+- skills/code-review-pre-commit/SKILL.md
 - src/hooks/lib/review-config.js
+- src/hooks/pre-commit-review.js
 - src/hooks/review-config-cli.js
+- src/hooks/test-pre-commit-review.js
 - src/hooks/test-review-config.js
+- src/hooks/test-timing-log.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-18 `a5c9539` — Add a layered resolver for reviewer and plan-review models
+  - .claude-plugin/plugin.json
+  - .claude/sdlc-review.json
+  - src/hooks/lib/review-config.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/test-review-config.js

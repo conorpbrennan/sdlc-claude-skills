@@ -1,14 +1,12 @@
 // Tests for lib/review-config.js and review-config-cli.js: which model reviews
 // which round, resolved from built-in defaults, a user file, a repo file and
 // path rules.
-//
-// Written before the implementation.
 require('./lib/isolate-git-env.js').isolateGitEnv();
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 
 const cfg = require('./lib/review-config.js');
 
@@ -235,6 +233,23 @@ j = JSON.parse(runCli(['review', '--round', '1', '--repo', gitRepo], sb));
 assert('--repo works from another cwd', [j.round, j.agent, j.model], [1, 'code-reviewer', 'sonnet']);
 j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
 assert('plan-review prints the plan result', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 3]);
+
+// A flag with no value, or a bad round, is a usage error.
+const runCliRaw = (args, cwd) => spawnSync('node', [cli, ...args], { cwd, encoding: 'utf-8', env: process.env });
+assert('missing --round exits non-zero', runCliRaw(['review'], gitRepo).status, 2);
+assert('--round with nothing after it exits 2', runCliRaw(['review', '--round'], gitRepo).status, 2);
+assert('--model at the end exits 2', runCliRaw(['review', '--round', '1', '--model'], gitRepo).status, 2);
+assert('--round 0 exits 2', runCliRaw(['review', '--round', '0'], gitRepo).status, 2);
+assert('--round 1abc exits 2', runCliRaw(['review', '--round', '1abc'], gitRepo).status, 2);
+assert('--round -1 exits 2', runCliRaw(['review', '--round', '-1'], gitRepo).status, 2);
+
+// Outside any git repository the answer is still printed, with a warning.
+const noRepo = fs.mkdtempSync(path.join(sb, 'norepo-'));
+const nr = runCliRaw(['review', '--round', '1'], noRepo);
+assert('outside a repo still exits 0', nr.status, 0);
+j = JSON.parse(nr.stdout);
+assert('outside a repo falls back to defaults', [j.model, j.agent], ['sonnet', 'code-reviewer']);
+assert('outside a repo warns', j.warnings.length > 0, true);
 
 fs.rmSync(sb, { recursive: true, force: true });
 
