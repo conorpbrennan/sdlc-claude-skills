@@ -67,6 +67,16 @@
             "timeout": 2000
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/agent-tier-gate.js\"",
+            "timeout": 1000
+          }
+        ]
       }
     ],
     "PostToolUse": [
