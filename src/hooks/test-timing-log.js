@@ -40,6 +40,14 @@ console.log('\n[CLI] node timing-log.js <event> key=value');
     assert('cli records the event', rec.event, 'review.completed');
     assert('cli keeps strings', rec.agent, 'code-reviewer');
     assert('cli parses numbers', rec.important, 2);
+    // model and source ride along; a source with spaces arrives as one argument.
+    resetLog();
+    spawnSync('node', [path.join(__dirname, 'timing-log.js'), 'review.completed',
+        'agent=code-reviewer-deep', 'round=2', 'model=opus', 'source=rule src/hooks/** (repo config)'],
+        { encoding: 'utf-8', env: { ...process.env, TIMING_LOG_PATH: TEST_LOG } });
+    const rec2 = JSON.parse(fs.readFileSync(TEST_LOG, 'utf-8').trim().split('\n').pop());
+    assert('cli records model', rec2.model, 'opus');
+    assert('cli records a source with spaces whole', rec2.source, 'rule src/hooks/** (repo config)');
     const usage = spawnSync('node', [path.join(__dirname, 'timing-log.js')], { encoding: 'utf-8' });
     assert('cli without an event exits 2', usage.status, 2);
     resetLog();
