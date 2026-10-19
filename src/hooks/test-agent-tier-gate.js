@@ -65,6 +65,10 @@ assert('allow opus with reason, sdlc:implementer',
     call({ subagent_type: agent('implementer'), model: 'opus', prompt: 'TIER: opus: why\n' + BUDGET_MARKER }).out, '');
 assert('missing model rewritten to sonnet, sdlc:implementer',
     call({ subagent_type: agent('implementer'), prompt: 'x' }).out.hookSpecificOutput.updatedInput.model, 'sonnet');
+assert('allow opus with reason, bare implementer',
+    call({ subagent_type: 'implementer', model: 'opus', prompt: 'TIER: opus: why\n' + BUDGET_MARKER }).out, '');
+assert('missing model rewritten to sonnet, bare implementer',
+    call({ subagent_type: 'implementer', prompt: 'x' }).out.hookSpecificOutput.updatedInput.model, 'sonnet');
 
 console.log('gated types, model missing or cheap');
 const rewritten = call({ subagent_type: 'Explore', prompt: 'look', description: 'd' });

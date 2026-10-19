@@ -3,7 +3,8 @@
 The `pre-commit-hygiene.js` hook runs `ruff check --fix`, `ruff format`, and
 a targeted `pytest` before allowing `git commit` in opted-in repos. The
 targeted run covers only the test files that match the staged modules
-(`test_<basename>*.py` under the repo, plus any staged test file), with
+(`test_<basename>*.py` found anywhere in the repo outside `.venv`,
+`node_modules` and `archive`, plus any staged test file), with
 `--cov=<pkg>` and `diff-cover --fail-under=95` on the result. With no
 matching test it says so and runs the `smoke` marker, or passes with a
 `WARNING` line when the repo has none. The full suite runs in

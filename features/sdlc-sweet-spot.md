@@ -34,13 +34,23 @@
 - src/hooks/agent-tier-gate.js
 - src/hooks/lib/review-config.js
 - src/hooks/orchestrator-mode.js
+- src/hooks/pre-commit-review.js
 - src/hooks/test-agent-tier-gate.js
 - src/hooks/test-orchestrator-mode.js
 - src/hooks/test-pre-commit-hygiene.sh
+- src/hooks/test-pre-commit-review.js
 - src/hooks/test-review-config.js
 - src/test-plugin-layout.js
 
 ## History
+
+- 2026-10-19 `48b5249` — Prompt the owner to run orchestrator sessions on Sonnet
+  - .claude-plugin/plugin.json
+  - commands/handoff.md
+  - commands/orchestrate.md
+  - skills/plan-spec/SKILL.md
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-orchestrator-mode.js
 
 - 2026-10-19 `53a672e` — Run only the tests that match the staged modules in the hygiene gate
   - .claude-plugin/plugin.json
