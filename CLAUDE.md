@@ -49,6 +49,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `code-review-pre-commit` skill | `skills/code-review-pre-commit/SKILL.md` |
 | `code-review-implementer` skill | `skills/code-review-implementer/SKILL.md` |
 | `code-reviewer` / `code-reviewer-deep` agents | `agents/` |
+| `implementer` agent (Sonnet, turn budget) | `agents/implementer.md` |
 | `verifier` agent (read-only, outside-in) | `agents/verifier.md` |
 | `/commit-prep`, `/review-timing`, `/feature`, `/feature-new` | `commands/` |
 | `/verify` and its recorder | `commands/verify.md`, `src/hooks/record-verification.js` |

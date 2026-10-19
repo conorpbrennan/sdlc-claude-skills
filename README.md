@@ -147,6 +147,7 @@ into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
 | `.claude-plugin/plugin.json`, `marketplace.json` | read by `/plugin` | the `sdlc` plugin, served by the `sdlc-claude-skills` marketplace |
 | `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer` | the three workflow skills |
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
+| `agents/implementer.md` | `sdlc:implementer` (Sonnet, 80 turns) | the plan-step implementer; at 60 turns it wraps up, past 80 it reports PARTIAL |
 | `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
 | `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new` | slash commands |
 | `commands/verify.md` | `/sdlc:verify` | dispatches the verifier, then runs the recorder |

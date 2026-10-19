@@ -8,6 +8,7 @@ const { spawnSync } = require('child_process');
 
 const HOOK = path.join(__dirname, 'agent-tier-gate.js');
 const { BUDGET_BLOCK, BUDGET_MARKER } = require('./lib/context-budget.js');
+const { agent } = require('./lib/plugin-names.js');
 const DENY_REASON = 'Opus dispatch without a stated reason. Opus is for plans, plan source review and judgement calls. Add a line "TIER: opus: <why>" to the prompt, or dispatch with model: "sonnet".';
 
 let passed = 0;
@@ -39,7 +40,7 @@ const call = (toolInput) => run(JSON.stringify({ tool_name: 'Agent', tool_input:
 const decision = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificOutput.permissionDecision;
 
 console.log('gated types, opus without a reason');
-for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan']) {
+for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan', 'implementer', agent('implementer')]) {
     const r = call({ subagent_type: type, model: 'opus', prompt: 'do the thing' });
     assert(`deny opus, type=${JSON.stringify(type)}`, decision(r), 'deny');
     assert(`deny reason, type=${JSON.stringify(type)}`,
@@ -58,6 +59,12 @@ assert('allow colon form', withReason('TIER: opus: plan source review').out, '')
 assert('allow dash form', withReason('TIER: opus - judgement call').out, '');
 assert('allow lowercase tier', withReason('tier: Opus: why').out, '');
 assert('allow fable reason', withReason('TIER: fable: why', 'fable').out, '');
+
+console.log('implementer, opus with a reason');
+assert('allow opus with reason, sdlc:implementer',
+    call({ subagent_type: agent('implementer'), model: 'opus', prompt: 'TIER: opus: why\n' + BUDGET_MARKER }).out, '');
+assert('missing model rewritten to sonnet, sdlc:implementer',
+    call({ subagent_type: agent('implementer'), prompt: 'x' }).out.hookSpecificOutput.updatedInput.model, 'sonnet');
 
 console.log('gated types, model missing or cheap');
 const rewritten = call({ subagent_type: 'Explore', prompt: 'look', description: 'd' });
@@ -88,7 +95,7 @@ for (const type of ['sdlc:code-reviewer-deep', 'sdlc:code-reviewer', 'fork', 'cl
 
 console.log('context budget');
 const updated = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificOutput.updatedInput;
-for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan']) {
+for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan', 'implementer', agent('implementer')]) {
     const u = updated(call({ subagent_type: type, model: 'sonnet', prompt: 'do it' }));
     assert(`budget appended once, type=${JSON.stringify(type)}`, u && u.prompt, 'do it\n\n' + BUDGET_BLOCK);
 }
