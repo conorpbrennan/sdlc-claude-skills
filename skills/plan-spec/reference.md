@@ -804,13 +804,21 @@ else, and does (§7a, §18.3, §21.3).
 
 Every step asked for red-first evidence on its refusal tests and got it,
 usually by the implementer removing the guard and quoting the failure text.
-Twice the reviewer reproduced the red independently by mutation. This is
-cheap and it is the only thing that separates a conservation check from a
-comment.
+This is cheap and it is the only thing that separates a conservation check
+from a comment.
 
-**Rule.** Every test that asserts a refusal is run red first, and the report
-quotes the failing assertion. Reviewers are told the claimed red and asked to
-confirm it from the test body or by mutation.
+**Rule.** Every test that asserts a refusal is run red first: one failing run
+of the named test before the implementation exists, and the report quotes the
+failing assertion. Nothing more is asked of the implementer. A step block does
+not ask for a mutation table, and the §19 report has no field for one.
+Red is confirmed by the reviewer's spot check on one test (§21.2), or by a
+once-per-phase step the plan names that runs mutation over the phase.
+The reviewer is told the claimed red and confirms it from
+the test body.
+
+*Evidence, 19 Oct 2026.* 38 of 46 implementer reports in one run carried
+mutation tables, and one step ran 109 mutants. Implementer runs over 100 calls
+were 8% of runs and 77% of implementer spend.
 
 ## 12. The gating tools are part of the system under test
 
@@ -953,7 +961,8 @@ steps' file sets, which is why they are declared — and which is why this
 field is filled last, after every step has one.>
 
 TESTS FIRST: <the test files and the assertions that must be red before
-the implementation exists, and how red is shown (§11)>
+the implementation exists; red is one failing run of the named test, quoted
+in the report (§11). Nothing beyond that run.>
 
 GATE: <every condition, each mechanically checkable by a reader with a
 shell, joined by "and". Includes the repository's class-level guards
@@ -1490,14 +1499,14 @@ THE STEP, verbatim:
 <the step's §16 block, every field, unedited>
 
 WORKING CONSTRAINTS, verbatim:
-<the plan's §20.2>
-
-WHAT LANDED BEFORE YOU:
-<each step id in ASSUMES LANDED, with its commit sha from the tracker>
+<the plan's §20.2, a page of at most 60 lines>
 
 WHAT THE PRECEDING STEP LEFT YOU:
 <the NEXT field of the preceding step's report, verbatim (§19), or
 "nothing">
+
+PRIOR REPORT (only if the step needs it, at most one):
+<one path under run/reports/, or omit the line>
 
 Rules for you specifically:
 - Touch only the paths in the step's file set. It does not grow during
@@ -1511,12 +1520,11 @@ Rules for you specifically:
   commands and refuse those shapes (§20.2).
 - Your working directory resets between commands. Every command outside the
   repository root carries its own `cd`.
-- Run TESTS FIRST red before the implementation exists, and quote the failure
-  text (§11).
+- Run the named TESTS FIRST test once, red, before the implementation
+  exists, and quote the failure text (§11). Nothing beyond that run.
 - Run the whole GATE yourself and quote each condition's command and result.
 - A choice inside the step's stated scope: take the conservative option,
-  record it in your report and in the plan's DECISIONS-OPEN, continue
-  (§18.5). A choice that changes what the step delivers, its file set, its
+  record it in your report, continue (§18.5). A choice that changes what the step delivers, its file set, its
   signatures or its gate: stop before committing and propose the amendment
   (§18.4). The test is whether the step as written is still true after the
   choice.
@@ -1528,6 +1536,14 @@ Rules for you specifically:
   five-line summary, not the report (§19).
 <the §19 block>
 ```
+
+**The prompt is self-contained.** It is the step block verbatim, a working-
+constraints page of at most 60 lines, the previous step's NEXT, and at most one
+prior report path. It never says "read lines a-b of the plan", never lists
+DECISIONS notes and never attaches appendices. The step's file set (§16)
+names every file the implementer touches, so it has no reason to open the
+plan. If the step needs more than the prompt carries, the step is
+under-specified: it goes back to the plan (§18.4), not into a longer prompt.
 
 ### 21.2 The reviewer
 
@@ -1577,7 +1593,8 @@ it appears above. The closed list exists to stop a reviewer inventing
 step-specific criteria, never to license passing a critical defect.
 
 THE CLAIMED RED: <the report's RED FIRST field>. Confirm it from the test
-body or by mutation; do not take it on the report's word (§11).
+body or by mutation on one test; do not take it on the report's word
+(§11).
 
 End with the verdict trailer the commit gate consumes (see Terms).
 ```
