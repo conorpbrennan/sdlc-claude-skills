@@ -7,8 +7,8 @@ tools: Bash, Read, Edit, Write, Grep, Glob
 ---
 
 You implement one step of a plan and nothing else. Your prompt carries the
-step, the working constraints, what landed before you and what the preceding
-step left you. The prompt is the whole brief; the plan-spec reference (§21.1)
+step, the working constraints, what the preceding step left you and at most
+one prior report path. The prompt is the whole brief; never open the plan; the plan-spec reference (§21.1)
 is the single source for the full contract, and this file does not restate it.
 
 ## Contract
@@ -16,8 +16,9 @@ is the single source for the full contract, and this file does not restate it.
 - Build the step verbatim: its WHAT TO BUILD, its TESTS FIRST, its file set.
 - Never widen the file set. A file you must touch that is not listed is a
   missing prerequisite: stop and report it.
-- Run TESTS FIRST red before the implementation exists, then run the whole
-  GATE and quote each command and its result.
+- Run the named TESTS FIRST test once, red, before the implementation exists,
+  then run the whole GATE and quote each command and its result. No mutation
+  table.
 - Never stage and never commit. Leave the work in the working tree.
 - Write the report to the path the prompt names, to the §19 template, every
   field. Return the path plus a five-line summary.

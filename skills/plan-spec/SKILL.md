@@ -133,9 +133,15 @@ lose.
 
 Per step:
 
-1. **Dispatch the implementer** with §21.1's prompt: the step verbatim, the
-   working constraints verbatim, what landed before it, and the preceding
-   step's NEXT. It does not stage and does not commit. It runs on Sonnet
+1. **Dispatch the implementer** with §21.1's prompt: a
+   self-contained prompt: the step verbatim, a working-constraints page of
+   at most 60 lines, the preceding step's NEXT and at most one prior report
+   path. Never "read lines a-b of the plan", a list of DECISIONS notes or
+   appendices; a step that needs more goes back to the plan. Red-first is
+   one failing run of the named test, quoted in the report; the step block
+   asks for no mutation table (19 Oct 2026: 38 of 46 implementer reports
+   carried one, one step ran 109 mutants, and runs over 100 calls were 8%
+   of runs and 77% of implementer spend). It does not stage and does not commit. It runs on Sonnet
    (§9) and the dispatch says so: `subagent_type: "sdlc:implementer"`,
    `model: "sonnet"`. It carries an 80-turn budget (a step that cannot
    finish reports PARTIAL and you split it). An Opus implementer needs the owner's OK recorded in
