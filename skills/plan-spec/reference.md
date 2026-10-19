@@ -1049,8 +1049,10 @@ implementer pass. The test an author applies before writing it:
   before dispatch. The plan review flags any step that does.
 
 A step that fails any of these splits, and the split is written into the plan
-before dispatch, not discovered by the implementer. Two commits from one step
-is the signal that the plan owed the run another step.
+before dispatch, not discovered by the implementer. A second commit from one
+step is the signal only when the work needed a file outside the step's set or
+a missing prerequisite (§18.6). A review finding inside the set is a fix round
+on the same commit (§18.3), not a second commit.
 
 **The plan has a cap too.** A plan is at most 40,000 bytes, 15 step blocks, and
 80 lines in any one step block. `check_size.py` measures all three and exits 1
@@ -1108,6 +1110,12 @@ two FAILs, stop: do not dispatch a third review. Show the open items and ask
 the owner to choose between fixing and accepting with the gap named in the
 commit message (§9). The run has a bounded number of rounds per step by
 construction, which is what stops a step consuming a day of reviewer time.
+
+**A finding inside the step's file set is a fix round, not a new step.** If
+the fix touches only files in the step's declared set, it is round one's fix
+on the same commit: fresh fix agent, same review, same §18.3 path. An inserted
+step (§18.6) is for a finding that needs a file outside the set or a
+prerequisite the plan lacks.
 
 **Who makes the fix.** Not the reviewer: it cannot edit (§10). Not the
 original implementer: its context is gone by the time a review returns, and
@@ -1179,32 +1187,32 @@ where there is such code.
 
 ### 18.6 A step is inserted mid-run
 
-§17 says two commits from one step "is the signal that the plan owed the run
-another step", and this run produced that signal three times: a guard the
-review of step 83 asked for, a set of engine fixes before 96, and a third
-commit on 78b that its own sweep's review demanded. The signal needs
-somewhere to go, or the insertion lands as an unrecorded commit and the plan
-and the history part company.
+An inserted step is the exception, not the normal case. In three runs on
+19 Oct 2026, inserted steps nearly doubled the commit count: 24 base steps
+plus 20 inserted; 20 plus 18; 32 plus 14. Most came from review findings that
+stayed inside the step's own file set and needed a fix round, not a step.
 
-**Rule.** An inserted step is a step. It gets an id formed from its
+**When a finding is a fix round.** The fix stays inside the step's declared
+file set. It is a fix round on the same commit (§18.3): a fresh fix agent, the
+same review. No new id, no new §16 block.
+
+**When a finding is an inserted step.** The fix needs a file outside the
+step's set, or a prerequisite the plan lacks. Only then is a step inserted.
+The signal in §17 (a second commit from one step) applies to this case alone.
+
+**Advisories and should-fix items outside the set.** Do not insert a step for
+each. List them in the tracker as they arrive and batch them into one
+close-out step per phase, written into the plan before it is dispatched.
+
+**Rule for an inserted step.** It is a step. It gets an id formed from its
 predecessor's with a letter suffix, so that no existing cross-reference
-moves — the run's plan already carries ids of that shape (78b, 94b, 96b),
-which is what makes a suffix cheap. It gets a full §16 block written into
-the plan *before* it is dispatched, a dated line under §18.5 saying what
-asked for it, its own GATE, its own review, and its own tracker block. What
-it must not be is an enlarged predecessor: absorbing the work into the step
-that provoked it is how a step's file set grows during implementation, which
-§17 forbids for this reason.
-
-**Amendment, 4 Sep 2026: insertion is the normal case, not the exception.** A
-later run inserted three steps and every one came from a review finding or an
-owner decision rather than from an author's afterthought — the same signal
-§17 describes, arriving earlier. The stronger form: a review finding that is
-real but outside the closed FAIL list is an inserted step, not an advisory to
-carry forward. One step passed with three "should fix" findings; folding them
-into the next step would have enlarged an unrelated step's file set (§17),
-and leaving them would have shipped a defect that put a 165-character
-sentence into a field a later step validates against.
+moves; the run's plan already carries ids of that shape (78b, 94b, 96b). It
+gets a full §16 block written into the plan *before* it is dispatched, a dated
+line under §18.5 saying what asked for it, its own GATE, its own review, and
+its own tracker block. It is not an enlarged predecessor: absorbing the work
+into the step that provoked it is how a step's file set grows during
+implementation, which §17 forbids. Its block is dispatched unreviewed (§2b,
+rule 6), so write the GATE as commands with expected output.
 
 ## 19. The implementer's report
 

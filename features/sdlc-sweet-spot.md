@@ -33,6 +33,14 @@
 
 ## History
 
+- 2026-10-19 `1b18785` — Cap the plan review loop at two rounds and take the cap off the owner list
+  - .claude-plugin/plugin.json
+  - .claude/sdlc-review.json.example
+  - skills/plan-spec/SKILL.md
+  - skills/plan-spec/reference.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/test-review-config.js
+
 - 2026-10-19 `136de4b` — Add a plan size check and cap plans at 40 KB, 15 steps, 80 lines a step
   - .claude-plugin/plugin.json
   - skills/plan-spec/SKILL.md

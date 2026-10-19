@@ -164,14 +164,19 @@ Per step:
    Its worktree is destroyed with the export; **a worktree serves one
    round.** Round two reviews the whole staged diff, not the delta. After
    two FAILs stop and ask the owner.
-7. **A real finding outside the closed FAIL list is a step, not an advisory**
-   (§18.6). Give it its predecessor's id with a letter suffix and a full §16
-   block written into the plan *before* dispatch. That block is the one
-   piece of the plan no review round will ever see (§2b), so state its GATE
-   as commands with expected output, and tell the implementer the block is
-   unreviewed: a disagreement with it is a DISAGREEMENTS entry (§19), not an
-   error to work around. Never absorb the work into the step that provoked
-   it — that is how a file set grows during implementation (§17).
+7. **A finding inside the step's file set is a fix round, not a step**
+   (§18.3, §18.6): fresh fix agent, same commit, same review. Inserted steps
+   nearly doubled commit counts in three runs (24+20, 20+18, 32+14; 19 Oct
+   2026). Insert a step only for a finding that needs a file outside the set
+   or a missing prerequisite: its predecessor's id with a letter suffix and a
+   full §16 block written into the plan *before* dispatch. That block is the
+   one piece of the plan no review round will ever see (§2b), so state its
+   GATE as commands with expected output, and tell the implementer the block
+   is unreviewed: a disagreement with it is a DISAGREEMENTS entry (§19), not
+   an error to work around. Advisories and should-fix items outside the set
+   are listed in the tracker as they arrive and batched into one close-out
+   step per phase. Never absorb the work into the step that provoked it
+   (§17).
 8. **Close the step against §18.1's five conditions**, then the next.
 
 Running a plan puts the main session in **orchestrator mode** (the
