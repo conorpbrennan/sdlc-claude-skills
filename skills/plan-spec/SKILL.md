@@ -121,8 +121,9 @@ Per step:
 1. **Dispatch the implementer** with §21.1's prompt: the step verbatim, the
    working constraints verbatim, what landed before it, and the preceding
    step's NEXT. It does not stage and does not commit. It runs on Sonnet
-   (§9) and the dispatch says so: `subagent_type: "general-purpose"`,
-   `model: "sonnet"`. An Opus implementer needs the owner's OK recorded in
+   (§9) and the dispatch says so: `subagent_type: "sdlc:implementer"`,
+   `model: "sonnet"`. It carries an 80-turn budget (a step that cannot
+   finish reports PARTIAL and you split it). An Opus implementer needs the owner's OK recorded in
    §20.2 and a `TIER: opus: <reason>` line in the prompt; the
    `agent-tier-gate` hook denies an Opus dispatch without it.
 2. **Read the report in full** (§19). The implementer wrote it to

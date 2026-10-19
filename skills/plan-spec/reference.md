@@ -768,13 +768,13 @@ design. A step that looks as though it needs the heavy tier to build is a
 step the plan under-specified — spend the tier on the plan, where §2a is
 already spending it, not on the step.
 
-**Amendment, 18 Oct 2026: the dispatch states the tier.** In the week of
-11-18 Oct 2026, 17 implementer runs and 10 investigations went to Opus,
-because plans named the implementer tier as Opus or the dispatch named
-`model: "opus"`; the §21 prompts never stated a model, so nothing pushed the
-other way. **Rule.** The implementer runs on Sonnet, and the dispatch says so:
-`subagent_type: "general-purpose"`, `model: "sonnet"` (§21.1). An Opus
-implementer needs the owner's OK recorded in §20.2 and a
+**The dispatch states the tier and the budget.** 17 implementer runs and 10
+investigations in the week of 11-18 Oct 2026 went to Opus, because plans named
+Opus or the dispatch named `model: "opus"`. On 19 Oct, runs over 100 calls
+were 8% of implementer runs and 77% of implementer spend. **Rule.** The
+implementer is the `sdlc:implementer` agent: Sonnet, 80 turns, and the
+dispatch says so: `subagent_type: "sdlc:implementer"`, `model: "sonnet"`
+(§21.1). An Opus implementer needs the owner's OK recorded in §20.2 and a
 `TIER: opus: <reason>` line in the prompt. The `agent-tier-gate` hook denies
 an Opus dispatch without that line.
 
@@ -1458,7 +1458,7 @@ run is carrying in someone's memory (§19a).
 
 ### 21.1 The implementer
 
-Dispatch: `subagent_type: "general-purpose"`, `model: "sonnet"` (§9). The
+Dispatch: `subagent_type: "sdlc:implementer"`, `model: "sonnet"` (§9). The
 Agent call states both; the prompt below is what goes in its `prompt` field.
 An Opus implementer adds a `TIER: opus: <reason>` line to the prompt, and only
 with the owner's OK recorded in §20.2.
@@ -1570,7 +1570,7 @@ reviews like one.
 ### 21.3 The fix
 
 Dispatched after a review FAIL (§18.3), including an overlapped one (§7a).
-Dispatch: `subagent_type: "general-purpose"`, `model: "sonnet"`, as §21.1. It
+Dispatch: `subagent_type: "sdlc:implementer"`, `model: "sonnet"`, as §21.1. It
 is §21.1 with three substitutions and nothing else new:
 
 1. The tree is the one the review failed in — the reviewer's worktree under

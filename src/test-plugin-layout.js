@@ -288,8 +288,8 @@ for (const dir of skillDirs) {
 console.log('\nAgents at the plugin layout paths:');
 const agentFiles = listDir(AGENTS_DIR)
     .filter(e => e.isFile() && e.name.endsWith('.md')).map(e => e.name).sort();
-assert('agents/ holds the two review agents and the verifier', agentFiles,
-    ['code-reviewer-deep.md', 'code-reviewer.md', 'verifier.md']);
+assert('agents/ holds the implementer, the two review agents and the verifier', agentFiles,
+    ['code-reviewer-deep.md', 'code-reviewer.md', 'implementer.md', 'verifier.md']);
 for (const file of agentFiles) {
     const name = frontmatterName(path.join(AGENTS_DIR, file));
     assert(`agents/${file} has a name`, typeof name === 'string' && name.length > 0, true);

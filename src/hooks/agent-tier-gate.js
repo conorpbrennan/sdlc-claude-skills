@@ -9,11 +9,12 @@
 
 const { deny } = require('./lib/hook-output');
 const { withBudget } = require('./lib/context-budget');
+const { agent } = require('./lib/plugin-names');
 
 // Agent types whose model this gate steers. Every other type decides its own model:
 // sdlc:* reviewers via sdlc-review.json, fork by inheriting, user agents by frontmatter.
 // An empty or missing type means general-purpose.
-const GATED_TYPES = new Set(['', 'general-purpose', 'explore', 'plan']);
+const GATED_TYPES = new Set(['', 'general-purpose', 'explore', 'plan', 'implementer', agent('implementer')]);
 
 const EXPENSIVE_MODEL = /opus|fable/i;
 const TIER_LINE = /^\s*tier:\s*(?:opus|fable)\s*[:\-–—]\s*\S/im;
