@@ -19,6 +19,8 @@
 - README.md
 - agents/implementer.md
 - commands/commit-prep.md
+- commands/handoff.md
+- commands/orchestrate.md
 - commands/verify.md
 - instructions/hygiene-snippet.md
 - skills/plan-spec/SKILL.md
@@ -31,12 +33,23 @@
 - skills/plan-spec/test_check_size.py
 - src/hooks/agent-tier-gate.js
 - src/hooks/lib/review-config.js
+- src/hooks/orchestrator-mode.js
 - src/hooks/test-agent-tier-gate.js
+- src/hooks/test-orchestrator-mode.js
 - src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-review-config.js
 - src/test-plugin-layout.js
 
 ## History
+
+- 2026-10-19 `53a672e` — Run only the tests that match the staged modules in the hygiene gate
+  - .claude-plugin/plugin.json
+  - .claude/hygiene-repos.json.example
+  - README.md
+  - commands/commit-prep.md
+  - commands/verify.md
+  - instructions/hygiene-snippet.md
+  - src/hooks/test-pre-commit-hygiene.sh
 
 - 2026-10-19 `1b18785` — Cap the plan review loop at two rounds and take the cap off the owner list
   - .claude-plugin/plugin.json

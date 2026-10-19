@@ -190,7 +190,11 @@ Running a plan puts the main session in **orchestrator mode** (the
 trackers, reports, plans, briefs, feature records and memory, and nudges
 after 8 inline commands since the last dispatch. Investigation that chases a
 failure is a dispatch, not an inline run. `/sdlc:orchestrate off` is the
-owner's switch.
+owner's switch. Run the orchestrator session on Sonnet (`/model sonnet`);
+Opus is for plan writing, plan source review and FAIL triage (the 19 Oct 2026
+analysis found Opus orchestrator turns a large share of spend, commit reviews
+about 9%). The hook prints this once when the mode turns on; nothing enforces
+it.
 
 Overlap the review of step N with the implementation of N+1 only when their
 file sets are disjoint (§7a), and never two implementers or two reviewers at
