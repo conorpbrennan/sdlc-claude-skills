@@ -191,9 +191,14 @@ assert('round 3 uses the deep agent', r.agent, 'code-reviewer-deep');
 
 console.log('\nPlan review and orchestrator:');
 let p = cfg.resolvePlanReview({ repoRoot: bare });
-assert('plan review defaults', p, { source: 'opus', consistency: 'sonnet', cap: 3, warnings: [] });
+assert('plan review defaults', p, { source: 'opus', consistency: 'sonnet', cap: 2, warnings: [] });
 let o = cfg.resolveOrchestrator({ repoRoot: bare });
 assert('orchestrator defaults', o, { bashNudge: 8, warnings: [] });
+const repoK = newRepo('repoK');
+writeRepoCfg(repoK, { planReview: { cap: 4 } });
+assert('repo override raises the plan cap', cfg.resolvePlanReview({ repoRoot: repoK }).cap, 4);
+writeRepoCfg(repoK, { planReview: { cap: 0 } });
+assert('invalid cap with no user config falls back to 2', cfg.resolvePlanReview({ repoRoot: repoK }).cap, 2);
 writeUserCfg({ planReview: { source: 'sonnet', cap: 5 }, orchestrator: { bashNudge: 12 } });
 p = cfg.resolvePlanReview({ repoRoot: bare });
 assert('user plan review, per key', [p.source, p.consistency, p.cap], ['sonnet', 'sonnet', 5]);
@@ -232,7 +237,7 @@ assert('--model overrides', [j.model, j.source], ['sonnet', 'override']);
 j = JSON.parse(runCli(['review', '--round', '1', '--repo', gitRepo], sb));
 assert('--repo works from another cwd', [j.round, j.agent, j.model], [1, 'code-reviewer', 'sonnet']);
 j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
-assert('plan-review prints the plan result', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 3]);
+assert('plan-review prints the plan result', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 2]);
 
 // A flag with no value, or a bad round, is a usage error.
 const runCliRaw = (args, cwd) => spawnSync('node', [cli, ...args], { cwd, encoding: 'utf-8', env: process.env });

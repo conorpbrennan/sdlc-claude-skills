@@ -30,7 +30,7 @@ const DEFAULTS = {
     round1: 'sonnet',
     round2: 'opus',
     maxRounds: 2,
-    planReview: { source: 'opus', consistency: 'sonnet', cap: 3 },
+    planReview: { source: 'opus', consistency: 'sonnet', cap: 2 },
     orchestrator: { bashNudge: 8 },
 };
 

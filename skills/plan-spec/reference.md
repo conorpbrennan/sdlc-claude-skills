@@ -240,11 +240,11 @@ owner can settle, each with its options priced and the step it blocks. Ask
 them all up front. Record the answers in the plan (Assay put them under §3 as
 D2) so the record of why is in the same document as the work.
 
-Two of those points are the same on every plan and are easy to forget
-because they are about the process rather than the work.
+Some of those points are the same on every plan and are easy to forget
+because they are about the process rather than the work. The pre-run review
+loop cap is not one of them: it is two rounds and not an owner question (§2a).
 
-The first is the cap on the pre-run review loop (§2a). The second is standing
-authorisation to run unattended: §7a.3 and §8 have the orchestrator stage and
+The first is standing authorisation to run unattended: §7a.3 and §8 have the orchestrator stage and
 commit without asking, and §18.3 has it dispatch a fix round the same way,
 and the harness the run sits in may forbid exactly that — the one this
 document was written in instructs its agent to stop once a review passes and
@@ -290,16 +290,17 @@ answers change the text it is reviewing.
   stopping rule, and note what it is not — it is not "no findings". A heavy
   reviewer given a large document will almost always find something; the
   question the loop asks is whether it found a *kind* of thing that is new.
-- **The declared cap.** Not a constant in this document: the maximum number
-  of iterations is an input, named by the owner before the loop starts,
-  asked with §2's other decisions and recorded with them (§20.3). The run
-  this document describes converged in eight, which is the only calibration
-  point there is — a long plan against a novel design will want more, a
-  one-page plan against a well-understood change one or two (§22). As a
-  floor rather than a rule: a plan of five steps or fewer that has not
-  converged in two rounds is being rewritten, not reviewed. A loop with no
-  declared cap has no failure boundary; a cap named once the rounds are
-  under way is named to fit how the rounds are going.
+- **The cap of two.** The maximum number of iterations is two, the default of
+  `planReview.cap` in `sdlc-review.json`. It is not an owner question and it
+  does not rise mid-run. One extra round is allowed only with its reason
+  recorded in §20.3. Round 1 is the Opus source round on the whole document.
+  Round 2 is the Sonnet consistency round, and its single input is the
+  sections changed since revision 1 (the fold-in), not the whole document. A
+  reduced-form plan (§22) runs one round. Evidence, 19 Oct 2026: plans of
+  150-450 KB went 3-5 review rounds and never converged; the one 86 KB plan
+  converged in 3. A NOT YET with material findings at round 2 means the plan is
+  too large or a design point is open. Split it by phase (`check_size.py`,
+  §17) or return to the owner decisions; do not run a third round.
 
 **The bar for raising a finding.** Convergence is the goal and the cap is a
 failure boundary, not a target: a loop that runs to its cap has usually spent
@@ -344,9 +345,9 @@ carries `TIER: opus: plan source review`. An *internal-consistency* round
 holds the document against itself. It runs on Sonnet. A consistency round is
 still always followed by a source round (§2b). The two models and the default
 cap come from `sdlc-review.json` (`planReview.source`, `planReview.consistency`,
-`planReview.cap`; defaults opus, sonnet, 3). Read them with
-`node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap the owner
-declared (§2, §20.3) still wins over the config default.
+`planReview.cap`; defaults opus, sonnet, 2). Read them with
+`node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap is not an
+owner question and does not rise mid-run (see "The cap of two" above).
 
 **Three failure modes, all seen.** *Churn*: each round's fix creates the next
 round's seam, and this document's fourth round found little else — seams
@@ -1401,12 +1402,11 @@ citing it.
 3. **Owner decisions — named, with where each bites.** Every point only the
    owner can settle, each with its options priced and the step it blocks
    (§2). Answered before dispatch; the answers recorded here, in this
-   document, so the record of why sits beside the work. Two answers are
-   recorded here on every plan: the review-loop cap (§2a), whatever its
-   value, because a cap that lives only in the orchestrator's head is not a
-   boundary; and the standing authorisation to stage, commit and dispatch
-   fixes unattended, quoting the harness rules it overrides (§2). Where any
-   step carries a named-reader condition (§16), a third: which steps those
+   document, so the record of why sits beside the work. One answer is
+   recorded here on every plan: the standing authorisation to stage, commit and dispatch
+   fixes unattended, quoting the harness rules it overrides (§2). The review-loop
+   cap is not asked (it is two, §2a); an extra round is recorded here with its
+   reason. Where any step carries a named-reader condition (§16), a second: which steps those
    are and at which breaks the owner clears them. Unbatched, they are read
    one at a time and the run waits on a person per step; unnamed, they are
    discovered at the end, which is the acceptance-step failure §18.1
@@ -1616,7 +1616,10 @@ Dispatch: the model comes from the round's input (§2a). A source round runs on
 `model: "opus"` and its prompt carries a `TIER: opus: plan source review`
 line. An internal-consistency round runs on `model: "sonnet"`. Read both with
 `node <plugin>/src/hooks/review-config-cli.js plan-review`; the cap it prints
-is the default, and the owner's declared cap (§2) wins.
+is 2 by default. Round 1 is a source round on the whole document. Round 2 is a
+consistency round whose single input is the sections changed since revision 1
+(see the changed-sections form below). One extra round only with its reason
+recorded in §20.3.
 
 ```
 You are reviewing <document path>, revision <n>, as a document. You are
@@ -1628,7 +1631,9 @@ and by whom>
 THE ONE INPUT YOU HOLD IT AGAINST:
 <exactly one of: the source material it claims to describe; the document
 itself, for internal consistency; a run artefact; the policy or spec
-register; the rules it claims to satisfy>
+register; the rules it claims to satisfy; for the round-2 consistency round,
+only the sections changed since revision 1 (the fold-in), pasted or named by
+heading, and not the whole document>
 
 WHAT TO CHECK — answer each, numbered:
 <this round's questions>
@@ -1711,8 +1716,8 @@ question is still a wait state, so the question is still asked, but three
 answers do not need a section. Sections 4, 6, 8, 9 and 10 fold into the step
 blocks and the closing entry.
 
-*The review loop (§2a).* The cap is asked as always, and on a one-page plan
-the answer is one or two. One independent reviewer
+*The review loop (§2a).* The cap is two, not asked, and a one-page plan runs
+one round: one independent reviewer
 holding the plan against the source it proposes to change. A second round
 only if the first returns NOT YET on something that changes a step. The
 convergence rule is unchanged and simply arrives sooner: a one-page plan runs
