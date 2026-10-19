@@ -36,9 +36,10 @@ gates never scale down; the paperwork does.
 ## 1. Mode: write a plan
 
 1. **Ask the owner decisions first (§2, §20.3).** Every point only the owner
-   can settle, each with its options priced and the step it blocks. Three
-   recur on every plan and are easy to miss because they are about process:
-   - the cap on the review loop below (an input, never a constant);
+   can settle, each with its options priced and the step it blocks. Two
+   recur on every plan and are easy to miss because they are about process.
+   The review-loop cap is not one of them: it is two rounds, set in
+   `sdlc-review.json`, and not put to the owner (§2a):
    - standing authorisation to stage, commit and dispatch fixes unattended,
      quoting the harness rules it overrides — otherwise the run stalls at
      the first commit;
@@ -65,23 +66,34 @@ gates never scale down; the paperwork does.
 
 ### The pre-run review loop (§2a)
 
-Iterate until one of two conditions, then dispatch step one.
+The loop is capped at **two rounds**. Stop earlier on no new criteria, then
+dispatch step one.
 
+- Round 1 is the Opus source round, on the whole document. Round 2 is the
+  Sonnet consistency round. Its **single input** is the sections changed
+  since revision 1 (the fold-in), not the whole document (§21.4's prompt).
+  A reduced-form plan (§22) gets one round.
 - One **fresh** independent reviewer per round, given the document and
   **exactly one input** to hold it against (§21.4's prompt). Do not tell it
-  what earlier rounds found, what changed, or which round it is.
+  what earlier rounds found or which round it is.
 - **The tier follows the input.** A source round (the document held against
   source, spec, or code at HEAD) runs on Opus and its prompt carries
   `TIER: opus: plan source review`. An internal-consistency round runs on
   Sonnet. Models and default cap come from `sdlc-review.json`
   (`planReview.source`, `planReview.consistency`, `planReview.cap`; defaults
-  opus, sonnet, 3), read with
-  `node <plugin>/src/hooks/review-config-cli.js plan-review`. The owner's
-  declared cap (§2) wins over the config default.
+  opus, sonnet, 2), read with
+  `node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap is not
+  an owner question and does not rise mid-run. One extra round is allowed only
+  with its reason recorded in §20.3.
+- **A NOT YET with material findings at round 2** means the plan is too large
+  or a design point is open. Split it by phase (`check_size.py`, §17) or
+  return to the owner decisions. Do not run a third round to chase it.
+  Evidence, 19 Oct 2026: plans of 150-450 KB ran 3-5 review rounds and never
+  converged; the one 86 KB plan converged in 3.
 - Disposition every finding as the round closes — folded in, or rejected
   with the reason — into §20.8, before the next round starts.
 - **Stop on: no new criteria** (every finding names a defect class already
-  dispositioned) **or the declared cap.**
+  dispositioned) **or the cap of two.**
 
 **The fold-in is the least-checked text (§2b).** The finding was verified;
 the fix that closes it is new text no round has read, and a correction flag
