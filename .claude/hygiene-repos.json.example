@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "Per-repo opt-in for pre-commit-hygiene.js. Install to ~/.claude/hygiene-repos.json. Keys are git toplevel paths with forward slashes, e.g. /home/you/dev/your-repo or C:/Users/you/dev/your-repo. The checks below are the canonical ruff -> pytest-cov -> diff-cover recipe; copy it rather than inventing a variant.",
+  "_comment": "Per-repo opt-in for pre-commit-hygiene.js. Install to ~/.claude/hygiene-repos.json. Keys are git toplevel paths with forward slashes, e.g. /home/you/dev/your-repo or C:/Users/you/dev/your-repo. The checks below are the canonical ruff -> targeted pytest-cov -> diff-cover recipe: pytest runs only the test files that match the staged modules (test_<basename>*.py) plus any staged test file; with no match it runs the \"smoke\" marker, or warns. The full suite runs in /sdlc:verify and /sdlc:commit-prep. Copy the recipe rather than inventing a variant.",
   "repos": {
     "/home/you/dev/your-repo": {
       "shell": "bash",
@@ -12,10 +12,22 @@
         "export PYTHONPATH=python_src"
       ],
       "checks": [
-        { "name": "ruff-check",  "command": "if [ -n \"$STAGED_PY\" ]; then echo \"$STAGED_PY\" | xargs ruff check --fix --force-exclude --; fi" },
-        { "name": "ruff-format", "command": "if [ -n \"$STAGED_PY\" ]; then echo \"$STAGED_PY\" | xargs ruff format --force-exclude --; fi" },
-        { "name": "pytest-cov",  "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then pytest $(echo \"$STAGED_PY_PKGS\" | tr ',' '\\n' | sed 's|^|--cov=|' | tr '\\n' ' ') --cov-branch --cov-report=xml -q; fi" },
-        { "name": "diff-cover",  "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then diff-cover coverage.xml --compare-branch=HEAD --fail-under=95; fi" }
+        {
+          "name": "ruff-check",
+          "command": "if [ -n \"$STAGED_PY\" ]; then echo \"$STAGED_PY\" | xargs ruff check --fix --force-exclude --; fi"
+        },
+        {
+          "name": "ruff-format",
+          "command": "if [ -n \"$STAGED_PY\" ]; then echo \"$STAGED_PY\" | xargs ruff format --force-exclude --; fi"
+        },
+        {
+          "name": "pytest-cov",
+          "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then T=$(printf \"%s\\n\" \"$STAGED_PY\" | while read -r f; do b=$(basename \"$f\" .py); case \"$b\" in test_*) [ -f \"$f\" ] && echo \"$f\";; *) find \"$PWD\" \\( -name .venv -o -name node_modules -o -name archive \\) -prune -o -name \"test_${b}*.py\" -print;; esac; done | sort -u); COV=$(echo \"$STAGED_PY_PKGS\" | tr ',' '\\n' | sed 's|^|--cov=|' | tr '\\n' ' '); rm -f coverage.xml; if [ -n \"$T\" ]; then pytest $T $COV --cov-branch --cov-report=xml -q; else echo \"pytest: no tests match the staged files; running the smoke marker\"; pytest -m smoke -q && rc=0 || rc=$?; if [ $rc -eq 5 ]; then echo \"WARNING: no smoke marker; no tests ran for the staged files\"; else [ $rc -eq 0 ]; fi; fi; fi"
+        },
+        {
+          "name": "diff-cover",
+          "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then if [ -f coverage.xml ]; then diff-cover coverage.xml --compare-branch=HEAD --fail-under=95; else echo \"diff-cover: no coverage.xml, no targeted tests ran\"; fi; fi"
+        }
       ],
       "timeoutMs": 900000
     }

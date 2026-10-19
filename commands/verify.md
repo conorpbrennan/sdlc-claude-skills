@@ -34,7 +34,15 @@ None.
    "sdlc:verifier"`). Its prompt carries the feature record path, the
    requirement, the acceptance criteria copied verbatim from the record
    with their numbers, and the HEAD sha (`git rev-parse HEAD`). Add
-   nothing that rewords, summarises or reorders the criteria.
+   nothing that rewords, summarises or reorders the criteria. The one
+   addition is a precondition line, after the criteria and outside the
+   numbering: run the full test suite with coverage first, using the
+   repo's own full command (for a Python repo
+   `pytest --cov --cov-branch --cov-report=xml -q`), and report a failing
+   suite as `VERIFY_GATE: FAIL`. The per-commit hygiene gate runs only the
+   tests that match the staged modules (hygiene pytest cost 436 min/week on
+   19 Oct 2026, 22 min per commit in one large worktree), so this is the
+   one place the whole suite runs before the PR.
 5. Write the sub-agent's report verbatim, with the Write tool, to a file in
    the session scratchpad. Do not edit it.
 6. Run `node <recorder> --report <file>` and show its output.
