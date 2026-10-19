@@ -11,7 +11,7 @@ Parse `$ARGUMENTS` for `--skip-tests` (run lint/format only, skip pytest/coverag
 
 <steps>
 1. Resolve the repo root: `git rev-parse --show-toplevel` and normalise to forward slashes.
-2. Read `~/.claude/hygiene-repos.json`. If `repos[<toplevel>]` exists, use its `setup` + `checks` as the authoritative pipeline — this guarantees parity with the `pre-commit-hygiene.js` hook.
+2. Read `~/.claude/hygiene-repos.json`. If `repos[<toplevel>]` exists, use its `setup` + `checks` as the authoritative pipeline — this guarantees parity with the `pre-commit-hygiene.js` hook. The configured pytest check is targeted (only the tests that match the changed modules), so for a Python repo also run the full suite once: `pytest --cov --cov-branch --cov-report=xml -q`, then the diff-cover stage below. The hook runs the targeted form on each commit; the full run is what this pre-flight adds.
 3. If no entry exists, use the default pipeline (skip the `pytest` + `diff-cover` stages when `--skip-tests` is passed):
    - `ruff check --fix`
    - `ruff format`

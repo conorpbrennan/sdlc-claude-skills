@@ -205,7 +205,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 
 | Command | Does |
 |---|---|
-| `/commit-prep [--skip-tests]` | Runs ruff + pytest + coverage before you stage, so hygiene and review failures collapse into one round-trip. Never stages or commits. |
+| `/commit-prep [--skip-tests]` | Runs ruff + the full pytest suite + coverage before you stage, so hygiene and review failures collapse into one round-trip. Never stages or commits. |
 | `/review-timing [--days N] [--repo PATH] [--json]` | Fast-path hit rate, per-gate breakdown, p50/p95 on coverage regen and diff-cover. |
 | `/feature <slug>` / `/feature list` | Recall prior context for a feature branch. |
 | `/feature-new <slug> "<requirement>" ["<criterion>" ...]` | Seed or update `features/<slug>.md`, including its 2–5 `## Acceptance` criteria. |
@@ -226,7 +226,7 @@ in order, cheapest rejection first.
 | `pre-commit-review.js` | PreToolUse | Blocks unless `.git/.claude-last-review` is fresh and both hashes match |
 | `pending-review-gate.js` | PreToolUse | Dormant — nothing writes its marker today |
 | `enforce-co-author.js` | PreToolUse | Attribution trailer |
-| `pre-commit-hygiene.js` | PreToolUse | ruff + pytest in opted-in repos |
+| `pre-commit-hygiene.js` | PreToolUse | ruff + targeted pytest in opted-in repos |
 | `pre-pr-verify.js` | PreToolUse | On `gh pr create` in a repo listed in `verify-repos.json`: a notice (advisory, the default) or a block (enforce) when the verification is missing or stale |
 | `post-commit-notify.js`, `claude-attribution-note.js`, `post-commit-feature.js` | PostToolUse | Notification, attribution note, sha-stamped feature history |
 
@@ -395,8 +395,14 @@ the hygiene path that means a retry waits for fresh coverage again, up to
 ### `~/.claude/hygiene-repos.json`
 Per-repo opt-in for the hygiene gate: `setup` shell lines plus a list of
 `{ name, command }` checks. Seeded from `.claude/hygiene-repos.json.example`,
-which carries the canonical ruff-check → ruff-format → pytest-cov →
-diff-cover recipe. Copy that rather than inventing a variant.
+which carries the canonical ruff-check → ruff-format → targeted pytest-cov →
+diff-cover recipe. Copy that rather than inventing a variant. The pytest
+check runs only the tests that match the staged modules
+(`test_<basename>*.py`, plus any staged test file); with no match it runs the
+`smoke` marker or warns, and diff-cover is skipped because no `coverage.xml`
+was written. The full suite runs in `/sdlc:verify` and `/commit-prep`.
+Hygiene pytest cost 436 min/week on 19 Oct 2026, 22 min per commit in the
+barra worktree on the full suite.
 
 The hook runs `bash -c`, not a login shell, so conda must be sourced
 explicitly in `setup`.

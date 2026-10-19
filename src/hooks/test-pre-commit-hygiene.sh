@@ -425,6 +425,127 @@ OUT=$(run_hook "$CFG11" "$REPO11" "git commit --amend --no-edit")
 check "amend with a failing check -> block" "$OUT" "block"
 
 # ---------------------------------------------------------------------------
+# Cases 12-15: the example config's targeted pytest-cov + diff-cover recipe.
+# The harness runs whatever commands a config names, so the recipe is lifted
+# from .claude/hygiene-repos.json.example and run in a fixture package with a
+# fake pytest and diff-cover on PATH that log their arguments.
+#   12 staged module with a matching test -> only that test runs, with --cov
+#      and coverage.xml, then diff-cover
+#   13 staged module with no matching test -> says so, runs the smoke marker,
+#      writes no coverage.xml, skips diff-cover
+#   14 staged test file -> that file runs
+#   15 no matching test and no smoke marker (pytest exit 5) -> passes with a
+#      warning
+# ---------------------------------------------------------------------------
+EXAMPLE_CFG="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.claude/hygiene-repos.json.example"
+
+FAKEBIN="$TMPROOT/fakebin"
+mkdir -p "$FAKEBIN"
+cat > "$FAKEBIN/pytest" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FAKE_LOG_DIR/pytest.log"
+case " $* " in *" -m smoke "*) [ "${FAKE_SMOKE:-yes}" = "none" ] && exit 5;; esac
+case " $* " in *" --cov-report=xml "*) : > coverage.xml;; esac
+exit 0
+EOF
+cat > "$FAKEBIN/diff-cover" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FAKE_LOG_DIR/diff-cover.log"
+exit 0
+EOF
+chmod +x "$FAKEBIN/pytest" "$FAKEBIN/diff-cover"
+
+# Usage: targeted_case <name> <file to stage> <smoke: yes|none>
+# Leaves the hook output in TOUT, the pytest log in TPYLOG, the diff-cover log
+# in TDCLOG and the repo path in TREPO.
+targeted_case() {
+    local name="$1" staged="$2" smoke="$3"
+    TREPO="$TMPROOT/targeted-$name"
+    git init -q "$TREPO"
+    mkdir -p "$TREPO/pkg" "$TREPO/tests"
+    printf 'x = 1\n' > "$TREPO/pkg/mod.py"
+    printf 'y = 1\n' > "$TREPO/pkg/other.py"
+    printf 'def test_mod():\n    pass\n' > "$TREPO/tests/test_mod.py"
+    git -C "$TREPO" add "$staged"
+    local top
+    top="$(git -C "$TREPO" rev-parse --show-toplevel | sed 's|\\\\|/|g')"
+    local cfg="$TMPROOT/targeted-$name.json"
+    EXAMPLE_CFG="$EXAMPLE_CFG" TOP="$top" node -e '
+        const ex = JSON.parse(require("fs").readFileSync(process.env.EXAMPLE_CFG, "utf-8"));
+        const entry = Object.values(ex.repos)[0];
+        entry.setup = [];
+        entry.checks = entry.checks.filter(c => /cov|diff-cover/.test(c.name));
+        entry.timeoutMs = 30000;
+        console.log(JSON.stringify({ version: 1, repos: { [process.env.TOP]: entry } }));
+    ' > "$cfg"
+    export FAKE_LOG_DIR="$TMPROOT/log-$name" FAKE_SMOKE="$smoke"
+    mkdir -p "$FAKE_LOG_DIR"
+    TOUT=$(PATH="$FAKEBIN:$PATH" run_hook "$cfg" "$TREPO" "git commit -m test")
+    TPYLOG="$(cat "$FAKE_LOG_DIR/pytest.log" 2>/dev/null || true)"
+    TDCLOG="$(cat "$FAKE_LOG_DIR/diff-cover.log" 2>/dev/null || true)"
+}
+
+targeted_case match pkg/mod.py yes
+check "targeted recipe, matching test -> approve" "$TOUT" "approve"
+if [ "$(printf '%s\n' "$TPYLOG" | wc -l)" -eq 1 ] \
+   && printf '%s' "$TPYLOG" | grep -q 'tests/test_mod.py' \
+   && printf '%s' "$TPYLOG" | grep -q -- '--cov=pkg' \
+   && printf '%s' "$TPYLOG" | grep -q -- '--cov-report=xml' \
+   && [ -f "$TREPO/coverage.xml" ] \
+   && printf '%s' "$TDCLOG" | grep -q -- '--fail-under=95'; then
+    echo "PASS: matching test runs alone with --cov, then diff-cover"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: matching test did not run alone with --cov, then diff-cover"
+    echo "  pytest log: $TPYLOG"
+    echo "  diff-cover log: $TDCLOG"
+    FAIL=$((FAIL + 1))
+fi
+
+targeted_case nomatch pkg/other.py yes
+check "targeted recipe, no matching test -> approve" "$TOUT" "approve"
+if printf '%s' "$TPYLOG" | grep -q -- '-m smoke' \
+   && ! printf '%s' "$TPYLOG" | grep -q 'test_mod' \
+   && [ ! -f "$TREPO/coverage.xml" ] \
+   && [ -z "$TDCLOG" ]; then
+    echo "PASS: no matching test runs the smoke marker, no coverage.xml, no diff-cover"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: no-match path did not run only the smoke marker"
+    echo "  pytest log: $TPYLOG"
+    echo "  diff-cover log: $TDCLOG"
+    FAIL=$((FAIL + 1))
+fi
+
+targeted_case testfile tests/test_mod.py yes
+if printf '%s' "$TPYLOG" | grep -q 'tests/test_mod.py' \
+   && ! printf '%s' "$TPYLOG" | grep -q -- '-m smoke'; then
+    echo "PASS: a staged test file runs itself"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: a staged test file did not run itself"
+    echo "  pytest log: $TPYLOG"
+    FAIL=$((FAIL + 1))
+fi
+
+# No smoke marker: run the pytest-cov command directly to read its output.
+targeted_case nosmoke pkg/other.py none
+check "targeted recipe, no test and no smoke marker -> approve" "$TOUT" "approve"
+SMOKE_CMD=$(EXAMPLE_CFG="$EXAMPLE_CFG" node -e '
+    const ex = JSON.parse(require("fs").readFileSync(process.env.EXAMPLE_CFG, "utf-8"));
+    console.log(Object.values(ex.repos)[0].checks.find(c => /cov/.test(c.name)).command);
+')
+SMOKE_OUT=$(cd "$TREPO" && PATH="$FAKEBIN:$PATH" STAGED_PY="$TREPO/pkg/other.py" STAGED_PY_PKGS=pkg bash -c "$SMOKE_CMD" 2>&1 || true)
+if printf '%s' "$SMOKE_OUT" | grep -q 'no tests match' && printf '%s' "$SMOKE_OUT" | grep -q 'WARNING'; then
+    echo "PASS: no test and no smoke marker says so and warns"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: no-smoke path did not say so and warn"
+    echo "  output: $SMOKE_OUT"
+    FAIL=$((FAIL + 1))
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

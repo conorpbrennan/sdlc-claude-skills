@@ -13,10 +13,14 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- .claude/hygiene-repos.json.example
 - .claude/sdlc-review.json.example
 - CLAUDE.md
 - README.md
 - agents/implementer.md
+- commands/commit-prep.md
+- commands/verify.md
+- instructions/hygiene-snippet.md
 - skills/plan-spec/SKILL.md
 - skills/plan-spec/check_size.py
 - skills/plan-spec/fixtures/size-over-bytes.md
@@ -28,6 +32,7 @@
 - src/hooks/agent-tier-gate.js
 - src/hooks/lib/review-config.js
 - src/hooks/test-agent-tier-gate.js
+- src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-review-config.js
 - src/test-plugin-layout.js
 

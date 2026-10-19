@@ -1,7 +1,14 @@
 ## Pre-Commit Hygiene Gate
 
 The `pre-commit-hygiene.js` hook runs `ruff check --fix`, `ruff format`, and
-`pytest -q` before allowing `git commit` in opted-in repos. Opt-in is
+a targeted `pytest` before allowing `git commit` in opted-in repos. The
+targeted run covers only the test files that match the staged modules
+(`test_<basename>*.py` under the repo, plus any staged test file), with
+`--cov=<pkg>` and `diff-cover --fail-under=95` on the result. With no
+matching test it says so and runs the `smoke` marker, or passes with a
+`WARNING` line when the repo has none. The full suite runs in
+`/sdlc:verify` and `/sdlc:commit-prep`. Hygiene pytest cost 436 min/week on
+19 Oct 2026, 22 min per commit in the barra worktree on the full suite. Opt-in is
 per-repo via `~/.claude/hygiene-repos.json`. A passing run writes
 `.git/.claude-last-hygiene` (body `PASS\n<staged-diff-hash>`, 10-minute TTL)
 so unchanged re-commits skip the work.
