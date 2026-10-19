@@ -399,6 +399,7 @@ console.log('the Sonnet line prints once per switch-on');
     assert('ordinary prompt prints nothing', run({ session_id: t, hook_event_name: 'UserPromptSubmit', cwd: plain, prompt: 'carry on' }).out, '');
     const nudged = [];
     for (let i = 0; i < 8; i++) nudged.push(ctxOf(post(t, 'Bash', { command: 'ls /p' })));
+    assert('inline-command nudge is emitted', nudged.some((x) => !!x), true);
     assert('inline-command nudge does not carry the line', nudged.some((x) => count(x) > 0), false);
     assert('plan-spec run prints the line', count(ctxOf(post(newSession(), 'Skill', { skill: 'sdlc:plan-spec', args: 'run plans/x.md' }))), 1);
 

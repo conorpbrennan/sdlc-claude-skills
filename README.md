@@ -398,7 +398,8 @@ Per-repo opt-in for the hygiene gate: `setup` shell lines plus a list of
 which carries the canonical ruff-check → ruff-format → targeted pytest-cov →
 diff-cover recipe. Copy that rather than inventing a variant. The pytest
 check runs only the tests that match the staged modules
-(`test_<basename>*.py`, plus any staged test file); with no match it runs the
+(`test_<basename>*.py`, found anywhere in the repo outside `.venv`,
+`node_modules` and `archive`, plus any staged test file); with no match it runs the
 `smoke` marker or warns, and diff-cover is skipped because no `coverage.xml`
 was written. The full suite runs in `/sdlc:verify` and `/commit-prep`.
 Hygiene pytest cost 436 min/week on 19 Oct 2026, 22 min per commit in the

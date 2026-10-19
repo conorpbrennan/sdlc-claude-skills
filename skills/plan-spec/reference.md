@@ -294,8 +294,7 @@ answers change the text it is reviewing.
   `planReview.cap` in `sdlc-review.json`. It is not an owner question and it
   does not rise mid-run. One extra round is allowed only with its reason
   recorded in §20.3. Round 1 is the Opus source round on the whole document.
-  Round 2 is the Sonnet consistency round, and its single input is the
-  sections changed since revision 1 (the fold-in), not the whole document. A
+  Round 2 is the Sonnet consistency round; its input is in §21.4. A
   reduced-form plan (§22) runs one round. Evidence, 19 Oct 2026: plans of
   150-450 KB went 3-5 review rounds and never converged; the one 86 KB plan
   converged in 3. A NOT YET with material findings at round 2 means the plan is
@@ -1064,7 +1063,8 @@ a missing prerequisite (§18.6). A review finding inside the set is a fix round
 on the same commit (§18.3), not a second commit.
 
 **The plan has a cap too.** A plan is at most 40,000 bytes, 15 step blocks, and
-80 lines in any one step block. `check_size.py` measures all three and exits 1
+80 lines in any one step block, counting the step's heading line.
+`check_size.py` measures all three and exits 1
 with one line per breach. Plans of 150-450 KB went 3-5 review rounds and never
 converged; the one 86 KB plan converged in 3 (19 Oct 2026). A plan over a cap
 is split by phase, each phase its own plan, not made longer.
@@ -1642,8 +1642,7 @@ Dispatch: the model comes from the round's input (§2a). A source round runs on
 line. An internal-consistency round runs on `model: "sonnet"`. Read both with
 `node <plugin>/src/hooks/review-config-cli.js plan-review`; the cap it prints
 is 2 by default. Round 1 is a source round on the whole document. Round 2 is a
-consistency round whose single input is the sections changed since revision 1
-(see the changed-sections form below). One extra round only with its reason
+consistency round; its input form is in the prompt below. One extra round only with its reason
 recorded in §20.3.
 
 ```

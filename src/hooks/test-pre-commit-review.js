@@ -2444,6 +2444,47 @@ try {
     cleanDiffCoverStub();
     cleanCoverageXml();
 
+    console.log('\n[INT] Gate 3c staleness wait-for-hygiene (coverage.xml deleted mid-wait):');
+    cleanAll();
+    writeCoverageXml('<coverage></coverage>');
+    fs.utimesSync(COV_XML, staleTime, staleTime);
+    stageDummyContent('def foo():\n    return 1\n');
+    writeDiffCoverStub(0);
+    fs.writeFileSync(HYGIENE_CFG, JSON.stringify({
+        repos: { [toplevelKey]: {
+            setup: [],
+            checks: [{ name: 'pytest-cov', command: 'true' }],
+            timeoutMs: 30000,
+        }},
+    }), 'utf-8');
+    // The hygiene recipe's no-match path runs `rm -f coverage.xml`. Delete it
+    // shortly after the hook starts polling; the hook must stop waiting and
+    // fall through to the review path, not wait out COV_WAIT_TIMEOUT_MS.
+    const delSidecar = spawn('node', ['-e', `
+        setTimeout(() => {
+            try { require('fs').unlinkSync(${JSON.stringify(COV_XML)}); }
+            catch (e) {}
+        }, 250);
+    `], { detached: true, stdio: 'ignore' });
+    delSidecar.unref();
+    const delT0 = Date.now();
+    r = runHook('git commit -m x', {
+        COVERAGE_XML_PATH: COV_XML,
+        DIFF_COVER_CMD: 'node ' + DIFF_COVER_STUB,
+        HYGIENE_REPOS_CONFIG: HYGIENE_CFG,
+        COV_WAIT_TIMEOUT_MS: '8000',
+    });
+    const delElapsed = Date.now() - delT0;
+    assert('deleted coverage.xml blocks for review', r.decision, 'block');
+    assertFalse('deleted coverage.xml is not coverage-stale',
+        (r.reason || '').includes('Hygiene did not produce'));
+    assertContains('deleted coverage.xml reaches the review block',
+        r.systemMessage || '', 'staged files');
+    assertTrue('deleted coverage.xml does not wait out the timeout (under 6s)', delElapsed < 6000);
+    try { fs.unlinkSync(HYGIENE_CFG); } catch (e) {}
+    cleanDiffCoverStub();
+    cleanCoverageXml();
+
     console.log('\n[INT] Gate 3c empty-gap false-positive guard:');
     cleanAll();
     stageDummyContent('def foo():\n    return 1\n');

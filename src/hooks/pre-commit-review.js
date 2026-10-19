@@ -575,7 +575,11 @@ function pollForFreshCoverage(covPath, newerThanMs, timeoutMs) {
         try {
             const st = fs.statSync(covPath);
             if (st.mtimeMs >= newerThanMs) return true;
-        } catch (e) { /* file may not exist yet */ }
+        } catch (e) {
+            // Gone while waiting (the hygiene recipe's no-match path deletes
+            // it): nothing will refresh it, so stop. The caller checks existence.
+            return false;
+        }
         const left = deadline - Date.now();
         if (left <= 0) break;
         Atomics.wait(sab, 0, 0, Math.min(POLL_INTERVAL_MS, left));
@@ -882,7 +886,7 @@ function main() {
     // the skill resolve the same rules. An unreadable index gives no paths.
     const stagedForConfig = () => getAllStagedPaths() || [];
     const diffHash = getStagedDiffHash();
-    const coveragePath = findCoverageXml(toplevel);
+    let coveragePath = findCoverageXml(toplevel);
     const covHash = coveragePath ? getCoverageXmlHash(coveragePath) : 'none';
     hookMeta.repo = toplevel || null;
     hookMeta.diff_hash_prefix = (diffHash || '').slice(0, 8);
@@ -1104,7 +1108,7 @@ function main() {
     // COV_WAIT_TIMEOUT_MS (two minutes by default) and then blocked with advice
     // the developer could not act on.
     const covFiles = codeFiles.filter(coverageMeasurable);
-    if (coveragePath && covFiles.length > 0) {
+    covGate: if (coveragePath && covFiles.length > 0) {
         const covStat = (() => { try { return fs.statSync(coveragePath); } catch (e) { return null; } })();
         const newestStagedMtime = covFiles
             .map(f => { try { return fs.statSync(path.join(toplevel, f)).mtimeMs; } catch (e) { return 0; } })
@@ -1126,6 +1130,12 @@ function main() {
                     success: fresh,
                     via: 'wait-for-hygiene',
                 });
+                if (!fresh && !fs.existsSync(coveragePath)) {
+                    // coverage.xml vanished while waiting: treat it as absent, as
+                    // when findCoverageXml returns null at the start.
+                    coveragePath = null;
+                    break covGate;
+                }
                 if (fresh) {
                     try {
                         const newStat = fs.statSync(coveragePath);
