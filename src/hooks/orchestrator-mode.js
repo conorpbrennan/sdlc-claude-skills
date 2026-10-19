@@ -26,6 +26,9 @@ const { PLUGIN, cmd } = require('./lib/plugin-names');
 const STATE_DIR_ENV = 'SDLC_ORCHESTRATOR_STATE_DIR';
 const DEFAULT_NUDGE = 8;
 
+// Printed once each time the mode turns on. A prompt to the owner; nothing enforces it.
+const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for plan writing, plan source review and FAIL triage.';
+
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
 const DENY_REASON = 'Orchestrator mode: the main session does not edit source. Write a brief and dispatch a Sonnet sub-agent (Agent tool, model: "sonnet"). If the owner wants this edit made inline, ask them to run ' + cmd('orchestrate') + ' off.';
@@ -175,8 +178,9 @@ function onPostToolUse(input) {
 
     const trigger = triggerOf(tool, toolInput);
     if (trigger) {
-        if (!state || !state.on) writeState(sid, newState(true, false, trigger));
-        return null;
+        if (state && state.on) return null;
+        writeState(sid, newState(true, false, trigger));
+        return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: MODEL_LINE } };
     }
     if (!state || !state.on) return null;
 
@@ -216,10 +220,12 @@ function onUserPromptSubmit(input) {
             : newState(false, true, 'owner: ' + cmd('orchestrate') + ' off'));
     }
     // Tell Claude the state, so the command never needs to know its own session id.
+    // The Sonnet line goes out with the explicit switch-on only, not with status or off.
+    const summary = stateSummary(readState(input.session_id));
     return {
         hookSpecificOutput: {
             hookEventName: 'UserPromptSubmit',
-            additionalContext: stateSummary(readState(input.session_id)),
+            additionalContext: m[1] === 'on' ? summary + '\n' + MODEL_LINE : summary,
         },
     };
 }

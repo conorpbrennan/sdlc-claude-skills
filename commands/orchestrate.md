@@ -20,13 +20,20 @@ The switch itself is applied by the `UserPromptSubmit` hook the moment the
 prompt is submitted. This command only reports. Do not edit any state file.
 
 1. Report the `Orchestrator mode:` line the hook added to this prompt's
-   context, and nothing else. Do not run a command to look the state up and
+   context, and for `on` the Sonnet line under it, and nothing else. Do not run a command to look the state up and
    do not guess it.
 2. For `off`, add that triggers will not turn the mode back on in this
    session until the owner runs `/sdlc:orchestrate on`.
 
 ## Duties while the mode is on
 
+- Run the orchestrator session on Sonnet (`/model sonnet`). Opus is for plan
+  writing, plan source review and FAIL triage. The hook prints this line once
+  when the mode turns on; nothing enforces it. On 19 Oct 2026 the weekly
+  analysis put commit reviews at about 9% of spend, with Opus orchestrator
+  turns a large share of the rest.
+- The end-of-run `/sdlc:verify` runs the full test suite with coverage first,
+  so expect it to be slow.
 - Trust the implementer's report. It ends with the test command it ran, the
   pass/fail summary line and `git diff --stat`. Do not re-run the tests or
   shell-read the source to check them. Verification belongs to the reviewer

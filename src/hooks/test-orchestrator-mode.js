@@ -76,6 +76,7 @@ const decision = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificO
 const turnOn = (sid, extra) => writeState(sid, { on: true, since: '2026-01-01T00:00:00.000Z', trigger: 'test', inlineSinceDispatch: 0, off: false, ...extra });
 
 const COMMIT = 'com' + 'mit';
+const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for plan writing, plan source review and FAIL triage.';
 const DENY_REASON = 'Orchestrator mode: the main session does not edit source. Write a brief and dispatch a Sonnet sub-agent (Agent tool, model: "sonnet"). If the owner wants this edit made inline, ask them to run /sdlc:orchestrate off.';
 
 console.log('sub-agent input prints nothing and changes nothing');
@@ -157,7 +158,7 @@ console.log('UserPromptSubmit');
     const sid = newSession();
     const ctx = (r) => r.out && r.out.hookSpecificOutput;
     const on1 = ctx(prompt(sid, '/orchestrate on'));
-    assert('on reports state', [on1.hookEventName, /^Orchestrator mode: on \(trigger: owner: \/sdlc:orchestrate on, since \S+, 0 inline commands since the last dispatch\)\.$/.test(on1.additionalContext)], ['UserPromptSubmit', true]);
+    assert('on reports state', [on1.hookEventName, /^Orchestrator mode: on \(trigger: owner: \/sdlc:orchestrate on, since \S+, 0 inline commands since the last dispatch\)\.\n/.test(on1.additionalContext)], ['UserPromptSubmit', true]);
     assert('short form on', isOn(sid), true);
     prompt(sid, '/orchestrate off');
     assert('short form off', [readState(sid).on, readState(sid).off], [false, true]);
@@ -376,6 +377,35 @@ console.log('--status');
     turnOn(sid, { on: false, off: true });
     const off = spawnSync('node', [HOOK, '--status', sid], { encoding: 'utf-8', env: ENV });
     assert('status off by owner', /switched off/.test(off.stdout), true);
+}
+
+console.log('the Sonnet line prints once per switch-on');
+{
+    const count = (text) => String(text || '').split(MODEL_LINE).length - 1;
+    const ctxOf = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificOutput.additionalContext;
+
+    // Explicit on path (UserPromptSubmit).
+    const sid = newSession();
+    assert('explicit on prints the line once', count(ctxOf(prompt(sid, '/orchestrate on'))), 1);
+    assert('status does not repeat it', count(ctxOf(prompt(sid, '/orchestrate status'))), 0);
+    assert('off does not print it', count(ctxOf(prompt(sid, '/orchestrate off'))), 0);
+    assert('switching on again prints it again', count(ctxOf(prompt(sid, '/sdlc:orchestrate on'))), 1);
+
+    // Trigger path (PostToolUse on a handoff read).
+    const t = newSession();
+    assert('handoff read prints the line once', count(ctxOf(post(t, 'Read', { file_path: '/p/HANDOFF-1.md' }))), 1);
+    assert('second handoff read prints nothing', post(t, 'Read', { file_path: '/p/HANDOFF-1.md' }).out, '');
+    assert('Bash handoff read after on prints nothing', post(t, 'Bash', { command: 'cat /p/HANDOFF-1.md' }).out, '');
+    assert('ordinary prompt prints nothing', run({ session_id: t, hook_event_name: 'UserPromptSubmit', cwd: plain, prompt: 'carry on' }).out, '');
+    const nudged = [];
+    for (let i = 0; i < 8; i++) nudged.push(ctxOf(post(t, 'Bash', { command: 'ls /p' })));
+    assert('inline-command nudge does not carry the line', nudged.some((x) => count(x) > 0), false);
+    assert('plan-spec run prints the line', count(ctxOf(post(newSession(), 'Skill', { skill: 'sdlc:plan-spec', args: 'run plans/x.md' }))), 1);
+
+    // No line while the owner has switched the mode off.
+    const o = newSession();
+    prompt(o, '/orchestrate off');
+    assert('trigger while off prints nothing', post(o, 'Read', { file_path: '/p/HANDOFF-1.md' }).out, '');
 }
 
 fs.rmSync(sb, { recursive: true, force: true });
