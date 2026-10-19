@@ -1051,6 +1051,12 @@ A step that fails any of these splits, and the split is written into the plan
 before dispatch, not discovered by the implementer. Two commits from one step
 is the signal that the plan owed the run another step.
 
+**The plan has a cap too.** A plan is at most 40,000 bytes, 15 step blocks, and
+80 lines in any one step block. `check_size.py` measures all three and exits 1
+with one line per breach. Plans of 150-450 KB went 3-5 review rounds and never
+converged; the one 86 KB plan converged in 3 (19 Oct 2026). A plan over a cap
+is split by phase, each phase its own plan, not made longer.
+
 ## 18. Done, and what to do when it is not
 
 ### 18.1 Done
@@ -1443,6 +1449,11 @@ independently reviewed before the first step is dispatched; 8 grows with
 each review round; 9 and 10 are filled during and after the run. A plan
 missing section 2 will have its constraints rediscovered per step, which is
 the §5 incident; a plan missing section 7 cannot be finished, only abandoned.
+
+**Size.** The skeleton holds one phase. A plan over 40,000 bytes, 15 step
+blocks, or 80 lines in a step block is split by phase, each phase its own plan
+with its own ten sections (§17; `check_size.py`). Plans of 150-450 KB never
+converged in review; the one 86 KB plan did, in 3 rounds (19 Oct 2026).
 
 ## 21. The four dispatch prompts
 

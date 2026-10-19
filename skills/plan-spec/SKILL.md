@@ -59,6 +59,8 @@ gates never scale down; the paperwork does.
    test splits, and the split is written into the plan before dispatch.
    That includes a step an implementer could not finish in about 40 tool
    calls (§17); the plan review flags it.
+   Size the plan too: over 40,000 bytes, 15 steps, or 80 lines in a step
+   block, it is split by phase, each phase its own plan (§17).
 5. **Run the review loop (§2a).** See below.
 
 ### The pre-run review loop (§2a)
@@ -86,7 +88,8 @@ the fix that closes it is new text no round has read, and a correction flag
 makes it look more checked, not less.
 
 - Run `check_citations.py` in this skill's base directory, as
-  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. A
+  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. Run `check_size.py` the same way (`python3 <that path> <plan>`) at the same points: a breach
+  (over 40,000 bytes, 15 steps, or 80 lines in a step block) means phases, each phase its own plan, not a longer plan. A
   `NEW` file set exempts paths and symbols; a `TESTS FIRST` field exempts
   symbols only, so the test's file must still resolve.
 - Apply a batch of edits with `edit_doc.py` in this skill's base directory — `apply_edits` for one file,

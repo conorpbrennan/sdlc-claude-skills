@@ -17,11 +17,26 @@
 - README.md
 - agents/implementer.md
 - skills/plan-spec/SKILL.md
+- skills/plan-spec/check_size.py
+- skills/plan-spec/fixtures/size-over-bytes.md
+- skills/plan-spec/fixtures/size-over-lines.md
+- skills/plan-spec/fixtures/size-over-steps.md
+- skills/plan-spec/fixtures/size-under.md
 - skills/plan-spec/reference.md
+- skills/plan-spec/test_check_size.py
 - src/hooks/agent-tier-gate.js
 - src/hooks/test-agent-tier-gate.js
 - src/test-plugin-layout.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-19 `d04b008` — Add a turn-budgeted implementer agent and route plan-spec dispatch to it
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - README.md
+  - agents/implementer.md
+  - skills/plan-spec/SKILL.md
+  - skills/plan-spec/reference.md
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/test-agent-tier-gate.js
+  - src/test-plugin-layout.js
