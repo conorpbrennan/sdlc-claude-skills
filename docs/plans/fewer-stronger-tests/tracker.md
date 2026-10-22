@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 5. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: close-out C2, review round 1.
-TREE: staged C1's tracker block and C1-review-1 report; unstaged C2. Worktrees open: none.
+IN FLIGHT: close-out C3, review round 1.
+TREE: staged C2's tracker block and C2-review-1 report; unstaged C3. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -100,6 +100,15 @@ STEP C1: PASS (docs/plans/fewer-stronger-tests-closeout.md; inserted, unreviewed
   stage:   src/hooks/lib/added-tests.js, src/hooks/test-added-tests.js, tools/run-tests.sh, tools/test-run-tests.sh, .claude/hygiene-repos.json.example, src/hooks/test-pre-commit-hygiene.sh, .claude-plugin/plugin.json (1.0.44 -> 1.0.45), plans (C1-C3 split out), tracker, reports/7-review-1.md, C1-implementer-1.md
   files:   as declared
   disagreements: COPY CHECK counts lines, not occurrences; gate condition "prints 2" met by occurrence count
+
+STEP C2: PASS (inserted, unreviewed block)
+  commit:  9f39470
+  gate:    feature test 57/0 in a staged worktree, a clean worktree and the main tree; run-tests exit 0; guards pass
+  reviews: code-reviewer, round 1, PASS, under 1 minute
+  reports: reports/C2-implementer-1.md, reports/C2-review-1.md
+  stage:   src/hooks/test-pre-commit-feature.sh, .claude-plugin/plugin.json (1.0.45 -> 1.0.46), tracker, reports/C1-review-1.md, C2-implementer-1.md
+  files:   as declared
+  disagreements: the reviewer's probe staged a throwaway change in the review worktree's index (shared gitdir via cp -r); main index verified clean, worktree removed before the marker.
 
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
   - step 7: test-pre-commit-feature.sh "amend -> approve" fails inside a git worktree, passes in the main tree (3/3); likely reads real repo state like the step-7 fix.

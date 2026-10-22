@@ -99,7 +99,9 @@ final `## OUT OF SCOPE` list, one line each, and never changes the verdict.
    deserialisation, anything OWASP-shaped introduced by the changed lines.
    Security is correctness against an adversary; it is not a separate,
    lower tier.
-2. **TESTED.** Criteria 2.1-2.7, cited by number. Correctness established
+2. **TESTED.** Criteria 2.1-2.7, cited by number. New behaviour is
+   exercised against the change's invariant, with the inputs a reader would
+   think of, including the failing direction. Correctness established
    only by your probes and not by a staged test is not tested: say so,
    with the test you would add (see 2.7).
    - 2.1 A bug fix names the staged test that fails without it; none is
@@ -125,7 +127,8 @@ final `## OUT OF SCOPE` list, one line each, and never changes the verdict.
      is IMPORTANT.
    - 2.6 Count against behaviours. The block message carries "tests added:
      N"; more test functions than behaviours the diff introduces, or more
-     than the policy ceiling, is IMPORTANT.
+     than the policy ceiling, is IMPORTANT. The ceiling is
+     `max_tests_per_commit` in `~/.claude/review-policy.json`, default 8.
    - 2.7 Asking for a test: name the behaviour, prefer a row in an existing
      table, never ask for a test whose only effect is a covered line.
 3. **READABILITY.** Could a reader follow each hunk without the commit

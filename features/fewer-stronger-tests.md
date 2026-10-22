@@ -53,6 +53,13 @@
 
 ## History
 
+- 2026-10-22 `9f39470` — Close-out C2: amend -> approve runs in its own temp repo
+  - .claude-plugin/plugin.json
+  - docs/plans/fewer-stronger-tests/reports/C1-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/C2-implementer-1.md
+  - docs/plans/fewer-stronger-tests/tracker.md
+  - src/hooks/test-pre-commit-feature.sh
+
 - 2026-10-22 `193ba51` — Close-out C1: Go and JS each patterns, empty-root runner fails closed, parallel smoke fallback
   - .claude-plugin/plugin.json
   - .claude/hygiene-repos.json.example

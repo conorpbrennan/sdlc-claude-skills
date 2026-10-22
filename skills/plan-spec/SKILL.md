@@ -56,7 +56,7 @@ gates never scale down; the paperwork does.
    questions plus a closed FAIL list — everything whose answer could differ
    between two competent readers goes here, never in GATE). TESTS FIRST
    follows the test rule in §16 and §21.1.
-4. **Size each step against §17's four tests.** One step is one reviewable
+4. **Size each step against §17's six tests.** One step is one reviewable
    diff, one commit, one GATE, one implementer pass. A step that fails a
    test splits, and the split is written into the plan before dispatch.
    That includes a step an implementer could not finish in about 40 tool
