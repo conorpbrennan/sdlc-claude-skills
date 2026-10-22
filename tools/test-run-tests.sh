@@ -35,13 +35,20 @@ check() {
 
 # Table: name | root | expected runner exit | expected rc for each file
 ROWS="passing suite|pass|0|0
-failing suite|fail|1|1"
+failing suite|fail|1|1
+empty root|empty|2|"
+mkdir -p "$TMPROOT/empty"
 
 while IFS='|' read -r name root want_exit want_rc; do
     out="$(bash "$RUNNER" -j 2 "$TMPROOT/$root" 2>&1)"
     got_exit=$?
     [ "$got_exit" = "$want_exit" ] && r=yes || r=no
     check "$name: runner exit is $want_exit (got $got_exit)" "$r"
+    if [ -z "$want_rc" ]; then
+        echo "$out" | grep -qF "no test files under $TMPROOT/empty" && r=yes || r=no
+        check "$name: prints 'no test files under <ROOT>'" "$r"
+        continue
+    fi
     for f in src/hooks/test-fixture.sh src/hooks/test-fixture.js; do
         echo "$out" | grep -q "^rc=$want_rc $f\$" && r=yes || r=no
         check "$name: rc line 'rc=$want_rc $f'" "$r"

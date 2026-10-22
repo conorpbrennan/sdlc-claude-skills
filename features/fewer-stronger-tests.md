@@ -23,6 +23,8 @@
 - README.md
 - commands/commit-prep.md
 - commands/verify.md
+- docs/plans/fewer-stronger-tests-closeout.md
+- docs/plans/fewer-stronger-tests.md
 - docs/plans/fewer-stronger-tests/reports/1-implementer-1.md
 - docs/plans/fewer-stronger-tests/reports/1-review-1.md
 - docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
@@ -31,6 +33,8 @@
 - docs/plans/fewer-stronger-tests/reports/6-review-1.md
 - docs/plans/fewer-stronger-tests/reports/7-fix-1.md
 - docs/plans/fewer-stronger-tests/reports/7-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/7-review-1.md
+- docs/plans/fewer-stronger-tests/reports/C1-implementer-1.md
 - docs/plans/fewer-stronger-tests/tracker.md
 - instructions/hygiene-snippet.md
 - skills/code-review-implementer/SKILL.md
@@ -45,6 +49,17 @@
 - tools/test-run-tests.sh
 
 ## History
+
+- 2026-10-22 `78369a4` — Review block message: advisory tests-added line against max_tests_per_commit
+  - .claude-plugin/plugin.json
+  - .claude/review-policy.json.example
+  - README.md
+  - docs/plans/fewer-stronger-tests/reports/6-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/7-fix-1.md
+  - docs/plans/fewer-stronger-tests/reports/7-implementer-1.md
+  - docs/plans/fewer-stronger-tests/tracker.md
+  - src/hooks/pre-commit-review.js
+  - src/hooks/test-pre-commit-review.js
 
 - 2026-10-22 `b274715` — Parallel pytest recipe in every pytest the toolchain runs
   - .claude-plugin/plugin.json

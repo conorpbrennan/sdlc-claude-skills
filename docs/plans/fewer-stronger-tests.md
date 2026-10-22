@@ -1,7 +1,7 @@
 # Fewer, faster, stronger tests from the sdlc toolchain
 
 Plan for `/sdlc:plan-spec run`. Written 22 Oct 2026 against `main` at a9a685e.
-Revision 4. Copied into the repo on branch `fewer-stronger-tests` on 22 Oct 2026.
+Revision 5. Copied into the repo on branch `fewer-stronger-tests` on 22 Oct 2026.
 
 ## Findings
 
@@ -574,6 +574,8 @@ a second `git diff` spawn; a path where counting changes `decision`.
 
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: about 30 calls; one or two rounds (hook steps take round 2 on Opus per `.claude/sdlc-review.json`).
+
+Close-out steps C1-C3 (review advisories) live in `docs/plans/fewer-stronger-tests-closeout.md`, split out on 22 Oct 2026 to keep this plan under the 40,000-byte cap.
 
 ## Section 6: What NOT to do
 
