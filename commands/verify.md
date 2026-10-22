@@ -38,7 +38,7 @@ None.
    addition is a precondition line, after the criteria and outside the
    numbering: run the full test suite with coverage first, using the
    repo's own full command (for a Python repo
-   `pytest --cov --cov-branch --cov-report=xml -q`), and report a failing
+   `XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD --cov --cov-branch --cov-report=xml -q`), and report a failing
    suite as `VERIFY_GATE: FAIL`. The per-commit hygiene gate runs only the
    tests that match the staged modules (hygiene pytest cost 436 min/week on
    19 Oct 2026, 22 min per commit in one large worktree), so this is the

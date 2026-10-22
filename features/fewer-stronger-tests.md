@@ -17,15 +17,22 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- .claude/hygiene-repos.json.example
 - CLAUDE.md
 - README.md
+- commands/commit-prep.md
+- commands/verify.md
 - docs/plans/fewer-stronger-tests/reports/1-implementer-1.md
 - docs/plans/fewer-stronger-tests/reports/1-review-1.md
 - docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/5-review-1.md
+- docs/plans/fewer-stronger-tests/reports/6-implementer-1.md
 - docs/plans/fewer-stronger-tests/tracker.md
+- instructions/hygiene-snippet.md
 - skills/code-review-implementer/SKILL.md
 - src/hooks/lib/added-tests.js
 - src/hooks/test-added-tests.js
+- src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-session-start-instructions.js
 - tools/measure-tests.js
 - tools/run-tests.sh

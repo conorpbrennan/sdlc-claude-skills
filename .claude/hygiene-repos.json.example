@@ -22,7 +22,7 @@
         },
         {
           "name": "pytest-cov",
-          "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then T=$(printf \"%s\\n\" \"$STAGED_PY\" | while read -r f; do b=$(basename \"$f\" .py); case \"$b\" in test_*) [ -f \"$f\" ] && echo \"$f\";; *) find \"$PWD\" \\( -name .venv -o -name node_modules -o -name archive \\) -prune -o -name \"test_${b}*.py\" -print;; esac; done | sort -u); COV=$(echo \"$STAGED_PY_PKGS\" | tr ',' '\\n' | sed 's|^|--cov=|' | tr '\\n' ' '); rm -f coverage.xml; if [ -n \"$T\" ]; then pytest $T $COV --cov-branch --cov-report=xml -q; else echo \"pytest: no tests match the staged files; running the smoke marker\"; pytest -m smoke -q && rc=0 || rc=$?; if [ $rc -eq 5 ]; then echo \"WARNING: no smoke marker; no tests ran for the staged files\"; else [ $rc -eq 0 ]; fi; fi; fi"
+          "command": "if [ -n \"$STAGED_PY_PKGS\" ]; then T=$(printf \"%s\\n\" \"$STAGED_PY\" | while read -r f; do b=$(basename \"$f\" .py); case \"$b\" in test_*) [ -f \"$f\" ] && echo \"$f\";; *) find \"$PWD\" \\( -name .venv -o -name node_modules -o -name archive \\) -prune -o -name \"test_${b}*.py\" -print;; esac; done | sort -u); COV=$(echo \"$STAGED_PY_PKGS\" | tr ',' '\\n' | sed 's|^|--cov=|' | tr '\\n' ' '); rm -f coverage.xml; if [ -n \"$T\" ]; then XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD $T $COV --cov-branch --cov-report=xml -q; else echo \"pytest: no tests match the staged files; running the smoke marker\"; pytest -m smoke -q && rc=0 || rc=$?; if [ $rc -eq 5 ]; then echo \"WARNING: no smoke marker; no tests ran for the staged files\"; else [ $rc -eq 0 ]; fi; fi; fi"
         },
         {
           "name": "diff-cover",
