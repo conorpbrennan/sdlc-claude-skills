@@ -1,11 +1,12 @@
 {
-  "_comment": "Per-repo policy for pre-commit-review.js fast paths. Install to ~/.claude/review-policy.json. Keys are git toplevel paths (forward slashes). Defaults apply if a repo is absent or fields are missing.",
+  "_comment": "Per-repo policy for pre-commit-review.js fast paths. Install to ~/.claude/review-policy.json. Keys are git toplevel paths (forward slashes). Defaults apply if a repo is absent or fields are missing. diff_cover_threshold 95 and branch_cover_threshold 90 are kept on 22 Oct 2026 evidence: 3 of 31 hygiene blocks and 10 of 285 review blocks were coverage. max_tests_per_commit (default 8) is advisory: the review block message prints it beside the tests the commit adds, and it blocks nothing until two weeks of tools/measure-tests.js figures say otherwise.",
   "repos": {
     "/home/you/dev/your-repo": {
       "presentational_paths": ["**/html_report*.py", "docs/**"],
       "trivial_line_threshold": 3,
       "diff_cover_threshold": 95,
-      "branch_cover_threshold": 90
+      "branch_cover_threshold": 90,
+      "max_tests_per_commit": 8
     }
   }
 }

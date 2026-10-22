@@ -90,6 +90,7 @@ const DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 // with the consolidation: `.sh` and `.ps1` are new to these lists, so shell is
 // reviewed for the first time.
 const sourceFiles = require('./lib/source-files');
+const addedTests = require('./lib/added-tests');
 const {
     SOURCE_EXTENSIONS,
     EXCLUDE_PATTERNS,
@@ -212,7 +213,31 @@ function loadPolicy(toplevel) {
         trivial_line_threshold: repoCfg.trivial_line_threshold ?? 3,
         diff_cover_threshold: repoCfg.diff_cover_threshold ?? 95,
         branch_cover_threshold: repoCfg.branch_cover_threshold ?? 90,
+        max_tests_per_commit: repoCfg.max_tests_per_commit ?? 8,
     };
+}
+
+// The advisory tests-added line for the review-required block message. It reads
+// the diff the hook already read (no second `git diff`) and never decides
+// anything: any failure, or a diff that could not be read, prints "unreadable".
+// The diff is the one readStagedDiff takes over the staged source files, which
+// include test files with a source extension.
+//
+// Args:
+//   diffText: Text of the staged diff, or null when the read failed.
+//   ceiling: The policy max_tests_per_commit.
+//
+// Returns:
+//   One sentence ending in a full stop.
+function testsAddedLine(diffText, ceiling) {
+    try {
+        if (diffText === null) return 'Tests added: unreadable.';
+        const t = addedTests.countAddedTests(diffText);
+        return 'Tests added: ' + t.testFunctions + ' functions, ' + t.parametrised + ' parametrised rows, ' +
+            t.testLines + '/' + t.sourceLines + ' test/source lines (ceiling ' + ceiling + ').';
+    } catch (e) {
+        return 'Tests added: unreadable.';
+    }
 }
 
 function appendFastPassLog(gitDir, reason, hashPrefix, fileCount) {
@@ -1288,7 +1313,7 @@ function main() {
     writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'review-required: ' + reason.split('\n')[0].slice(0, 120));
     block('review-required', reason,
         'PRE_COMMIT_REVIEW: ' + fastPathSkipNote + 'Run ' + REVIEW_CMD + ' --fresh on the ' +
-        'staged files: ' + fileList + semanticNote + '. ' + roundsPolicy(resolveRounds(toplevel, stagedForConfig())) +
+        'staged files: ' + fileList + semanticNote + '. ' + testsAddedLine(diffRead.text, policy.max_tests_per_commit) + ' ' + roundsPolicy(resolveRounds(toplevel, stagedForConfig())) +
         ' On TDD_GATE: PASS run exactly: ' + markerRecipe(MARKER_FILE, coveragePath, 'code-reviewer:round1:PASS') +
         TAG_NOTE + '. On TDD_GATE: FAIL do not write the marker. Either way, record the round by running ' +
         'exactly: ' + TIMING_CMD + ' (fill in the placeholders).');

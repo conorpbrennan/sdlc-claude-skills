@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 4. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: step 6, review round 1.
-TREE: staged step 5's tracker block and 5-review-1 report; unstaged step 6. Worktrees open: none.
+IN FLIGHT: step 7, review round 1 (after fix round 1 for the HEAD-dependent test cases).
+TREE: staged step 6's tracker block and 6-review-1 report; unstaged step 7. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -70,7 +70,19 @@ STEP 5: PASS
   budget:  about 6 of 15 calls
   gap:     xdist-present path (one merged coverage.xml) unverified here: no xdist installed. Owner verifies in a target repo with xdist (barra-risk-reports already runs -n auto with pytest-cov 7.1 + diff-cover 10.6).
 
+STEP 6: PASS
+  commit:  b274715
+  gate:    hygiene 30/0 (red 29/1); "dist loadfile" in all three; COPY CHECK example 1, commit-prep 2, verify 1, SKILL 1; hygiene-snippet 1504 bytes unchanged; session-start 0; run-tests 39 files 0 failed; guards pass
+  reviews: code-reviewer, round 1, PASS, under 1 minute
+  reports: reports/6-implementer-1.md, reports/6-review-1.md
+  stage:   .claude/hygiene-repos.json.example, instructions/hygiene-snippet.md, commands/commit-prep.md, commands/verify.md, README.md, src/hooks/test-pre-commit-hygiene.sh, .claude-plugin/plugin.json (1.0.42 -> 1.0.43), tracker, reports/5-review-1.md, reports/6-implementer-1.md
+  files:   as declared
+  decisions: smoke fallback left serial (step names only the targeted call)
+  budget:  about 24 of 35 calls
+  gap:     merged coverage.xml under real xdist unverified (same as step 5)
+
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
+  - step 6: hygiene-snippet line 12 lost `.sqlite` and "serial otherwise" (README has both); smoke fallback serial; optional opt-in real-xdist coverage.xml case.
   - step 4: SKILL.md item 4 "§17's four tests" -> six; wrap the two long snippet lines.
   - step 3: 2.6 names where the ceiling lives (`max_tests_per_commit`); restore "new behaviour exercised against the invariant, inputs a reader would think of" in the TESTED lead-in.
   - step 2: run-tests.sh exits 0 on zero files found (wrong ROOT); add a fail-closed guard.
