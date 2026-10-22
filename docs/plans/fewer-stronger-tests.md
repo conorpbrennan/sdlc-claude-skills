@@ -1,7 +1,7 @@
 # Fewer, faster, stronger tests from the sdlc toolchain
 
 Plan for `/sdlc:plan-spec run`. Written 22 Oct 2026 against `main` at a9a685e.
-Revision 1. Copied into the repo on branch `fewer-stronger-tests` on 22 Oct 2026.
+Revision 3. Copied into the repo on branch `fewer-stronger-tests` on 22 Oct 2026.
 
 ## Findings
 
@@ -56,7 +56,7 @@ Measured drivers, in order of weight:
    parametrised table already passes, but no text says so, and
    36 tdd-order blocks in the timing log each ended in a new test function.
 - **Driver 5: Nothing says "run tests in parallel".** `commands/commit-prep.md:17`,
-   `commands/verify.md:36-37`, `.claude/hygiene-repos.json.example` (the
+   `commands/verify.md:41`, `.claude/hygiene-repos.json.example` (the
    pytest-cov check), `skills/code-review-pre-commit/SKILL.md:158` (gap
    prompt), `skills/code-review-implementer/SKILL.md:63-64`, `CLAUDE.md:41-42`
    all name a serial command. Live `~/.claude/hygiene-repos.json`: 20 of 26
@@ -83,14 +83,14 @@ pattern.
 `tools/measure-tests.js` (step 1) reports, over a git range: test functions
 added per code commit (median), test lines added per source line added,
 share of added test functions that are parametrised or table-driven, share
-with one assertion, mock-only count. Baseline it on this repo (`a9a685e~60..a9a685e`)
+with one assertion, mock-only count. Baseline it on this repo (`a9a685e~40..a9a685e`)
 and on the two target repos before step 3 lands; rerun after two weeks of
 use.
 
 | Measure | Baseline | Target |
 |---|---|---|
 | Test functions added per implementer step (barra transcripts) | 22 | at most 8 (table rows do not count) |
-| Test lines per source line added (this repo; barra steps) | 1.25; 1.34 | at most 0.8 |
+| Test lines per source line added (this repo; barra steps) | 1.20; 1.34 | at most 0.8 |
 | Single-assertion share of new tests (ConstraintsSystem) | 47% | at most 25% |
 | Parametrised/table share of new test functions | 12% | at least 30% |
 | Mock-only tests in a new diff | 27 in qdspy | 0 |
@@ -104,20 +104,20 @@ use.
   reviewer still fails a bug fix with no failing test. Fewer tests must mean
   broader tests; the single-assert and table shares are the check.
 - **Flaky parallel runs.** This repo: every suite uses `mkdtemp` (24 sites);
-  one case failed once under `-P 16` and not under `-P 4` or serial
-  (`src/hooks/test-pre-commit-feature.sh` "amend -> approve"); step 2 finds
-  the cause and pins it, and isolates the timing log per run. Python repos:
+  `src/hooks/test-pre-commit-hygiene.sh` failed once in 9 parallel runs;
+  step 2 pins any case that fails under `-P N` during its gate runs, and
+  isolates the timing log per run. Python repos:
   `--dist loadfile` keeps module fixtures on one worker; 8 ConstraintsSystem
   and 4 qdspy test hits name a fixed `.db`/`.sqlite` path and need
   `tmp_path_factory` before `-n auto` is switched on there (owner task, Section 6).
-- **xdist missing.** Every recipe in step 6 detects `import xdist` and falls
+- **xdist missing.** The recipe (Section 2) detects `import xdist` and falls
   back to the serial command with a printed `WARNING`. pytest-cov 7.1 combines
   worker data itself; diff-cover reads the combined `coverage.xml` and needs no
   change.
 - **Instruction budget.** `src/hooks/test-session-start-instructions.js` is
   already red at HEAD on "at least 1500 characters of headroom" (snippets
-  total 9,049 bytes against a 10,000 cap). Step 4 is net-negative in snippet
-  bytes and turns that assertion green.
+  9,049 bytes, context 9,061 chars; the assertion needs at most 8,500
+  chars). Step 4 lands the snippets at or below 8,250 bytes.
 - **A cap that blocks honest work.** The per-commit test count ships as an
   advisory line in the block message, measured for two weeks, before anyone
   proposes enforcing it.
@@ -165,9 +165,16 @@ tasks listed in Section 6; add mutation testing (dropped on 19 Oct 2026 evidence
   out of commands that name a commit, and `cd` in every command outside the
   repo root.
 - Always permitted, never counted: the plan, `features/fewer-stronger-tests.md`,
-  the tracker, `run/reports/`.
+  the tracker `docs/plans/fewer-stronger-tests/tracker.md`, and
+  `docs/plans/fewer-stronger-tests/reports/`.
 - Threat model for hook steps: honest mistakes in commands Claude writes,
   not adversarial shell. Two review rounds, then commit with gaps named.
+- The pytest recipe, defined here only. Every copy (steps 5 and 6) is
+  byte-identical to this line, then appends its own arguments:
+  `XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD`
+  Each copy stays on one line. COPY CHECK, used by steps 5-6 and DoD 6
+  (prints 1 or more per file; an empty `R` is a failure):
+  `R=$(grep -m1 -o 'XD=.*pytest [$]XD' docs/plans/fewer-stronger-tests.md); test -n "$R" && grep -cF -- "$R" <file>...`
 
 ## Section 3: Owner decisions
 
@@ -184,6 +191,8 @@ tasks listed in Section 6; add mutation testing (dropped on 19 Oct 2026 evidence
 - **Decision 4: Target-repo rollout.** (`-n auto`, `--dist loadfile`, fixed-path sqlite
    fixtures) is done in those repos by their owners; this plan ships the
    recipe. Bites nowhere here; listed in Section 6.
+- Follow-on: a second plan slims this repo's own test suite under criteria
+  2.1-2.7 after this plan lands (owner asked, 22 Oct 2026).
 
 ## Section 4: Prerequisites, ordering and suite baseline
 
@@ -193,13 +202,14 @@ before 4 and 5, which point at it; 6 and 7 independent of each other.
 
 Suite baseline at HEAD a9a685e, measured 22 Oct 2026:
 - `src/hooks/test-session-start-instructions.js`: red, 6 FAILs. One is
-  the 1500-char headroom (turned green by step 4). Five are "no warning for
-  <legacy hook>" and depend on this machine's `~/.claude/settings.json`
-  still wiring legacy hooks: out of scope, excluded from Section 7 by name.
+  the 1500-char headroom (turned green by step 4). Five are "no warning ..."
+  cases asserting `ctx.includes('WARNING')` is false, while
+  `instructions/hygiene-snippet.md:10` contains `WARNING`; step 2 fixes them.
 - `skills/plan-spec/test_check_size.py`: cannot run here (`.venv` has no
   pytest). Out of scope; Section 7 runs it with `python3 -m pytest` only where
   pytest is importable.
-- Everything else green serially; one case flaky at `-P 16` (step 2).
+- Everything else green serially; `src/hooks/test-pre-commit-hygiene.sh`
+  failed once in 9 parallel runs (step 2).
 
 ## Section 5: The steps
 
@@ -222,7 +232,7 @@ WHAT TO BUILD:
   `assert` and `assert_called`/`call_count` per added `def test_` body);
   other languages report null for those two.
 - `tools/measure-tests.js --range A..B [--repo PATH] [--json]`: for each
-  commit in the range that touches a source extension, run
+  commit `git rev-list --no-merges A..B` lists that touches a source extension, run
   `git show --format= --unified=0 <sha>` and fold `countAddedTests` over it;
   print median test functions per code commit, test lines per source line,
   parametrised share, single-assert share, mock-only total, and the five
@@ -240,11 +250,12 @@ TESTS FIRST: `src/hooks/test-added-tests.js` — one table of eight unified
 diffs (py single test, py parametrised with three rows, py mock-only, js
 `test(`, java `@Test`, source-only diff, test file with only a comment added,
 a `+++` header that mentions `def test_`) with expected counts, one loop, one
-`assert` per field. Red before the lib exists.
+`assert` per field; it calls `isolateGitEnv()` as `src/test-suite-isolation.js`
+requires. Red before the lib exists.
 
 GATE: `node src/hooks/test-added-tests.js` exits 0 and
-`node tools/measure-tests.js --range a9a685e~60..a9a685e` prints a
-test-lines-per-source-line figure, which the report quotes beside the 1.25
+`node tools/measure-tests.js --range a9a685e~40..a9a685e` prints a
+test-lines-per-source-line figure, which the report quotes beside the 1.20
 measured here, and the class-level guards pass.
 
 REVIEW: 1. Does the `+++` header case prove headers are not counted?
@@ -256,9 +267,10 @@ production code (the `*Spec.java` incident in the TDD snippet).
 ROLLBACK: a single `git revert` of this step's commit.
 BUDGET: about 30 calls; one round.
 
-**2. This repo's suites run in parallel through one runner, isolated from the real timing log, and the one flaky case is pinned.**
-NEW `tools/run-tests.sh`. EXTEND `CLAUDE.md`, `README.md`,
-`skills/code-review-implementer/SKILL.md`, `src/hooks/test-pre-commit-feature.sh`.
+**2. This repo's suites run in parallel through one runner, isolated from the real timing log, and any parallel-only failure is pinned.**
+NEW `tools/run-tests.sh`, `tools/test-run-tests.sh`. EXTEND `CLAUDE.md`, `README.md`,
+`skills/code-review-implementer/SKILL.md`, `src/hooks/test-pre-commit-feature.sh`,
+`src/hooks/test-pre-commit-hygiene.sh`, `src/hooks/test-session-start-instructions.js`.
 
 WHY NOW: serial 87.4 s, `-P 16` 25.0 s, measured 22 Oct 2026 with
 `date +%s%N` around each file. `node --test` already runs each file as its
@@ -268,19 +280,20 @@ change (probe: four files 1.73 s to 0.87 s). 78 fixture rows in
 `TIMING_LOG_PATH`.
 
 WHAT TO BUILD:
-- `tools/run-tests.sh [-j N]`: exports `TIMING_LOG_PATH` to a `mktemp` file
-  for the whole run; runs
-  `node --test --test-concurrency=N src/hooks/test-*.js src/test-*.js`
+- `tools/run-tests.sh [-j N] [ROOT]`: `ROOT` (default the repo root) is
+  where the globs below resolve; a glob matching nothing is skipped. Exports
+  `TIMING_LOG_PATH` to a `mktemp` file for the whole run; runs
+  `node --test --test-concurrency=N src/hooks/test-*.js src/test-*.js tools/test-*.js`
   and, in the same wall-clock window, `xargs -P N -n1 bash` over
-  `src/hooks/test-*.sh src/test-*.sh`; runs `python3 -m pytest -q skills/plan-spec`
+  `src/hooks/test-*.sh src/test-*.sh tools/test-*.sh`; runs `python3 -m pytest -q skills/plan-spec`
   only if `python3 -c "import pytest"` succeeds, else prints one WARNING
   line; prints per-file rc and total elapsed; exits non-zero if any file
   did. `N` defaults to `nproc`.
-- `src/hooks/test-pre-commit-feature.sh` "amend -> approve": find why it
-  fails under `-P 16` (candidates: a hook timeout under load, a shared
-  path; the test uses `mktemp` throughout, so look at the hook's own
-  timeouts first) and fix the cause in the test or, if the cause is in the
-  hook, report it as a step the plan owes (§18.6) rather than fixing inline.
+- Any case that fails under `-P N` during the gate runs: find the cause and
+  fix it in the test or, if the cause is in the hook, report it as a step
+  the plan owes (§18.6) rather than fixing inline.
+- `src/hooks/test-session-start-instructions.js`: the five
+  `ctx.includes('WARNING')` assertions become `ctx.includes(WARNING_HEAD)`.
 - `CLAUDE.md:41-42`, `README.md` (the tests paragraph) and
   `skills/code-review-implementer/SKILL.md:63-64` name `tools/run-tests.sh`
   as the way to run the suites; the per-file commands stay as the way to
@@ -290,18 +303,22 @@ IMPORTS: none.
 ASSUMES LANDED: step 1.
 MUST NOT TOUCH: `src/hooks/lib/added-tests.js`, `tools/measure-tests.js`.
 
-TESTS FIRST: none new; the runner is shell glue over existing suites and
-its gate is the suites themselves, run three times.
+TESTS FIRST: `tools/test-run-tests.sh` — one table over two fixture roots
+under `mktemp -d` (one passing suite, one failing suite); per row it asserts
+the runner's exit code, the per-file rc line, and that the suite saw
+`TIMING_LOG_PATH` exported. Red before the runner exists.
 
-GATE: `bash tools/run-tests.sh` exits 0 three consecutive times and its
+GATE: `bash tools/test-run-tests.sh` exits 0; `bash tools/run-tests.sh`
+reports no failing file except `src/hooks/test-session-start-instructions.js`,
+whose only FAIL is the headroom assertion, three consecutive times; its
 elapsed total is at most 40% of a serial loop over the same files measured
 in the same session (both figures quoted); `grep -c "repo[0-9]\|targeted-"
 ~/.claude/code-review-timing.jsonl` is unchanged before and after a run;
 `node src/hooks/test-added-tests.js` exits 0; guards pass.
 
 REVIEW: 1. Does a failing file make the runner exit non-zero (prove it
-with a deliberately broken copy under `mktemp -d`)? 2. Is the flaky
-case's fix a cause, not a retry or a sleep? FAIL on: a `sleep` or retry
+with a deliberately broken copy under `mktemp -d`)? 2. Is any
+parallel-only failure's fix a cause, not a retry or a sleep? FAIL on: a `sleep` or retry
 loop added to a test; the runner swallowing a non-zero rc.
 
 ROLLBACK: a single `git revert` of this step's commit.
@@ -340,9 +357,10 @@ MUST NOT TOUCH: `skills/*`, `instructions/*` (steps 4-6).
 
 TESTS FIRST: none; a documentation step outside the gates' extensions.
 
-GATE: `grep -c "^- 2\.[1-7]" agents/code-reviewer.md` prints 7;
+GATE: `grep -cE "^ *- 2\.[1-7] " agents/code-reviewer.md` prints 7;
 `grep -c "2.1-2.7" agents/code-reviewer-deep.md` prints at least 1;
-`claude plugin validate .` exits 0; `bash tools/run-tests.sh` exits 0.
+`claude plugin validate .` exits 0; `bash tools/run-tests.sh` reports no failing file except
+`src/hooks/test-session-start-instructions.js`, whose only FAIL is the headroom assertion.
 
 REVIEW: 1. Could a reviewer apply each of 2.2-2.6 to a diff and reach the
 same verdict twice? 2. Does any criterion weaken 2.1? 3. Is the file still
@@ -359,7 +377,7 @@ EXTEND `skills/plan-spec/reference.md`, `skills/plan-spec/SKILL.md`,
 
 WHY NOW: 22 tests per step measured; TESTS FIRST median 0 named tests;
 the GATE example at `skills/plan-spec/reference.md:995-996` is "no
-uncovered line"; the snippets are 549 bytes over the headroom the hook test
+uncovered line"; the snippets are over the headroom the hook test
 demands.
 
 WHAT TO BUILD:
@@ -382,8 +400,8 @@ WHAT TO BUILD:
   mandate (`src/hooks/lib/tdd-order.js::testDiffAddsTestCode` counts any
   added non-comment line) — and move the Robot/Cucumber/Java/.NET
   path-convention paragraph to `README.md`'s TDD section, leaving one
-  sentence that points there. Net change to `instructions/*.md` is at least
-  600 bytes negative.
+  sentence that points there. `instructions/*.md` lands at or below 8,250
+  bytes (9,049 at HEAD).
 
 IMPORTS: `agents/code-reviewer.md` owns the criteria; cite, never copy.
 ASSUMES LANDED: steps 2, 3.
@@ -394,9 +412,8 @@ TESTS FIRST: `src/hooks/test-session-start-instructions.js` "at least 1500
 characters of headroom" is red at HEAD and must be green after; quote the
 red run.
 
-GATE: `node src/hooks/test-session-start-instructions.js` no longer reports
-the headroom FAIL (the five legacy-wiring FAILs are the Section 4 baseline and
-may remain); `wc -c instructions/*.md` total is below 8,450;
+GATE: `node src/hooks/test-session-start-instructions.js` exits 0;
+`wc -c instructions/*.md` total is at most 8,250;
 `grep -c "no uncovered line" skills/plan-spec/reference.md` prints 0;
 `grep -c "2.2-2.7" agents/implementer.md skills/plan-spec/reference.md`
 prints at least 1 each; `python3 skills/plan-spec/check_citations.py
@@ -419,16 +436,19 @@ WHAT TO BUILD, in the `<gap-patching-mode>` block
 - Step 2 becomes: for each uncovered function, first look for an existing
   test of that function; add a row to its table, or a case to it, before
   writing a new function. At most one new test function per uncovered
-  function. The test follows `agents/code-reviewer.md` 2.2-2.5.
+  function. The test follows `agents/code-reviewer.md` 2.2-2.7.
 - New step: an uncovered line that is defensive (re-raise, log-and-return,
   an `else` that cannot be reached through the public interface) is listed
   in the report as `UNCOVERABLE: <file:line> <reason>` and left alone; no
   `pragma: no cover` is added.
-- Step 3's command becomes the step-6 recipe (xdist detected, serial
-  fallback), written once here and cited from step 6 rather than copied.
+- Step 3's command becomes the Section 2 recipe, byte-identical, followed
+  by `--cov=<pkg> --cov-branch --cov-report=xml -q`.
+- Gap-patch PASS conditions are unchanged. When only UNCOVERABLE lines
+  remain, the patcher prints `GAP_PATCH: FAIL` with reason
+  `N UNCOVERABLE lines` and the list. It never loosens PASS.
 - The report lists tests added as "N functions, M rows".
 
-IMPORTS: `agents/code-reviewer.md` 2.2-2.5. ASSUMES LANDED: step 3.
+IMPORTS: `agents/code-reviewer.md` 2.2-2.7. ASSUMES LANDED: step 3.
 MUST NOT TOUCH: `src/hooks/pre-commit-review.js`, `commands/*`.
 
 TESTS FIRST: none; prompt text, outside the gates' extensions.
@@ -436,7 +456,8 @@ TESTS FIRST: none; prompt text, outside the gates' extensions.
 GATE: `grep -c "UNCOVERABLE" skills/code-review-pre-commit/SKILL.md`
 prints at least 2; `grep -c "pragma" skills/code-review-pre-commit/SKILL.md`
 prints at least 1 (the prohibition); `grep -c "import xdist"
-skills/code-review-pre-commit/SKILL.md` prints at least 1;
+skills/code-review-pre-commit/SKILL.md` prints at least 1; the Section 2
+COPY CHECK on `skills/code-review-pre-commit/SKILL.md` prints at least 1;
 `claude plugin validate .` exits 0; `bash tools/run-tests.sh` exits 0.
 
 REVIEW: 1. Can the gap-patcher still reach `GAP_PATCH: PASS` when every
@@ -457,19 +478,20 @@ max 639 s; the one repo on `-n auto` has pytest-xdist 3.8, pytest-cov 7.1
 and diff-cover 10.6 working together today.
 
 WHAT TO BUILD:
-- One recipe, defined once in `.claude/hygiene-repos.json.example`'s
-  `setup` as a shell function `pyx` and used by its `pytest-cov` check:
-  `XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || { echo 'WARNING: pytest-xdist missing; serial run' >&2; })`
-  then `pytest $XD -p no:cacheprovider <targets> --cov=... --cov-branch --cov-report=xml -q`.
-  `--dist loadfile` keeps a module's tests on one worker so module-scoped
-  fixtures hold. The diff-cover check is unchanged.
-- `commands/commit-prep.md:17-21` and `commands/verify.md:36-37`: the full
-  suite line uses the same recipe (quoted, not re-derived).
+- `.claude/hygiene-repos.json.example`'s `pytest-cov` check: its `pytest`
+  call becomes the Section 2 recipe, inline at the head of that command,
+  byte-identical; no `setup` function (one breaks `targeted_case`, which
+  sets `entry.setup = []`, and case 15's `SMOKE_CMD`). `--dist loadfile`
+  keeps a module's tests on one worker so module-scoped fixtures hold. The
+  diff-cover check is unchanged.
+- `commands/commit-prep.md:17-21` and `commands/verify.md:41`: the full
+  suite line is the Section 2 recipe, byte-identical, plus its own arguments.
 - `instructions/hygiene-snippet.md` and `README.md`'s hygiene section: one
   sentence each: the recipe runs `-n auto --dist loadfile` when xdist
   imports and warns otherwise; a fixed-path fixture (`.db`, `.sqlite`,
   `/tmp/<name>`) must move to `tmp_path_factory` before a repo opts in.
-  Snippet byte count must not rise above step 4's figure plus 200.
+  The `hygiene-snippet.md` sentence is net-zero bytes within that file and
+  adds no literal `WARNING`.
 - `src/hooks/test-pre-commit-hygiene.sh`: one new targeted case that runs
   the example config's `pytest-cov` command against the existing fake
   `pytest` with a fake `python` on PATH that exits 0 for `import xdist`,
@@ -480,8 +502,8 @@ WHAT TO BUILD:
 IMPORTS: the fake-binary harness already in
 `src/hooks/test-pre-commit-hygiene.sh` (`targeted_case`); reuse it.
 ASSUMES LANDED: steps 2, 4, 5.
-MUST NOT TOUCH: `skills/code-review-pre-commit/SKILL.md` (step 5 wrote
-the gap prompt's copy; this step cites it), `src/hooks/pre-commit-hygiene.js`.
+MUST NOT TOUCH: `skills/code-review-pre-commit/SKILL.md` (step 5's copy),
+`src/hooks/pre-commit-hygiene.js`.
 
 TESTS FIRST: the new case in `src/hooks/test-pre-commit-hygiene.sh`, red
 against the old example config (no `-n auto` in the log).
@@ -489,13 +511,17 @@ against the old example config (no `-n auto` in the log).
 GATE: `bash src/hooks/test-pre-commit-hygiene.sh` exits 0 and its output
 contains the new case's PASS line; `grep -c "dist loadfile"
 .claude/hygiene-repos.json.example commands/commit-prep.md commands/verify.md`
-prints at least 1 each; `node src/hooks/test-session-start-instructions.js`
-headroom assertion still green; `bash tools/run-tests.sh` exits 0.
+prints at least 1 each; the Section 2 COPY CHECK on those three files and
+`skills/code-review-pre-commit/SKILL.md` prints at least 1 each;
+`wc -c instructions/hygiene-snippet.md` is unchanged
+from step 4; `node src/hooks/test-session-start-instructions.js` exits 0;
+`bash tools/run-tests.sh` exits 0.
 
 REVIEW: 1. Does the recipe degrade to exactly the old command when xdist is
 absent? 2. Does `--cov` under xdist still write one `coverage.xml` at the
-repo root (pytest-cov 7 does; say where that is checked)? 3. Is the recipe
-defined once and cited, or copied four times? FAIL on: a copy that differs
+repo root (pytest-cov 7 does; say where that is checked)? 3. Is the copy in
+the gap prompt, `hygiene-repos.json.example`, `commit-prep.md` and
+`verify.md` byte-identical to the Section 2 line (`grep -cF` it in each)? FAIL on: a copy that differs
 from the definition; a recipe that errors when xdist is missing.
 
 ROLLBACK: a single `git revert` of this step's commit.
@@ -569,20 +595,57 @@ Run in this order at the final HEAD:
 2. `node tools/measure-tests.js --range a9a685e..HEAD` prints a
    test-lines-per-source-line figure at or below 0.8 for this plan's own
    commits.
-3. `node src/hooks/test-session-start-instructions.js` reports no headroom
-   FAIL (the five legacy-wiring FAILs are excluded, Section 4).
-4. `claude plugin validate .` exits 0; `node tools/plugin-version.js check`
-   exits 0 on every commit in the range.
+3. `node src/hooks/test-session-start-instructions.js` exits 0.
+4. `claude plugin validate .` exits 0; every commit in `a9a685e..HEAD` that
+   is not features-only has a `.claude-plugin/plugin.json` version above its
+   parent's.
 5. `grep -rn "2.2-2.7" agents/implementer.md skills/plan-spec/reference.md skills/code-review-pre-commit/SKILL.md`
    finds at least one hit in each file, and `agents/code-reviewer.md` is the
    only file that defines 2.1-2.7.
-6. Two weeks after merge: `node tools/measure-tests.js --range <merge>..HEAD --repo <each target repo>`
+6. The Section 2 COPY CHECK on `skills/code-review-pre-commit/SKILL.md`,
+   `.claude/hygiene-repos.json.example`, `commands/commit-prep.md` and
+   `commands/verify.md` prints at least 1 for each file.
+7. Two weeks after merge: `node tools/measure-tests.js --range <merge>..HEAD --repo <each target repo>`
    and `/sdlc:review-timing` against the Targets table; the owner then
    decides on enforcement.
 
 ## Section 8: Review findings — disposition
 
-(empty; filled per round)
+Round 1 (source, against HEAD; NOT YET). All 11 folded in:
+1. "No warning" FAILs misattributed: step 2 switches them to `WARNING_HEAD`;
+   steps 2-3 allow only the headroom FAIL, step 4 on requires exit 0; the
+   legacy-wiring wording is gone from Section 4, steps 4 and 6, DoD 3.
+2. Range `a9a685e~60` does not resolve: now `~40` in Targets and step 1;
+   step 1 names `git rev-list --no-merges`.
+3. Runner had no test: step 2 adds `tools/test-run-tests.sh` and a `ROOT`
+   argument; flake bullet now covers any `-P N` failure; hygiene suite added.
+4. Runner globs now include `tools/test-*`.
+5. `pyx` setup function dropped; the detection sits inline in the check.
+6. Recipe defined once in Section 2; steps 5-6 copy it byte-identical;
+   step 6 REVIEW Q3 checks that. Chosen over "cite, never copy" because a
+   prompt and a JSON command cannot cite.
+7. Step 4 lands snippets at or below 8,250 bytes; step 6's sentence is
+   net-zero in `hygiene-snippet.md`, no new `WARNING`, and gated on it.
+8. Step 5 states gap-patch PASS is unchanged; UNCOVERABLE-only prints FAIL.
+9. Step 5 cites 2.2-2.7.
+10. DoD 4 is a per-commit version check over `a9a685e..HEAD`.
+11. Step 3 GATE regex fixed.
+Strict options taken throughout: no gate was loosened.
+
+Round 2 (consistency, fold-in sections; NOT YET, one finding). Folded in:
+1. Recipe byte-identity was only a REVIEW question: Section 2 now carries a
+   COPY CHECK command (run against this plan at revision 3: it extracts the
+   line and matches it); steps 5 and 6 GATE on it and DoD 6 runs it over all
+   four copies. Below the bar, noted: step 4's "exits as at HEAD" wording;
+   step 2 EXTEND lists the flake-pin targets without a named edit; step 5
+   REVIEW Q1 is answered by the plan.
+
+Below the bar: baseline ratio fixed to 1.20 (barra 1.34); `isolateGitEnv()`
+added to step 1; `commands/verify.md` cited at 41. Noted, not actioned: §17's
+new size test is the sixth, not fifth; step 7's diff reader is
+`readStagedDiff` in `pre-commit-review.js`; README has no "fast-path
+section"; criterion 2.6 cites a line step 7 builds. None changes what a
+step builds or gates.
 
 ## Section 9: DECISIONS-OPEN
 
