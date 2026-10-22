@@ -460,7 +460,15 @@ PR opened from the web.
 ### `~/.claude/review-policy.json`
 Per-repo fast-path tuning for `pre-commit-review.js`:
 `presentational_paths`, `trivial_line_threshold`, `diff_cover_threshold`,
-`branch_cover_threshold`. Defaults apply where a repo or field is absent.
+`branch_cover_threshold`, `max_tests_per_commit`. Defaults apply where a repo or field is absent.
+
+The review-required block message ends its file list with an advisory line,
+`Tests added: <functions> functions, <rows> parametrised rows, <testLines>/<sourceLines> test/source lines (ceiling <max_tests_per_commit>).`
+It counts the staged source diff the hook already read, through
+`src/hooks/lib/added-tests.js`; the rows figure counts parametrise decorators.
+A failed read prints `Tests added: unreadable.` The ceiling (default 8) never
+blocks and never touches a marker. The coverage thresholds stay at 95 and 90 on
+22 Oct 2026 evidence (3 of 31 hygiene blocks, 10 of 285 review blocks were coverage).
 
 ### Emergency override
 ```bash

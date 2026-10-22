@@ -1166,6 +1166,21 @@ try {
     // The dummy is a new file: its two lines plus one opaque count on each side
     // for the whole-file add (round 2, item 3).
     assertContains('message reports non-trivial line counts', r.systemMessage || '', '(3 non-trivial lines added, 1 removed)');
+    // The staged dummy is one two-line source file: no test, no row, 0 test lines.
+    assertContains('message carries the tests-added line with the fixture counts', r.systemMessage || '',
+        'Tests added: 0 functions, 0 parametrised rows, 0/2 test/source lines (ceiling 8).');
+    {
+        // A policy ceiling of 3 changes the ceiling text only, never the decision.
+        const decisionBefore = r.decision;
+        writePolicy({ repos: { [REPO_ROOT]: { max_tests_per_commit: 3 } } });
+        cleanAll();
+        const rc = runHook('git commit -m x', { REVIEW_POLICY_CONFIG: POLICY_PATH });
+        cleanPolicy();
+        cleanAll();
+        assertContains('policy max_tests_per_commit 3 shows in the tests-added line', rc.systemMessage || '',
+            'test/source lines (ceiling 3).');
+        assert('policy ceiling leaves the review-required decision unchanged', rc.decision, decisionBefore);
+    }
     // Executing the recipe verbatim must produce a marker the hook accepts.
     {
         const m = (r.systemMessage || '').match(/run exactly: (printf .*?) \(replace/);
@@ -1362,17 +1377,64 @@ try {
     // approved as trivial-diff. TDD_MANDATE_CONFIG points at a file that does not
     // exist, so the installed config cannot exempt this repo: the mandate stands.
     const NO_MANDATE_CFG = path.resolve(TMP_DIR, 'pre-commit-hook-test-no-such-mandate.json');
+    // The no_tests cases below run in a scratch repository, not in this checkout.
+    // The hook lets a no_tests result continue when the prior commit (HEAD against
+    // its parent) was test-only, so the verdict depended on whatever the last real
+    // commit on the branch happened to touch. The scratch HEAD is a commit that
+    // changes a source file, so the verdict is the same on every branch and commit.
+    const OTHER_TEST_REL = 'src/hooks/test-commit-command.js';
+    const SCRATCH_APP_REL = 'src/app.py';
+    const buildTddScratch = () => {
+        const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-tdd-')));
+        const g = (args, input) => execFileSync('git', args,
+            { cwd: dir, encoding: 'utf-8', input, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        g(['init', '-q']);
+        const write = (rel, content) => {
+            fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            fs.writeFileSync(path.join(dir, rel), content, 'utf-8');
+            g(['add', '--', rel]);
+        };
+        const commit = parent => {
+            const c = g(['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit-tree', g(['write-tree']),
+                ...(parent ? ['-p', parent] : []), '-m', 'c']);
+            g(['update-ref', 'HEAD', c]);
+            return c;
+        };
+        for (const rel of [TRACKED_REL, OTHER_TEST_REL]) {
+            write(rel, execFileSync('git', ['show', 'HEAD:' + rel], { cwd: REPO_ROOT, encoding: 'utf-8' }));
+        }
+        write(SCRATCH_APP_REL, 'def app():\n    return 1\n');
+        const root = commit(null);
+        write(SCRATCH_APP_REL, 'def app():\n    return 2\n');
+        commit(root);
+        process.on('exit', () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} });
+        const marker = path.join(dir, '.git', '.claude-last-review');
+        const stageBlobAt = (rel, content) => g(['update-index', '--add', '--cacheinfo',
+            '100644,' + g(['hash-object', '-w', '--stdin'], content) + ',' + rel]);
+        return {
+            dir, g,
+            stageBlob: stageBlobAt,
+            unstageBlob: rel => { try { g(['update-index', '--force-remove', '--', rel]); } catch (e) {} },
+            appendTracked: extra => stageBlobAt(TRACKED_REL, g(['show', 'HEAD:' + TRACKED_REL]) + '\n' + extra),
+            unstageTracked: () => { try { g(['reset', '-q', 'HEAD', '--', TRACKED_REL]); } catch (e) {} },
+            readMarker: () => { try { return fs.readFileSync(marker, 'utf-8'); } catch (e) { return null; } },
+            cleanMarker: () => { try { fs.unlinkSync(marker); } catch (e) {} },
+        };
+    };
+    const tddScratch = buildTddScratch();
+    const SCRATCH_POLICY_KEY = tddScratch.dir.replace(/\\/g, '/');
     console.log('\n[INT] No fast path runs before the TDD gate:');
     cleanAll();
     unstageDummy();
-    stageTrackedAppend('# just a note\n');
+    tddScratch.appendTracked('# just a note\n');
     r = runHook('git commit -m x', { TDD_MANDATE_CONFIG: NO_MANDATE_CFG },
-        { realMandate: true, input: { transcript_path: '' } });
+        { realMandate: true, input: { transcript_path: '' }, cwd: tddScratch.dir });
     assert('comment-only, no test, mandate on: blocked', r.decision, 'block');
     assertContains('...by the TDD gate', r.systemMessage || '', 'no_tests');
-    assertFalse('...with no PASS marker', (readMarker() || '').startsWith('PASS'));
-    assertFalse('...and no trivial-diff tag', (readMarker() || '').includes('trivial-diff'));
-    unstageTracked();
+    assertFalse('...with no PASS marker', (tddScratch.readMarker() || '').startsWith('PASS'));
+    assertFalse('...and no trivial-diff tag', (tddScratch.readMarker() || '').includes('trivial-diff'));
+    tddScratch.unstageTracked();
+    tddScratch.cleanMarker();
 
     // A crash in the TDD check is no verdict, and no verdict is not a pass: the
     // same comment-only change must be blocked, naming the error, never approved
@@ -1488,12 +1550,17 @@ try {
     }
 
     cleanAll();
-    stageTrackedAppend('TITLE = "Report"\n');
+    // The policy is keyed by repository path, so it names the scratch repository here.
+    writePolicy({ repos: { [SCRATCH_POLICY_KEY]: { presentational_paths: ['tmp/**', TRACKED_REL], trivial_line_threshold: 3 } } });
+    tddScratch.appendTracked('TITLE = "Report"\n');
     r = runHook('git commit -m x', { TDD_MANDATE_CONFIG: NO_MANDATE_CFG, REVIEW_POLICY_CONFIG: POLICY_PATH },
-        { realMandate: true, input: { transcript_path: '' } });
+        { realMandate: true, input: { transcript_path: '' }, cwd: tddScratch.dir });
     assert('presentational-eligible, no test, mandate on: blocked', r.decision, 'block');
     assertContains('...by the TDD gate', r.systemMessage || '', 'no_tests');
-    assertFalse('...not tagged presentational', (readMarker() || '').includes('presentational'));
+    assertFalse('...not tagged presentational', (tddScratch.readMarker() || '').includes('presentational'));
+    tddScratch.unstageTracked();
+    tddScratch.cleanMarker();
+    writePolicy({ repos: { [POLICY_KEY]: { presentational_paths: ['tmp/**', TRACKED_REL], trivial_line_threshold: 3 } } });
 
     cleanAll();
     writePolicy({ repos: { [POLICY_KEY]: { presentational_paths: ['docs/**'], trivial_line_threshold: 3 } } });
@@ -1664,9 +1731,12 @@ try {
         assertTrue('staged café.py is not approved', r.decision !== 'approve');
         assertFalse('staged café.py writes no PASS marker', (readMarker() || '').startsWith('PASS'));
         cleanAll();
-        r = runHook('git commit -m x', {}, { realMandate: true, input: { transcript_path: '' } });
+        tddScratch.stageBlob(accented, 'def foo():\n    return 1\n');
+        r = runHook('git commit -m x', {}, { realMandate: true, input: { transcript_path: '' }, cwd: tddScratch.dir });
         assertContains('staged café.py with no test: TDD gate blocks no_tests', r.systemMessage || '', 'no_tests');
     } finally {
+        tddScratch.unstageBlob(accented);
+        tddScratch.cleanMarker();
         unstageBlob(accented);
         cleanAll();
     }
@@ -1703,36 +1773,30 @@ try {
     console.log('\n[INT] An empty test file does not satisfy the mandate:');
     cleanAll();
     unstageDummy();
-    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
-    stageBlob(TEST_REL, '');
+    tddScratch.stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    tddScratch.stageBlob(TEST_REL, '');
     try {
-        r = runMandate();
+        r = runMandate({}, { cwd: tddScratch.dir });
         assert('impl + 0-byte test file: blocked', r.decision, 'block');
         assertContains('...as no_tests', r.systemMessage || '', 'no_tests');
     } finally {
-        unstageBlob(TEST_REL);
-        unstageBlob(IMPL_REL);
+        tddScratch.unstageBlob(TEST_REL);
+        tddScratch.unstageBlob(IMPL_REL);
+        tddScratch.cleanMarker();
         cleanAll();
     }
 
     console.log('\n[INT] A blank line added to an unrelated test does not satisfy the mandate:');
-    const OTHER_TEST_REL = 'src/hooks/test-commit-command.js';
-    stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
-    {
-        const mode = execFileSync('git', ['ls-tree', 'HEAD', '--', OTHER_TEST_REL],
-            { cwd: REPO_ROOT, encoding: 'utf-8' }).split(' ')[0];
-        const head = execFileSync('git', ['show', 'HEAD:' + OTHER_TEST_REL], { cwd: REPO_ROOT, encoding: 'utf-8' });
-        const blob = execFileSync('git', ['hash-object', '-w', '--stdin'],
-            { cwd: REPO_ROOT, encoding: 'utf-8', input: head + '\n' }).trim();
-        execFileSync('git', ['update-index', '--cacheinfo', mode + ',' + blob + ',' + OTHER_TEST_REL], { cwd: REPO_ROOT });
-    }
+    tddScratch.stageBlob(IMPL_REL, 'def bill():\n    return 1\n');
+    tddScratch.stageBlob(OTHER_TEST_REL, tddScratch.g(['show', 'HEAD:' + OTHER_TEST_REL]) + '\n\n');
     try {
-        r = runMandate();
+        r = runMandate({}, { cwd: tddScratch.dir });
         assert('impl + blank line in an unrelated test: blocked', r.decision, 'block');
         assertContains('...as no_tests', r.systemMessage || '', 'no_tests');
     } finally {
-        try { execFileSync('git', ['reset', '-q', 'HEAD', '--', OTHER_TEST_REL], { cwd: REPO_ROOT }); } catch (e) {}
-        unstageBlob(IMPL_REL);
+        try { tddScratch.g(['reset', '-q', 'HEAD', '--', OTHER_TEST_REL]); } catch (e) {}
+        tddScratch.unstageBlob(IMPL_REL);
+        tddScratch.cleanMarker();
         cleanAll();
     }
 

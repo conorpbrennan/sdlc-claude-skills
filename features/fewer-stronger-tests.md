@@ -18,6 +18,7 @@
 
 - .claude-plugin/plugin.json
 - .claude/hygiene-repos.json.example
+- .claude/review-policy.json.example
 - CLAUDE.md
 - README.md
 - commands/commit-prep.md
@@ -27,18 +28,35 @@
 - docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
 - docs/plans/fewer-stronger-tests/reports/5-review-1.md
 - docs/plans/fewer-stronger-tests/reports/6-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/6-review-1.md
+- docs/plans/fewer-stronger-tests/reports/7-fix-1.md
+- docs/plans/fewer-stronger-tests/reports/7-implementer-1.md
 - docs/plans/fewer-stronger-tests/tracker.md
 - instructions/hygiene-snippet.md
 - skills/code-review-implementer/SKILL.md
 - src/hooks/lib/added-tests.js
+- src/hooks/pre-commit-review.js
 - src/hooks/test-added-tests.js
 - src/hooks/test-pre-commit-hygiene.sh
+- src/hooks/test-pre-commit-review.js
 - src/hooks/test-session-start-instructions.js
 - tools/measure-tests.js
 - tools/run-tests.sh
 - tools/test-run-tests.sh
 
 ## History
+
+- 2026-10-22 `b274715` — Parallel pytest recipe in every pytest the toolchain runs
+  - .claude-plugin/plugin.json
+  - .claude/hygiene-repos.json.example
+  - README.md
+  - commands/commit-prep.md
+  - commands/verify.md
+  - docs/plans/fewer-stronger-tests/reports/5-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/6-implementer-1.md
+  - docs/plans/fewer-stronger-tests/tracker.md
+  - instructions/hygiene-snippet.md
+  - src/hooks/test-pre-commit-hygiene.sh
 
 - 2026-10-22 `4035d74` — Run the suites in parallel through tools/run-tests.sh
   - .claude-plugin/plugin.json
