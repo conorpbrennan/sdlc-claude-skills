@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 5. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: close-out C3, review round 1.
-TREE: staged C2's tracker block and C2-review-1 report; unstaged C3. Worktrees open: none.
+IN FLIGHT: definition of done / /sdlc:verify.
+TREE: staged C3's tracker block and C3-review-1 report. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -109,6 +109,21 @@ STEP C2: PASS (inserted, unreviewed block)
   stage:   src/hooks/test-pre-commit-feature.sh, .claude-plugin/plugin.json (1.0.45 -> 1.0.46), tracker, reports/C1-review-1.md, C2-implementer-1.md
   files:   as declared
   disagreements: the reviewer's probe staged a throwaway change in the review worktree's index (shared gitdir via cp -r); main index verified clean, worktree removed before the marker.
+
+STEP C3: PASS (inserted, unreviewed block)
+  commit:  d87d5c6
+  gate:    2.x bullets 7; max_tests_per_commit 1; "four tests" 0; plugin validate 0; run-tests 39 files 0 failed; plugin-layout 154/0; suite-isolation 43/0
+  reviews: code-reviewer, round 1, PASS, under 1 minute (run before the commit; docs-only)
+  reports: reports/C3-implementer-1.md, reports/C3-review-1.md
+  stage:   agents/code-reviewer.md, skills/plan-spec/SKILL.md, .claude-plugin/plugin.json (1.0.46 -> 1.0.47), tracker, reports/C2-review-1.md, C3-implementer-1.md
+  files:   as declared
+
+OPEN GAPS (named, not built):
+  - skills/plan-spec/reference.md:1042 "The other three tests" is stale against six size tests.
+  - One merged coverage.xml under real xdist + pytest-cov is unverified here (no xdist). Owner checks in a repo that has it (barra-risk-reports runs -n auto with pytest-cov 7.1 + diff-cover 10.6 today).
+  - hygiene-snippet.md sentence omits `.sqlite` and "serial otherwise" (README has both; snippet byte budget).
+  - testFunctions reads 0 for this repo's custom-harness JS suites; testLines is the measure here.
+  - Target-repo rollout (pytest-xdist, fixed-path fixtures, hygiene-repos.json) is the owner's, per plan Section 6.
 
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
   - step 7: test-pre-commit-feature.sh "amend -> approve" fails inside a git worktree, passes in the main tree (3/3); likely reads real repo state like the step-7 fix.

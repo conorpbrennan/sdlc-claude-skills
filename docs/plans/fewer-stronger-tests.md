@@ -664,4 +664,23 @@ step builds or gates.
 
 ## Section 10: As built
 
-(written last, from the tracker)
+Written 22 Oct 2026 from `docs/plans/fewer-stronger-tests/tracker.md`,
+which holds the per-step blocks, reports and open gaps.
+
+| Step | Commit | Review rounds | Notes |
+|---|---|---|---|
+| 1 measure-tests | d78b0c9 | 1 PASS | baseline 2.00 test/source lines over a9a685e~40..a9a685e (plan said 1.20) |
+| 2 run-tests.sh | 4035d74 | 1 PASS | 18.0-18.8 s parallel vs 72.2 s serial (25%) |
+| 3 criteria 2.1-2.7 | 46ca34d | 1 PASS | rev 4 added the isolation rule to 2.5 |
+| 4 plan-spec, implementer, TDD snippet | 57e7e36 | 1 PASS | snippets 9,049 -> 8,242 bytes; headroom test green |
+| 5 gap-patching prompt | 833e5d0 | 1 PASS | UNCOVERABLE reported; PASS unchanged |
+| 6 parallel pytest recipe | b274715 | 1 PASS | five byte-identical copies |
+| 7 tests-added line | 78369a4 | 1 PASS after 1 fix round | fix moved HEAD-dependent no_tests cases into a scratch repo |
+| C1 patterns, empty root, smoke | 193ba51 | 1 PASS | close-out plan |
+| C2 amend case isolation | 9f39470 | 1 PASS | close-out plan |
+| C3 criteria wording, counts | d87d5c6 | 1 PASS | close-out plan |
+
+No step needed a second review round. Two latent test-isolation defects
+surfaced and were fixed (steps 7 and C2): both ran hooks against the real
+checkout, the exact pattern criterion 2.5 now forbids. Open gaps are listed
+in the tracker under OPEN GAPS.
