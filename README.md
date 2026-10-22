@@ -551,9 +551,14 @@ project's install script afterwards.
 ## Tests
 
 ```bash
-for t in src/hooks/test-*.js src/test-*.js; do node "$t"; done
-for t in src/hooks/test-*.sh; do bash "$t"; done
+bash tools/run-tests.sh [-j N]
 ```
+
+`tools/run-tests.sh` runs every suite in parallel (`-j` defaults to `nproc`),
+points `TIMING_LOG_PATH` at a scratch file so no suite writes fixture rows to
+`~/.claude/code-review-timing.jsonl`, prints one `rc=N file` line per file and
+exits non-zero if any file did. To run one suite, use its own command, for
+example `node src/hooks/test-X.js` or `bash src/hooks/test-X.sh`.
 
 `src/test-claude-md-section.js` tests `src/lib/claude-md-section.js` directly,
 including a block of assertions stating that the inputs which broke the previous

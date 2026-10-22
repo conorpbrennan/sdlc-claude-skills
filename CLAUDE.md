@@ -38,8 +38,10 @@ edit made there is lost on the next update, and it never reaches the repo.
 - `./uninstall.sh` removes a pre-plugin deployment from `~/.claude/` (the
   one-time migration); `--dry-run` shows what it would do. It reads its
   legacy wiring from `legacy/hooks-config.json`.
-- Tests live beside the code they exercise: `node src/hooks/test-*.js`,
-  `bash src/hooks/test-*.sh` and `node src/test-*.js`.
+- Tests live beside the code they exercise. Run all the suites in parallel
+  with `bash tools/run-tests.sh [-j N]` (it isolates the timing log and prints
+  one rc line per file). Run one suite with `node src/hooks/test-X.js`,
+  `bash src/hooks/test-X.sh` or `node src/test-X.js`.
 
 ## What ships here
 

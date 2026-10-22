@@ -250,7 +250,7 @@ console.log('\nA hook the legacy wiring never had is not a legacy install:');
     // here would be one its own fix cannot clear.
     const home = scratchHome(wired('node "$HOME/.claude/hooks/stop-review-trigger.js"'));
     const ctx = context(run(HOOK, home));
-    assert('no warning for stop-review-trigger.js', ctx.includes('WARNING'), false);
+    assert('no warning for stop-review-trigger.js', ctx.includes(WARNING_HEAD), false);
     fs.rmSync(home, { recursive: true, force: true });
 }
 
@@ -269,7 +269,7 @@ console.log('\nA clean settings.json:');
 {
     const home = scratchHome(wired('node "/opt/tools/someone-elses-hook.js"'));
     const ctx = context(run(HOOK, home));
-    assert('no warning', ctx.includes('WARNING'), false);
+    assert('no warning', ctx.includes(WARNING_HEAD), false);
     assert('begins with the first section', ctx.startsWith(SECTIONS[0][1]), true);
     fs.rmSync(home, { recursive: true, force: true });
 }
@@ -278,7 +278,7 @@ console.log('\nA user script that only resembles a toolchain hook:');
 {
     const home = scratchHome(wired('node "$HOME/.claude/hooks/my-pre-commit-review.js"'));
     const ctx = context(run(HOOK, home));
-    assert('no warning for my-pre-commit-review.js', ctx.includes('WARNING'), false);
+    assert('no warning for my-pre-commit-review.js', ctx.includes(WARNING_HEAD), false);
     fs.rmSync(home, { recursive: true, force: true });
 }
 
@@ -286,14 +286,14 @@ console.log('\nThe plugin\'s own wiring is not a legacy install:');
 {
     const home = scratchHome(wired('node "${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-commit-review.js"'));
     const ctx = context(run(HOOK, home));
-    assert('no warning for a CLAUDE_PLUGIN_ROOT command', ctx.includes('WARNING'), false);
+    assert('no warning for a CLAUDE_PLUGIN_ROOT command', ctx.includes(WARNING_HEAD), false);
     fs.rmSync(home, { recursive: true, force: true });
 }
 
 console.log('\nNo settings.json:');
 {
     const ctx = context(run(HOOK, CLEAN_HOME));
-    assert('no warning', ctx.includes('WARNING'), false);
+    assert('no warning', ctx.includes(WARNING_HEAD), false);
 }
 
 console.log('\nAn unreadable settings.json:');
