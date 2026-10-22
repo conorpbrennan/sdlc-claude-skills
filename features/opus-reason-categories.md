@@ -28,4 +28,13 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-22 `945122a` — agent-tier-gate: Opus/Fable only for plan writing, plan source review, fail triage; user asked prompts
+  - .claude-plugin/plugin.json
+  - README.md
+  - commands/model-spend.md
+  - docs/plans/opus-reason-categories-fix-1.md
+  - docs/plans/opus-reason-categories-implementer-1.md
+  - skills/plan-spec/SKILL.md
+  - skills/plan-spec/reference.md
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/test-agent-tier-gate.js
