@@ -33,6 +33,18 @@
 
 ## History
 
+- 2026-10-22 `4035d74` — Run the suites in parallel through tools/run-tests.sh
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - README.md
+  - docs/plans/fewer-stronger-tests/reports/1-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
+  - docs/plans/fewer-stronger-tests/tracker.md
+  - skills/code-review-implementer/SKILL.md
+  - src/hooks/test-session-start-instructions.js
+  - tools/run-tests.sh
+  - tools/test-run-tests.sh
+
 - 2026-10-22 `d78b0c9` — Add measure-tests: count tests added over a git range
   - .claude-plugin/plugin.json
   - docs/plans/fewer-stronger-tests/reports/1-implementer-1.md

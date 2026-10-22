@@ -1,7 +1,7 @@
 # Fewer, faster, stronger tests from the sdlc toolchain
 
 Plan for `/sdlc:plan-spec run`. Written 22 Oct 2026 against `main` at a9a685e.
-Revision 3. Copied into the repo on branch `fewer-stronger-tests` on 22 Oct 2026.
+Revision 4. Copied into the repo on branch `fewer-stronger-tests` on 22 Oct 2026.
 
 ## Findings
 
@@ -345,6 +345,10 @@ criteria, numbered 2.1-2.7 so other files can cite them:
 - 2.5 Mocks only at the process boundary (`SfmEnvironment`, subprocess,
   network, clock). A test whose only assertion is that a mock was called is
   not a test: IMPORTANT, with the observable effect it should assert.
+  Tests are isolated so they run in parallel: each writes only under its
+  own temp dir (`tmp_path`, `mktemp -d`), uses no fixed path or shared
+  global, and passes in any order. A fixed path or an order dependence is
+  IMPORTANT.
 - 2.6 Count against behaviours. The block message carries "tests added: N";
   more test functions than behaviours the diff introduces, or more than
   the policy ceiling, is IMPORTANT.
@@ -649,7 +653,12 @@ step builds or gates.
 
 ## Section 9: DECISIONS-OPEN
 
-(empty)
+- 22 Oct 2026, before step 3 dispatch (orchestrator, §18.5): criterion 2.5
+  gains the isolation rule (own temp dir, no fixed path or shared global,
+  any order). The owner asked for tests that always run in parallel; no
+  criterion required parallel-safe tests. Folded into 2.5 so the 2.1-2.7
+  numbering every later step and DoD 5 cite is unchanged. Step 3's GATE
+  is unchanged.
 
 ## Section 10: As built
 

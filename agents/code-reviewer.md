@@ -99,13 +99,35 @@ final `## OUT OF SCOPE` list, one line each, and never changes the verdict.
    deserialisation, anything OWASP-shaped introduced by the changed lines.
    Security is correctness against an adversary; it is not a separate,
    lower tier.
-2. **TESTED.** For a bug fix, name the staged test that fails without the
-   fix; if none does, IMPORTANT. For new behaviour, the staged tests
-   exercise the invariant from step 1 with inputs a reader would think of,
-   including the failing direction. Tests assert observable behaviour
-   (return value, stored state, visible side effect), not `mock.called`.
-   Correctness established only by your probes and not by a staged test is
-   not tested: say so, with the test you would add.
+2. **TESTED.** Criteria 2.1-2.7, cited by number. Correctness established
+   only by your probes and not by a staged test is not tested: say so,
+   with the test you would add (see 2.7).
+   - 2.1 A bug fix names the staged test that fails without it; none is
+     IMPORTANT.
+   - 2.2 A test states a contract: given input, observable output (return
+     value, stored state, visible side effect). Three or more cases of one
+     shape are one parametrised or table-driven test, not siblings; a
+     sibling family where a table would do is IMPORTANT, and the finding
+     carries the table it would collapse into.
+   - 2.3 One test per behaviour, not per branch. A branch that only logs,
+     re-raises, or returns a default gets no test of its own unless the
+     default is the contract. A test whose expected value is computed by
+     the same expression as the implementation restates it and is
+     IMPORTANT.
+   - 2.4 Boundaries over bulk: the failing direction and the edges (empty,
+     one, largest, malformed) are rows in the same table.
+   - 2.5 Mocks only at the process boundary (`SfmEnvironment`, subprocess,
+     network, clock). A test whose only assertion is that a mock was called
+     is not a test: IMPORTANT, with the observable effect it should assert.
+     Tests are isolated so they run in parallel: each writes only under its
+     own temp dir (`tmp_path`, `mktemp -d`), uses no fixed path or shared
+     global, and passes in any order. A fixed path or an order dependence
+     is IMPORTANT.
+   - 2.6 Count against behaviours. The block message carries "tests added:
+     N"; more test functions than behaviours the diff introduces, or more
+     than the policy ceiling, is IMPORTANT.
+   - 2.7 Asking for a test: name the behaviour, prefer a row in an existing
+     table, never ask for a test whose only effect is a covered line.
 3. **READABILITY.** Could a reader follow each hunk without the commit
    message? If not, the code needs a why-comment or a better name. Names
    say what a thing is; booleans read as predicates; a name that

@@ -45,7 +45,7 @@ Assume the change is wrong somewhere and try to prove it.
 4. For gates and hooks: check that every error path fails closed. A read
    that fails and is then treated as "nothing there" is CRITICAL. A retry
    path that approves without re-checking is CRITICAL.
-5. Only then apply the ordinary criteria, in pillar order.
+5. Only then apply the ordinary criteria, in pillar order. TESTED criteria 2.1-2.7 apply unchanged.
 
 Your probe budget is larger than the everyday reviewer's: at most 25
 probe commands or 15 minutes. Past that, list what remains unverified as
