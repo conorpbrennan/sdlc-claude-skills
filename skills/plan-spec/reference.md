@@ -961,7 +961,9 @@ field is filled last, after every step has one.>
 
 TESTS FIRST: <the test files and the assertions that must be red before
 the implementation exists; red is one failing run of the named test, quoted
-in the report (§11). Nothing beyond that run.>
+in the report (§11). Nothing beyond that run. At most eight test functions
+for the step, table-driven where three or more cases share a shape: name the
+table, its columns and its rows.>
 
 GATE: <every condition, each mechanically checkable by a reader with a
 shell, joined by "and". Includes the repository's class-level guards
@@ -992,8 +994,9 @@ on. A step that reads "1 + 2" like every other step has said nothing.>
 **GATE, defined.** A GATE line is a conjunction of conditions, each of which
 a reader can settle the same way twice. Most are settled by running
 something and comparing: "the suite is green" is not a gate, `pytest -q
-tests/test_x.py` exiting zero is; "coverage is good" is not, "diff-cover
-reports no uncovered line in the step's file set" is.
+tests/test_x.py` exiting zero is; "coverage is good" is not, "the
+named table tests pass and the hook's branch threshold holds on the
+step's files" is.
 
 A step whose output is prose or visual — the as-built record, a reference
 page, a signed spec, a screen a person has to look at — cannot be gated that
@@ -1051,6 +1054,8 @@ implementer pass. The test an author applies before writing it:
   rather than a rollback. That is permitted and it is also a signal, since
   that step said in its own text that it was likely two commits.
 
+- Its TESTS FIRST needs at most eight test functions. A step that needs more
+  is two steps.
 - An implementer finishes it in about 40 tool calls or fewer. Cost grows
   with every turn, because the whole context is re-read each time: runs over
   50 turns were 54% of implementer spend. A step expected to exceed 40 splits
@@ -1523,6 +1528,8 @@ Rules for you specifically:
 - Run the named TESTS FIRST test once, red, before the implementation
   exists, and quote the failure text (§11). Nothing beyond that run.
 - Run the whole GATE yourself and quote each condition's command and result.
+- Tests follow `agents/code-reviewer.md` 2.2-2.7; at most eight functions;
+  a case is a row.
 - A choice inside the step's stated scope: take the conservative option,
   record it in your report, continue (§18.5). A choice that changes what the step delivers, its file set, its
   signatures or its gate: stop before committing and propose the amendment

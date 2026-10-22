@@ -19,6 +19,8 @@ is the single source for the full contract, and this file does not restate it.
 - Run the named TESTS FIRST test once, red, before the implementation exists,
   then run the whole GATE and quote each command and its result. No mutation
   table.
+- Tests follow `agents/code-reviewer.md` 2.2-2.7: tables over siblings, at
+  most eight functions per step, no mock-only tests.
 - Never stage and never commit. Leave the work in the working tree.
 - Write the report to the path the prompt names, to the §19 template, every
   field. Return the path plus a five-line summary.

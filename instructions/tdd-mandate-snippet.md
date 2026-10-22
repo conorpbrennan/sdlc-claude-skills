@@ -10,9 +10,8 @@ blocks two shapes:
 - **`no_tests`** -- implementation files are staged with no test file in the diff
   at all. Blocked.
 
-When edit order cannot be determined -- no transcript, or the files were staged in
-an earlier session -- the order check is skipped, but a test must still be present.
-An unverifiable order is not an excuse for a missing test.
+When edit order cannot be determined (no transcript, or files staged in an earlier
+session) the order check is skipped, but a test must still be present.
 
 So the working order for any code change is: write the failing test, then the
 implementation, then stage both together. Splitting them across two commits also
@@ -26,26 +25,15 @@ inverted rather than a second list: if a path is not in `SOURCE_EXTENSIONS`
 markup and config -- `.md`, `.rst`, `.txt`, `.csv`, `.css`, `.html`, `.json`,
 `.yaml`, `.toml`, lockfiles, dotfiles, and extensionless files such as `LICENSE`.
 
-There is no exempt-directory list. `tmp/` and `.planning/` had one and lost it,
-because the rule above already covers the docs they held and its only remaining
-effect was exempting code. Everything that IS code needs a test, shell scripts
-included: `uninstall.sh` is the most destructive code in this project.
+There is no exempt-directory list: it only ever exempted code. Everything that
+IS code needs a test, shell scripts included.
 
-A `features/` directory is Cucumber's, and its step definitions count as tests. If
-this project's own feature records live there too, they are `.md` and therefore not
-code, so they are exempt rather than mistaken for tests.
+To exempt a path, add it to `exempt_paths` in `~/.claude/tdd-mandate.json`
+(a trailing slash makes it a directory prefix).
 
-To exempt a path rather than a whole repository, add it to `exempt_paths` in
-`~/.claude/tdd-mandate.json` -- a trailing slash makes it a directory prefix.
+**What counts as a test** is a path convention in `src/hooks/lib/tdd-order.js`; the README's TDD section lists it.
 
-**What counts as a test** is a path convention, listed in
-`src/hooks/lib/tdd-order.js`: a `test/`, `tests/`, `spec/` or `__tests__/`
-directory; a `test-` or `test_` prefix; a `_test.` or `.test.` or `.spec.` infix;
-`_spec.rb`; or a `*Test.java`-style suffix **inside** a test directory, where a
-.NET `Tests/`, `<Name>.Tests/` or `<Name>.Specs/` folder (any case, plural only) also counts. That
-last restriction matters -- a bare `*Spec.java` rule swept in whole public APIs
-(JavaPoet's `TypeSpec`, KotlinPoet's `FileSpec`) and calling production code a test
-is the fail-open direction.
+A test is a behaviour, not a branch. A new row in an existing table satisfies the mandate: `src/hooks/lib/tdd-order.js::testDiffAddsTestCode` counts any added non-comment line.
 
 If a commit is blocked and you believe the gate is wrong, say so rather than
 working around it. To exempt a repository deliberately:
