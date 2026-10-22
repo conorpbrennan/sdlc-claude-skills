@@ -775,8 +775,9 @@ were 8% of implementer runs and 77% of implementer spend. **Rule.** The
 implementer is the `sdlc:implementer` agent: Sonnet, 80 turns, and the
 dispatch says so: `subagent_type: "sdlc:implementer"`, `model: "sonnet"`
 (§21.1). An Opus implementer needs the owner's OK recorded in §20.2 and a
-`TIER: opus: <reason>` line in the prompt. The `agent-tier-gate` hook denies
-an Opus dispatch without that line.
+`TIER: opus: user asked` line in the prompt (the hook raises a confirm prompt for it).
+The `agent-tier-gate` hook accepts only the categories plan writing, plan source
+review, fail triage and user asked, and denies any other Opus dispatch.
 
 Reviewers are handed: the repo, the staged diff, the step's intent in one
 paragraph, the single owners it must not duplicate, the specific things to
@@ -1493,8 +1494,8 @@ run is carrying in someone's memory (§19a).
 
 Dispatch: `subagent_type: "sdlc:implementer"`, `model: "sonnet"` (§9). The
 Agent call states both; the prompt below is what goes in its `prompt` field.
-An Opus implementer adds a `TIER: opus: <reason>` line to the prompt, and only
-with the owner's OK recorded in §20.2.
+An Opus implementer adds a `TIER: opus: user asked` line to the prompt (the gate
+prompts the owner to confirm), and only with the owner's OK recorded in §20.2.
 
 ```
 You are implementing one step of <plan path>, revision <n>. You implement

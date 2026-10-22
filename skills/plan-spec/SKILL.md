@@ -146,8 +146,9 @@ Per step:
    (§9) and the dispatch says so: `subagent_type: "sdlc:implementer"`,
    `model: "sonnet"`. Its tests follow the §21.1 rule. It carries an 80-turn budget (a step that cannot
    finish reports PARTIAL and you split it). An Opus implementer needs the owner's OK recorded in
-   §20.2 and a `TIER: opus: <reason>` line in the prompt; the
-   `agent-tier-gate` hook denies an Opus dispatch without it.
+   §20.2 and a `TIER: opus: user asked` line in the prompt (it raises a confirm prompt); the
+   `agent-tier-gate` hook denies an Opus dispatch whose reason is not plan writing,
+   plan source review, fail triage or user asked.
 2. **Read the report in full** (§19). The implementer wrote it to
    `run/reports/<step>-implementer-<round>.md` (a fix agent, to
    `<step>-fix-<round>.md`) and returned the path plus a five-line summary;
