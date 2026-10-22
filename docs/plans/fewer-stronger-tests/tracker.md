@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 4. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: step 4, review round 1.
-TREE: staged step 3's tracker block and 3-review-1 report; unstaged step 4. Worktrees open: none.
+IN FLIGHT: step 5, review round 1.
+TREE: staged step 4's tracker block and 4-review-1 report; unstaged step 5. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -49,8 +49,19 @@ STEP 3: PASS
   decisions: plan rev 4 adds the isolation rule to 2.5 (Section 9)
   budget:  about 9 of 15 calls
 
+STEP 4: PASS
+  commit:  57e7e36
+  gate:    session-start-instructions 73/0 (red 72/1 at HEAD); instructions total 8,242; "no uncovered line" 0; "2.2-2.7" in implementer.md and reference.md; check_citations on the fixture exits 1 before and after; run-tests 39 files 0 failed; guards pass
+  reviews: code-reviewer, round 1, PASS, under 1 minute (run before the commit; docs-only)
+  reports: reports/4-implementer-1.md, reports/4-review-1.md
+  stage:   README.md, agents/implementer.md, instructions/tdd-mandate-snippet.md, skills/plan-spec/SKILL.md, skills/plan-spec/reference.md, .claude-plugin/plugin.json (1.0.40 -> 1.0.41), tracker, reports/3-review-1.md, reports/4-implementer-1.md
+  files:   as declared
+  decisions: three snippet sentences tightened beyond the move to reach 8,242 (wording only; reviewer confirmed no rule dropped); the Cucumber paragraph moved to README too
+  budget:  about 12 of 30 calls
+
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
+  - step 4: SKILL.md item 4 "§17's four tests" -> six; wrap the two long snippet lines.
   - step 3: 2.6 names where the ceiling lives (`max_tests_per_commit`); restore "new behaviour exercised against the invariant, inputs a reader would think of" in the TESTED lead-in.
   - step 2: run-tests.sh exits 0 on zero files found (wrong ROOT); add a fail-closed guard.
-  - step 2: README "Every suite passes" sentence — recheck after step 4.
+  - step 2: README "Every suite passes" — now true (step 4: 39 files, 0 failed); drop from list at close-out.
   - step 1: tighten Go `Test` regex (exclude `TestMain`, `Testing`); count JS `test.each`/`it.each`; add failing-direction rows for Go, C#, Rust; header case could use a visible testLines effect.

@@ -149,20 +149,31 @@ Thresholds: <from the block message: diff-cover N%, branch M%>
 
 1. Read the function(s) that contain the uncovered lines. Do not read
    surrounding code.
-2. Write the minimum pytest test(s) that exercise those lines and assert
-   observable behaviour (return value, stored state, externally visible
-   side effect). Do NOT assert on mocks or log messages. Write each test to
-   a path git does not ignore: `git check-ignore -q <path>` must exit 1.
-   pytest still runs an ignored test, so coverage would count a test the
-   commit cannot carry.
-3. Run: pytest --cov=<pkg> --cov-branch --cov-report=xml -q
-4. Run: diff-cover coverage.xml --compare-branch=HEAD --fail-under=<N>
-5. List every test file you created or changed, and end the report with
-   `git diff --stat` and the pytest summary line.
-6. If diff-cover exits 0, per-file branch coverage on changed files is
+2. For each uncovered function, first look for an existing test of that
+   function. Add a row to its table, or a case to it, before writing a new
+   test function. Write at most one new test function per uncovered
+   function, never one per uncovered line. Each test follows
+   `agents/code-reviewer.md` criteria 2.2-2.7 and asserts observable
+   behaviour (return value, stored state, externally visible side effect).
+   Do NOT assert on mocks or log messages. Write each new test to a path
+   git does not ignore: `git check-ignore -q <path>` must exit 1. pytest
+   still runs an ignored test, so coverage would count a test the commit
+   cannot carry.
+3. An uncovered line that is defensive (a re-raise, a log-and-return, an
+   `else` that cannot be reached through the public interface) gets no
+   test. List it in the report as `UNCOVERABLE: <file:line> <reason>` and
+   leave it alone. Never add `pragma: no cover`.
+4. Run: XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD --cov=<pkg> --cov-branch --cov-report=xml -q
+5. Run: diff-cover coverage.xml --compare-branch=HEAD --fail-under=<N>
+6. List every test file you created or changed, and the tests added as
+   "N functions, M rows". End the report with `git diff --stat` and the
+   pytest summary line.
+7. If diff-cover exits 0, per-file branch coverage on changed files is
    >= M%, and `git check-ignore` exits 1 for every test file you listed,
    print `GAP_PATCH: PASS` as the last line of your report.
-   Otherwise print `GAP_PATCH: FAIL` with a one-line reason.
+   Otherwise print `GAP_PATCH: FAIL` with a one-line reason. When only
+   UNCOVERABLE lines remain, the reason is `N UNCOVERABLE lines` followed
+   by the list. Never loosen the PASS conditions to fit them.
 
 Do NOT refactor the source.
 Do NOT add tests for already-covered code.
