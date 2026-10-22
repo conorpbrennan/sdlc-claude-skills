@@ -128,7 +128,11 @@ echo "Pass-through"
 out=$(printf '{"tool_input":{"command":"git status"}}' | node "$HOOK" 2>&1)
 assert_contains "non-commit -> approve" "$out" '"approve"'
 
-out=$(printf '{"tool_input":{"command":"git commit --amend --no-edit"}}' | node "$HOOK" 2>&1)
+# Run in a seeded temp repo with nothing staged, not in the checkout this
+# suite runs from: the hook reads the index and branch of its cwd, so the real
+# checkout's staged files or detached HEAD would flip the decision.
+REPO_AMEND=$(seed_repo)
+out=$(run_hook "$REPO_AMEND" "git commit --amend --no-edit")
 assert_contains "amend -> approve" "$out" '"approve"'
 
 # --- Blocklisted branch with source files ----------------------------------
