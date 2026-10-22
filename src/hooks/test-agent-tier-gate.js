@@ -9,7 +9,8 @@ const { spawnSync } = require('child_process');
 const HOOK = path.join(__dirname, 'agent-tier-gate.js');
 const { BUDGET_BLOCK, BUDGET_MARKER } = require('./lib/context-budget.js');
 const { agent } = require('./lib/plugin-names.js');
-const DENY_REASON = 'Opus dispatch without a stated reason. Opus is for plans, plan source review and judgement calls. Add a line "TIER: opus: <why>" to the prompt, or dispatch with model: "sonnet".';
+const CATEGORIES = ['plan writing', 'plan source review', 'fail triage', 'user asked'];
+const namesCategories = (r) => CATEGORIES.every((c) => r.out.hookSpecificOutput.permissionDecisionReason.includes(c));
 
 let passed = 0;
 let failed = 0;
@@ -43,8 +44,7 @@ console.log('gated types, opus without a reason');
 for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan', 'implementer', agent('implementer')]) {
     const r = call({ subagent_type: type, model: 'opus', prompt: 'do the thing' });
     assert(`deny opus, type=${JSON.stringify(type)}`, decision(r), 'deny');
-    assert(`deny reason, type=${JSON.stringify(type)}`,
-        r.out.hookSpecificOutput.permissionDecisionReason, DENY_REASON);
+    assert(`deny reason names the categories, type=${JSON.stringify(type)}`, namesCategories(r), true);
 }
 assert('deny fable', decision(call({ subagent_type: 'Plan', model: 'fable', prompt: 'x' })), 'deny');
 assert('deny full opus id', decision(call({ subagent_type: 'Plan', model: 'claude-opus-4-1', prompt: 'x' })), 'deny');
@@ -54,19 +54,50 @@ assert('deny empty reason text',
 
 console.log('gated types, opus with a reason');
 const withReason = (line, model) =>
-    call({ subagent_type: 'general-purpose', model: model || 'opus', prompt: `intro\n${line}\nmore\n${BUDGET_MARKER}` });
-assert('allow colon form', withReason('TIER: opus: plan source review').out, '');
-assert('allow dash form', withReason('TIER: opus - judgement call').out, '');
-assert('allow lowercase tier', withReason('tier: Opus: why').out, '');
-assert('allow fable reason', withReason('TIER: fable: why', 'fable').out, '');
+    call({ subagent_type: 'general-purpose', model: model || 'opus', description: 'Map workbook', prompt: `intro\n${line}\nmore\n${BUDGET_MARKER}` });
+// line, model, expected decision (undefined = allowed with no decision).
+for (const [line, model, want] of [
+    ['TIER: opus: plan writing', 'opus', undefined],
+    ['TIER: opus: plan source review', 'opus', undefined],
+    ['TIER: opus: fail triage', 'opus', undefined],
+    ['TIER: opus: plan source review: round 1 of rev 3', 'opus', undefined],
+    ['TIER: opus: plan-source-review', 'opus', undefined],
+    ['TIER: opus: plan_writing', 'opus', undefined],
+    ['TIER: OPUS: PLAN  WRITING', 'opus', undefined],
+    ['tier: Opus - fail triage', 'opus', undefined],
+    ['TIER: fable: plan writing', 'fable', undefined],
+    ['TIER: opus: user asked', 'opus', 'ask'],
+    ['TIER: fable: user asked: owner wants fable', 'fable', 'ask'],
+    ['TIER: opus: design judgement', 'opus', 'deny'],
+    ['TIER: opus - judgement call', 'opus', 'deny'],
+    ['TIER: opus: why', 'opus', 'deny'],
+    ['TIER: fable: why', 'fable', 'deny'],
+    ['TIER: opus: needs plan writing', 'opus', 'deny'],
+    ['TIER: opus: plan writer', 'opus', 'deny'],
+    ['TIER: opus: plan writingfoo', 'opus', 'deny'],
+    ['TIER: opus: plan writing2', 'opus', 'deny'],
+    ['TIER: opus:  ', 'opus', 'deny'],
+    ['TIER: opus: plan writing.', 'opus', undefined],
+    ['TIER: opus: plan source review, round 2', 'opus', undefined],
+    ['TIER: opus: fail triage; two unexplained results', 'opus', undefined],
+]) {
+    const r = withReason(line, model);
+    assert(`${want || 'allow'}: ${line}`, decision(r) || undefined, want);
+    if (want === 'deny') assert(`deny names the categories: ${line}`, namesCategories(r), true);
+    if (want === 'ask') {
+        const reason = r.out.hookSpecificOutput.permissionDecisionReason;
+        assert(`ask reason names model and description: ${line}`,
+            [reason.includes(model), reason.includes('"Map workbook"')], [true, true]);
+    }
+}
 
 console.log('implementer, opus with a reason');
 assert('allow opus with reason, sdlc:implementer',
-    call({ subagent_type: agent('implementer'), model: 'opus', prompt: 'TIER: opus: why\n' + BUDGET_MARKER }).out, '');
+    call({ subagent_type: agent('implementer'), model: 'opus', prompt: 'TIER: opus: plan writing\n' + BUDGET_MARKER }).out, '');
 assert('missing model rewritten to sonnet, sdlc:implementer',
     call({ subagent_type: agent('implementer'), prompt: 'x' }).out.hookSpecificOutput.updatedInput.model, 'sonnet');
 assert('allow opus with reason, bare implementer',
-    call({ subagent_type: 'implementer', model: 'opus', prompt: 'TIER: opus: why\n' + BUDGET_MARKER }).out, '');
+    call({ subagent_type: 'implementer', model: 'opus', prompt: 'TIER: opus: plan writing\n' + BUDGET_MARKER }).out, '');
 assert('missing model rewritten to sonnet, bare implementer',
     call({ subagent_type: 'implementer', prompt: 'x' }).out.hookSpecificOutput.updatedInput.model, 'sonnet');
 
@@ -110,12 +141,16 @@ assert('budget alone emits updatedInput and no permissionDecision',
     [updated(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })) !== undefined,
         decision(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' }))], [true, undefined]);
 assert('opus with reason: budget alone, no permissionDecision',
-    decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: why' })), undefined);
+    decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: plan writing' })), undefined);
+const asked = updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: user asked' }));
+assert('ask dispatch still carries the budget block', asked && asked.prompt, 'TIER: opus: user asked\n\n' + BUDGET_BLOCK);
+assert('ask dispatch keeps permissionDecision ask',
+    decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: user asked' })), 'ask');
 assert('tier rewrite plus budget still allows', decision(both), 'allow');
 assert('deny is unchanged', decision(call({ subagent_type: 'Plan', model: 'opus', prompt: 'x' })), 'deny');
 assert('model untouched when only budget', updated(call({ subagent_type: 'Plan', model: 'haiku', prompt: 'x' })).model, 'haiku');
 assert('opus with reason gets budget, model kept',
-    updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: why' })).model, 'opus');
+    updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: plan writing' })).model, 'opus');
 assert('idempotent when marker present',
     call({ subagent_type: 'Plan', model: 'sonnet', prompt: 'x\n' + BUDGET_MARKER + '\nmore' }).out, '');
 assert('marker present still rewrites model',

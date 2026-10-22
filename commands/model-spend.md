@@ -34,7 +34,7 @@ Lead with the finding, in plain short sentences: what share of the window's cost
 
 - how much main-session Opus cost is work (reading, editing, running tests) versus orchestration versus text-only turns. Work on Opus is the leak this steering aims to close;
 - how much cost sits in calls with main context over 300K;
-- how many Opus sub-agents ran, and how many prompts had no `TIER: opus:` line;
+- how many Opus sub-agents ran, and how many prompts had no `TIER: opus:` line (the reason starts with plan writing, plan source review, fail triage or user asked);
 - review rounds: any session that reached round 3 or more.
 
 State that the figures are list-price estimates. Do not pad. If the tool prints "No transcripts found", say so and stop.

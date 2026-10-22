@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // PreToolUse hook on the Agent tool: keeps volume work on Sonnet. A general-purpose,
 // Explore or Plan dispatch with no model is rewritten to Sonnet; an Opus or Fable
-// dispatch must carry a "TIER: opus: <reason>" line in its prompt or it is denied.
+// dispatch must carry a "TIER: opus: <category>" line in its prompt or it is denied.
+// The category is one of: plan writing, plan source review, fail triage (all allowed),
+// or user asked (raises a confirm prompt for the owner). Text after the category is
+// free. Any other reason, such as "design judgement", is denied: re-dispatch on Sonnet.
 // It also appends the shared context-budget block to those prompts (lib/context-budget.js).
 // Threat model: honest habit, not adversarial input. This is a cost gate, so any
 // parse error or odd input prints nothing and exits 0 (fail open).
@@ -17,9 +20,66 @@ const { agent } = require('./lib/plugin-names');
 const GATED_TYPES = new Set(['', 'general-purpose', 'explore', 'plan', 'implementer', agent('implementer')]);
 
 const EXPENSIVE_MODEL = /opus|fable/i;
-const TIER_LINE = /^\s*tier:\s*(?:opus|fable)\s*[:\-–—]\s*\S/im;
+const TIER_LINE = /^\s*tier:\s*(?:opus|fable)\s*[:\-–—]\s*(\S.*)$/im;
 
-const DENY_REASON = 'Opus dispatch without a stated reason. Opus is for plans, plan source review and judgement calls. Add a line "TIER: opus: <why>" to the prompt, or dispatch with model: "sonnet".';
+// The reason must start with one of these (after normalising). ALLOW passes silently,
+// ASK raises a confirm prompt for the owner.
+const CATEGORY_ALLOW = 'allow';
+const CATEGORY_ASK = 'ask';
+const TIER_CATEGORIES = [
+    ['plan writing', CATEGORY_ALLOW],
+    ['plan source review', CATEGORY_ALLOW],
+    ['fail triage', CATEGORY_ALLOW],
+    ['user asked', CATEGORY_ASK],
+];
+
+const DENY_REASON = 'Opus and Fable dispatches run only for: plan writing, plan source review, fail triage, or user asked. Add a line "TIER: opus: <category>" to the prompt with one of those four categories, or dispatch with model: "sonnet".';
+
+// Normalises a TIER reason for category matching.
+//
+// Args:
+//   reason: the text after the TIER prefix.
+// Returns:
+//   the reason lowercased, with - and _ as spaces and whitespace runs collapsed.
+function normaliseReason(reason) {
+    return reason.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Finds the category a TIER reason starts with.
+//
+// Args:
+//   reason: the text after the TIER prefix.
+// Returns:
+//   the CATEGORY_* kind for the matching category, or null when none matches.
+function categoryKind(reason) {
+    const text = normaliseReason(reason);
+    for (const [name, kind] of TIER_CATEGORIES) {
+        if (!text.startsWith(name)) continue;
+        // The category must end at a word boundary: a following letter or digit is a different word.
+        if (!/[a-z0-9]/.test(text.charAt(name.length))) return kind;
+    }
+    return null;
+}
+
+// Builds the ask output for an owner-requested model. The owner reads the reason in the prompt.
+//
+// Args:
+//   model: the requested model name.
+//   description: the dispatch description, or any non-string when absent.
+//   updatedInput: the tool input to run with if approved.
+// Returns:
+//   the object to print.
+function askWith(model, description, updatedInput) {
+    const label = typeof description === 'string' && description ? ` "${description}"` : '';
+    return {
+        hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'ask',
+            permissionDecisionReason: `Sub-agent${label} wants ${model}, stated as owner-requested. Approve only if you asked for this model; otherwise deny and it re-dispatches on Sonnet.`,
+            updatedInput,
+        },
+    };
+}
 
 // Builds the allow output that carries the rewritten input.
 //
@@ -64,10 +124,12 @@ function decide(toolInput) {
         const base = tier ? tier.hookSpecificOutput.updatedInput : toolInput;
         const prompt = withBudget(base.prompt);
         if (prompt === null) return tier;
-        // A tier rewrite already carries allow. A budget-only append carries
+        // A tier rewrite already carries its decision (allow or ask). A budget-only append carries
         // updatedInput alone: probed on claude -p, the sub-agent saw the appended
         // text with no permissionDecision, so the user's own prompt rules still apply.
-        return tier ? allowWith({ ...base, prompt }) : updateOnly({ ...base, prompt });
+        if (!tier) return updateOnly({ ...base, prompt });
+        const next = { ...tier, hookSpecificOutput: { ...tier.hookSpecificOutput, updatedInput: { ...base, prompt } } };
+        return next;
     } catch (e) {
         // Fail open: the budget is a nicety; the tier decision stands as it was.
         return tier;
@@ -97,7 +159,11 @@ function decideTier(toolInput) {
     }
     if (EXPENSIVE_MODEL.test(model)) {
         const prompt = typeof toolInput.prompt === 'string' ? toolInput.prompt : '';
-        return TIER_LINE.test(prompt) ? null : deny(DENY_REASON, '');
+        const match = TIER_LINE.exec(prompt);
+        const kind = match ? categoryKind(match[1]) : null;
+        if (kind === CATEGORY_ALLOW) return null;
+        if (kind === CATEGORY_ASK) return askWith(model, toolInput.description, toolInput);
+        return deny(DENY_REASON, '');
     }
     return null;
 }
