@@ -1,9 +1,9 @@
 # Tracker: fewer stronger tests
 
-RUN: docs/plans/fewer-stronger-tests.md, revision 4. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
+RUN: docs/plans/fewer-stronger-tests.md, revision 5. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: step 7, review round 1 (after fix round 1 for the HEAD-dependent test cases).
-TREE: staged step 6's tracker block and 6-review-1 report; unstaged step 7. Worktrees open: none.
+IN FLIGHT: close-out C1, review round 1.
+TREE: staged step 7's tracker block and 7-review-1 report; unstaged C1. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -81,7 +81,19 @@ STEP 6: PASS
   budget:  about 24 of 35 calls
   gap:     merged coverage.xml under real xdist unverified (same as step 5)
 
+STEP 7: PASS
+  commit:  78369a4
+  gate:    test-pre-commit-review 507/0 (red: 2 tests-added assertions); decision-unchanged assertion PASS; test-added-tests 0; run-tests 39 files 0 failed (main tree); guards pass
+  reviews: code-reviewer, round 1, PASS, about 3 minutes (after fix round 1)
+  reports: reports/7-implementer-1.md, reports/7-fix-1.md, reports/7-review-1.md
+  stage:   src/hooks/pre-commit-review.js, src/hooks/test-pre-commit-review.js, .claude/review-policy.json.example, README.md, .claude-plugin/plugin.json (1.0.43 -> 1.0.44), tracker, reports/6-review-1.md, 7-implementer-1.md, 7-fix-1.md
+  files:   as declared
+  disagreements: implementer called 10 test-pre-commit-review failures pre-existing/environmental; investigation (Sonnet, read-only) found them HEAD-dependent: they ran against the real repo and b274715 is test-only by the hook's definition, so the "test committed first" exemption fired. Fixed in round 1 inside the file set (scratch repo).
+  decisions: parametrised rows printed as the decorator count; tests-added line only in the review-required block message; README paragraph under the review-policy.json section
+  budget:  about 17 + 9 of 30 calls
+
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
+  - step 7: test-pre-commit-feature.sh "amend -> approve" fails inside a git worktree, passes in the main tree (3/3); likely reads real repo state like the step-7 fix.
   - step 6: hygiene-snippet line 12 lost `.sqlite` and "serial otherwise" (README has both); smoke fallback serial; optional opt-in real-xdist coverage.xml case.
   - step 4: SKILL.md item 4 "§17's four tests" -> six; wrap the two long snippet lines.
   - step 3: 2.6 names where the ceiling lives (`max_tests_per_commit`); restore "new behaviour exercised against the invariant, inputs a reader would think of" in the TESTED lead-in.

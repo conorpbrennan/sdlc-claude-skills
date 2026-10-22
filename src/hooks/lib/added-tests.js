@@ -37,8 +37,8 @@ const LANGUAGES = Object.freeze([
     {
         name: 'javascript',
         extensions: ['.js', '.jsx', '.ts', '.tsx'],
-        test: /^\s*(?:test|it)(?:\.(?:only|skip))?\(/,
-        parametrised: null,
+        test: /^\s*(?:test|it)(?:\.(?:only|skip))?(?:\.each)?\(/,
+        parametrised: /^\s*(?:test|it)(?:\.(?:only|skip))?\.each\(/,
     },
     {
         name: 'java',
@@ -55,7 +55,7 @@ const LANGUAGES = Object.freeze([
     {
         name: 'go',
         extensions: ['.go'],
-        test: /^func\s+Test\w*\(/,
+        test: /^func\s+Test(?!Main\()[A-Z0-9_]\w*\(/,
         parametrised: null,
     },
     {

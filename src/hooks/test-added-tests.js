@@ -78,6 +78,21 @@ const CASES = [
         want: { testFunctions: 1, testLines: 4, sourceLines: 0, parametrised: 0, singleAssert: null, mockOnly: null },
     },
     {
+        name: 'go TestMain is not a test',
+        diff: diff('pkg/foo_test.go', ['func TestMain(m *testing.M) {', '    os.Exit(m.Run())', '}']),
+        want: { testFunctions: 0, testLines: 3, sourceLines: 0, parametrised: 0, singleAssert: null, mockOnly: null },
+    },
+    {
+        name: 'go TestFoo is a test',
+        diff: diff('pkg/foo_test.go', ['func TestFoo(t *testing.T) {', '    Add(1, 2)', '}']),
+        want: { testFunctions: 1, testLines: 3, sourceLines: 0, parametrised: 0, singleAssert: null, mockOnly: null },
+    },
+    {
+        name: 'js test.each is one function, one parametrised',
+        diff: diff('src/foo.test.js', ['test.each([[1, 2], [3, 4]])("adds %i", (a, b) => {', '  expect(a).toBe(a);', '});']),
+        want: { testFunctions: 1, testLines: 3, sourceLines: 0, parametrised: 1, singleAssert: null, mockOnly: null },
+    },
+    {
         name: 'source-only diff',
         diff: diff('src/foo.py', ['def test_not_a_test_file():', '    return 1']),
         want: { testFunctions: 0, testLines: 0, sourceLines: 2, parametrised: 0, singleAssert: null, mockOnly: null },

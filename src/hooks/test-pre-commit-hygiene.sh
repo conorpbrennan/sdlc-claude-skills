@@ -555,14 +555,17 @@ XD_CMD=$(EXAMPLE_CFG="$EXAMPLE_CFG" node -e '
     console.log(Object.values(ex.repos)[0].checks.find(c => /cov/.test(c.name)).command);
 ')
 XD_FAIL=0
-for XD_RUN in present absent; do
+for XD_RUN in present absent smoke; do
     XD_PY="$TMPROOT/fakepy-$XD_RUN"
     mkdir -p "$XD_PY"
-    printf '#!/usr/bin/env bash\nexit %s\n' "$([ "$XD_RUN" = present ] && echo 0 || echo 1)" > "$XD_PY/python"
+    # The smoke run stages a module with no matching test, so the fallback runs.
+    XD_STAGED=pkg/mod.py
+    [ "$XD_RUN" = smoke ] && XD_STAGED=pkg/other.py
+    printf '#!/usr/bin/env bash\nexit %s\n' "$([ "$XD_RUN" = absent ] && echo 1 || echo 0)" > "$XD_PY/python"
     chmod +x "$XD_PY/python"
     export FAKE_LOG_DIR="$TMPROOT/log-xdist-$XD_RUN"
     mkdir -p "$FAKE_LOG_DIR"
-    XD_ERR=$(cd "$TREPO" && PATH="$XD_PY:$FAKEBIN:$PATH" STAGED_PY="$TREPO/pkg/mod.py" STAGED_PY_PKGS=pkg bash -c "$XD_CMD" 2>&1 >/dev/null || true)
+    XD_ERR=$(cd "$TREPO" && PATH="$XD_PY:$FAKEBIN:$PATH" STAGED_PY="$TREPO/$XD_STAGED" STAGED_PY_PKGS=pkg bash -c "$XD_CMD" 2>&1 >/dev/null || true)
     XD_LOG="$(cat "$FAKE_LOG_DIR/pytest.log" 2>/dev/null || true)"
     while IFS='|' read -r run in_log in_err needle; do
         [ "$run" = "$XD_RUN" ] || continue
@@ -579,6 +582,7 @@ present|no|no|WARNING
 absent|no|no|-n auto
 absent|no|yes|WARNING: pytest-xdist missing
 absent|yes|no|tests/test_mod.py
+smoke|yes|no|-n auto --dist loadfile -m smoke
 TABLE
 done
 if [ "$XD_FAIL" -eq 0 ]; then
