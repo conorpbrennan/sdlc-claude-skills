@@ -17,12 +17,26 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- CLAUDE.md
+- README.md
 - docs/plans/fewer-stronger-tests/reports/1-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/1-review-1.md
+- docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
 - docs/plans/fewer-stronger-tests/tracker.md
+- skills/code-review-implementer/SKILL.md
 - src/hooks/lib/added-tests.js
 - src/hooks/test-added-tests.js
+- src/hooks/test-session-start-instructions.js
 - tools/measure-tests.js
+- tools/run-tests.sh
+- tools/test-run-tests.sh
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-22 `d78b0c9` — Add measure-tests: count tests added over a git range
+  - .claude-plugin/plugin.json
+  - docs/plans/fewer-stronger-tests/reports/1-implementer-1.md
+  - docs/plans/fewer-stronger-tests/tracker.md
+  - src/hooks/lib/added-tests.js
+  - src/hooks/test-added-tests.js
+  - tools/measure-tests.js

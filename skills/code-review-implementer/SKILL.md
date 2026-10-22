@@ -60,9 +60,10 @@ RULES:
 3. A fix that needs a design decision the report did not make: skip it
    and say why, rather than guess.
 4. If the item names a missing test, write it, and make it fail without
-   the fix and pass with it. Run the relevant suite (`node
-   src/hooks/test-*.js`, `bash src/hooks/test-*.sh`, `pytest -q`, or
-   whatever the repository uses) after the last change.
+   the fix and pass with it. Run the relevant suite (in
+   this repo `bash tools/run-tests.sh` runs them all in parallel; one file
+   runs as `node src/hooks/test-X.js` or `bash src/hooks/test-X.sh`; elsewhere
+   `pytest -q`, or whatever the repository uses) after the last change.
 5. Do not stage or commit. Do not touch the index. Do not run the
    repository's hooks or install scripts.
 6. Report per item: fixed / skipped (why) / partial (what remains), the
