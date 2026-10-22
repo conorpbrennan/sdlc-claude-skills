@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 4. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: step 3, review round 1.
-TREE: staged step 2's tracker block and 2-review-1 report; unstaged step 3. Worktrees open: none.
+IN FLIGHT: step 4, review round 1.
+TREE: staged step 3's tracker block and 3-review-1 report; unstaged step 4. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -39,7 +39,18 @@ STEP 2: PASS
   files:   two declared test files untouched (no flake reproduced)
   budget:  about 17 of 35 calls
 
+STEP 3: PASS
+  commit:  46ca34d
+  gate:    grep 2.x bullets 7; deep cites 2.1-2.7 (1); plugin validate 0; plugin-layout 154/0; suite-isolation 43/0; runner 39 files, only the headroom FAIL
+  reviews: code-reviewer, round 1, PASS, under 1 minute (run before the commit; docs-only, the hook did not block)
+  reports: reports/3-implementer-1.md, reports/3-review-1.md
+  stage:   agents/code-reviewer.md, agents/code-reviewer-deep.md, .claude-plugin/plugin.json (1.0.39 -> 1.0.40), plan rev 4, tracker, reports/2-review-1.md, reports/3-implementer-1.md
+  files:   as declared
+  decisions: plan rev 4 adds the isolation rule to 2.5 (Section 9)
+  budget:  about 9 of 15 calls
+
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
+  - step 3: 2.6 names where the ceiling lives (`max_tests_per_commit`); restore "new behaviour exercised against the invariant, inputs a reader would think of" in the TESTED lead-in.
   - step 2: run-tests.sh exits 0 on zero files found (wrong ROOT); add a fail-closed guard.
   - step 2: README "Every suite passes" sentence — recheck after step 4.
   - step 1: tighten Go `Test` regex (exclude `TestMain`, `Testing`); count JS `test.each`/`it.each`; add failing-direction rows for Go, C#, Rust; header case could use a visible testLines effect.

@@ -295,6 +295,19 @@ test-only and adds test code. Until 2026-10-12 the docs promised this and the ga
 blocked the second commit as `no_tests` every time. Committing the test first is
 also the way through a `code_first` block.
 
+What counts as a test is a path convention, listed in
+`src/hooks/lib/tdd-order.js`: a `test/`, `tests/`, `spec/` or `__tests__/`
+directory; a `test-` or `test_` prefix; a `_test.` or `.test.` or `.spec.` infix;
+`_spec.rb`; or a `*Test.java`-style suffix **inside** a test directory, where a
+.NET `Tests/`, `<Name>.Tests/` or `<Name>.Specs/` folder (any case, plural only)
+also counts. That last restriction matters: a bare `*Spec.java` rule swept in
+whole public APIs (JavaPoet's `TypeSpec`, KotlinPoet's `FileSpec`), and calling
+production code a test is the fail-open direction.
+
+A `features/` directory is Cucumber's, and its step definitions count as tests.
+If this project's own feature records live there too, they are `.md` and
+therefore not code, so they are exempt rather than mistaken for tests.
+
 It was written long before it ran. The opt-in was an allowlist at
 `~/.claude/tdd-order-repos.json` that nobody had created, and `loadTddOrderRepos`
 returned `[]` on any read failure, so the gate was dormant everywhere. Switching it

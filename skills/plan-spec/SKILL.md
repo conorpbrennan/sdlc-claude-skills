@@ -54,7 +54,8 @@ gates never scale down; the paperwork does.
    whether the step is buildable: **GATE** (conditions any reader settles
    the same way twice, by running something) and **REVIEW** (numbered
    questions plus a closed FAIL list — everything whose answer could differ
-   between two competent readers goes here, never in GATE).
+   between two competent readers goes here, never in GATE). TESTS FIRST
+   follows the test rule in §16 and §21.1.
 4. **Size each step against §17's four tests.** One step is one reviewable
    diff, one commit, one GATE, one implementer pass. A step that fails a
    test splits, and the split is written into the plan before dispatch.
@@ -143,7 +144,7 @@ Per step:
    carried one, one step ran 109 mutants, and runs over 100 calls were 8%
    of runs and 77% of implementer spend). It does not stage and does not commit. It runs on Sonnet
    (§9) and the dispatch says so: `subagent_type: "sdlc:implementer"`,
-   `model: "sonnet"`. It carries an 80-turn budget (a step that cannot
+   `model: "sonnet"`. Its tests follow the §21.1 rule. It carries an 80-turn budget (a step that cannot
    finish reports PARTIAL and you split it). An Opus implementer needs the owner's OK recorded in
    §20.2 and a `TIER: opus: <reason>` line in the prompt; the
    `agent-tier-gate` hook denies an Opus dispatch without it.
