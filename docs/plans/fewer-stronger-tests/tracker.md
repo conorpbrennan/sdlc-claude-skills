@@ -1,9 +1,9 @@
 # Tracker: fewer stronger tests
 
-RUN: docs/plans/fewer-stronger-tests.md, revision 3. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
+RUN: docs/plans/fewer-stronger-tests.md, revision 4. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: step 2, review round 1.
-TREE: staged step 1's tracker block and 1-review-1 report; unstaged step 2. Worktrees open: none.
+IN FLIGHT: step 3, review round 1.
+TREE: staged step 2's tracker block and 2-review-1 report; unstaged step 3. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -30,6 +30,16 @@ Step 2 notes (from reports/2-implementer-1.md), recorded before review:
   files: test-pre-commit-feature.sh and test-pre-commit-hygiene.sh declared but untouched: no parallel-only failure in 7 full runs.
   measured: parallel 18.0/17.8/18.8 s vs serial 72.2 s (25%); timing-log fixture rows 104 before and after.
 
+STEP 2: PASS
+  commit:  4035d74
+  gate:    test-run-tests 14/0; run-tests x3 exit 1 with only session-start-instructions (headroom); 18.0/17.8/18.8 s vs serial 72.2 s (25%); timing-log rows 104/104; guards pass
+  reviews: code-reviewer, round 1, PASS, under 1 minute
+  reports: reports/2-implementer-1.md, reports/2-review-1.md
+  stage:   tools/run-tests.sh, tools/test-run-tests.sh, CLAUDE.md, README.md, skills/code-review-implementer/SKILL.md, src/hooks/test-session-start-instructions.js, .claude-plugin/plugin.json (1.0.38 -> 1.0.39), tracker, reports/1-review-1.md, reports/2-implementer-1.md, features record
+  files:   two declared test files untouched (no flake reproduced)
+  budget:  about 17 of 35 calls
+
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
+  - step 2: run-tests.sh exits 0 on zero files found (wrong ROOT); add a fail-closed guard.
   - step 2: README "Every suite passes" sentence — recheck after step 4.
   - step 1: tighten Go `Test` regex (exclude `TestMain`, `Testing`); count JS `test.each`/`it.each`; add failing-direction rows for Go, C#, Rust; header case could use a visible testLines effect.
