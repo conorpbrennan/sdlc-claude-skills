@@ -35,12 +35,15 @@
 - docs/plans/fewer-stronger-tests/reports/7-implementer-1.md
 - docs/plans/fewer-stronger-tests/reports/7-review-1.md
 - docs/plans/fewer-stronger-tests/reports/C1-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/C1-review-1.md
+- docs/plans/fewer-stronger-tests/reports/C2-implementer-1.md
 - docs/plans/fewer-stronger-tests/tracker.md
 - instructions/hygiene-snippet.md
 - skills/code-review-implementer/SKILL.md
 - src/hooks/lib/added-tests.js
 - src/hooks/pre-commit-review.js
 - src/hooks/test-added-tests.js
+- src/hooks/test-pre-commit-feature.sh
 - src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-session-start-instructions.js
@@ -49,6 +52,20 @@
 - tools/test-run-tests.sh
 
 ## History
+
+- 2026-10-22 `193ba51` — Close-out C1: Go and JS each patterns, empty-root runner fails closed, parallel smoke fallback
+  - .claude-plugin/plugin.json
+  - .claude/hygiene-repos.json.example
+  - docs/plans/fewer-stronger-tests-closeout.md
+  - docs/plans/fewer-stronger-tests.md
+  - docs/plans/fewer-stronger-tests/reports/7-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/C1-implementer-1.md
+  - docs/plans/fewer-stronger-tests/tracker.md
+  - src/hooks/lib/added-tests.js
+  - src/hooks/test-added-tests.js
+  - src/hooks/test-pre-commit-hygiene.sh
+  - tools/run-tests.sh
+  - tools/test-run-tests.sh
 
 - 2026-10-22 `78369a4` — Review block message: advisory tests-added line against max_tests_per_commit
   - .claude-plugin/plugin.json

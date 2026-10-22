@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 5. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: close-out C1, review round 1.
-TREE: staged step 7's tracker block and 7-review-1 report; unstaged C1. Worktrees open: none.
+IN FLIGHT: close-out C2, review round 1.
+TREE: staged C1's tracker block and C1-review-1 report; unstaged C2. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -91,6 +91,15 @@ STEP 7: PASS
   disagreements: implementer called 10 test-pre-commit-review failures pre-existing/environmental; investigation (Sonnet, read-only) found them HEAD-dependent: they ran against the real repo and b274715 is test-only by the hook's definition, so the "test committed first" exemption fired. Fixed in round 1 inside the file set (scratch repo).
   decisions: parametrised rows printed as the decorator count; tests-added line only in the review-required block message; README paragraph under the review-policy.json section
   budget:  about 17 + 9 of 30 calls
+
+STEP C1: PASS (docs/plans/fewer-stronger-tests-closeout.md; inserted, unreviewed block)
+  commit:  193ba51
+  gate:    test-added-tests 66/0; test-run-tests 16/0; hygiene 30/0; recipe occurrences in example 2 (COPY CHECK prints 1: both on one JSON line); run-tests 39 files 0 failed; guards pass
+  reviews: code-reviewer, round 1, PASS, under 1 minute
+  reports: reports/C1-implementer-1.md, reports/C1-review-1.md
+  stage:   src/hooks/lib/added-tests.js, src/hooks/test-added-tests.js, tools/run-tests.sh, tools/test-run-tests.sh, .claude/hygiene-repos.json.example, src/hooks/test-pre-commit-hygiene.sh, .claude-plugin/plugin.json (1.0.44 -> 1.0.45), plans (C1-C3 split out), tracker, reports/7-review-1.md, C1-implementer-1.md
+  files:   as declared
+  disagreements: COPY CHECK counts lines, not occurrences; gate condition "prints 2" met by occurrence count
 
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
   - step 7: test-pre-commit-feature.sh "amend -> approve" fails inside a git worktree, passes in the main tree (3/3); likely reads real repo state like the step-7 fix.
