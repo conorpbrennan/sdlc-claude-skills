@@ -418,6 +418,10 @@ was written. The full suite runs in `/sdlc:verify` and `/commit-prep`.
 Hygiene pytest cost 436 min/week on 19 Oct 2026, 22 min per commit in the
 barra worktree on the full suite.
 
+The recipe runs pytest with `-n auto --dist loadfile` when xdist imports and
+warns and runs serially otherwise; move any fixed-path fixture (`.db`,
+`.sqlite`, `/tmp/<name>`) to `tmp_path_factory` before a repo opts in.
+
 The hook runs `bash -c`, not a login shell, so conda must be sourced
 explicitly in `setup`.
 

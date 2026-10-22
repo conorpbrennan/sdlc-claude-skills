@@ -11,11 +11,11 @@ Parse `$ARGUMENTS` for `--skip-tests` (run lint/format only, skip pytest/coverag
 
 <steps>
 1. Resolve the repo root: `git rev-parse --show-toplevel` and normalise to forward slashes.
-2. Read `~/.claude/hygiene-repos.json`. If `repos[<toplevel>]` exists, use its `setup` + `checks` as the authoritative pipeline — this guarantees parity with the `pre-commit-hygiene.js` hook. The configured pytest check is targeted (only the tests that match the changed modules), so for a Python repo also run the full suite once: `pytest --cov --cov-branch --cov-report=xml -q`, then the diff-cover stage below. The hook runs the targeted form on each commit; the full run is what this pre-flight adds.
+2. Read `~/.claude/hygiene-repos.json`. If `repos[<toplevel>]` exists, use its `setup` + `checks` as the authoritative pipeline — this guarantees parity with the `pre-commit-hygiene.js` hook. The configured pytest check is targeted (only the tests that match the changed modules), so for a Python repo also run the full suite once: `XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD --cov --cov-branch --cov-report=xml -q`, then the diff-cover stage below. The hook runs the targeted form on each commit; the full run is what this pre-flight adds.
 3. If no entry exists, use the default pipeline (skip the `pytest` + `diff-cover` stages when `--skip-tests` is passed):
    - `ruff check --fix`
    - `ruff format`
-   - `pytest --cov --cov-branch --cov-report=xml -q`
+   - `XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD --cov --cov-branch --cov-report=xml -q`
    - `diff-cover coverage.xml --compare-branch=HEAD --fail-under=95` (only if `coverage.xml` was produced)
 4. Run each stage in a single `bash -c` invocation so environment (conda, PYTHONPATH) is preserved across stages. Stop on the first failing stage.
 5. Report per-stage PASS/FAIL. On failure, print the last ~30 lines of combined output and stop — do not attempt to auto-fix beyond what the tools do themselves (ruff's `--fix` is enough).

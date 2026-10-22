@@ -2,8 +2,8 @@
 
 RUN: docs/plans/fewer-stronger-tests.md, revision 4. Branch: fewer-stronger-tests (cut from main a9a685e). Started: 2026-10-22.
 BUDGET: steps 1-7, about 205 implementer calls per the step BUDGET fields. Spent: plan review rounds 1 (Opus source, NOT YET, 11 findings) and 2 (Sonnet consistency, NOT YET, 1 finding), all folded in; cap reached, plan READY.
-IN FLIGHT: step 5, review round 1.
-TREE: staged step 4's tracker block and 4-review-1 report; unstaged step 5. Worktrees open: none.
+IN FLIGHT: step 6, review round 1.
+TREE: staged step 5's tracker block and 5-review-1 report; unstaged step 6. Worktrees open: none.
 
 Owner decisions, 2026-10-22: Decision 1 (standing authorisation to stage, commit and dispatch fix rounds unattended) GRANTED. Follow-on plan to slim this repo's own suite after this one lands.
 
@@ -58,6 +58,17 @@ STEP 4: PASS
   files:   as declared
   decisions: three snippet sentences tightened beyond the move to reach 8,242 (wording only; reviewer confirmed no rule dropped); the Cucumber paragraph moved to README too
   budget:  about 12 of 30 calls
+
+STEP 5: PASS
+  commit:  833e5d0
+  gate:    UNCOVERABLE 2; pragma 1; import xdist 1; COPY CHECK 1; plugin-layout 154/0; suite-isolation 43/0; plugin validate 0; run-tests 39 files 0 failed
+  reviews: code-reviewer, round 1, PASS, under 1 minute (run before the commit; docs-only)
+  reports: reports/5-implementer-1.md, reports/5-review-1.md
+  stage:   skills/code-review-pre-commit/SKILL.md, .claude-plugin/plugin.json (1.0.41 -> 1.0.42), tracker, reports/4-review-1.md, reports/5-implementer-1.md
+  files:   as declared
+  decisions: UNCOVERABLE inserted as gap-prompt step 3 (7 steps now); recipe on one line inside the existing fence
+  budget:  about 6 of 15 calls
+  gap:     xdist-present path (one merged coverage.xml) unverified here: no xdist installed. Owner verifies in a target repo with xdist (barra-risk-reports already runs -n auto with pytest-cov 7.1 + diff-cover 10.6).
 
 CLOSE-OUT LIST (advisories outside a step's file set, batched for one close-out step):
   - step 4: SKILL.md item 4 "§17's four tests" -> six; wrap the two long snippet lines.

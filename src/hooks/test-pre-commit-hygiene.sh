@@ -545,6 +545,50 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+# Case 16: the targeted pytest call is parallel when xdist imports and serial
+# with a WARNING when it does not. A fake python on PATH answers `import xdist`
+# (exit 0, then exit 1), so the case does not depend on the real install.
+# One table of expected substrings: "<run>|<in pytest log: yes/no>|<in stderr: yes/no>|<substring>".
+targeted_case xdist pkg/mod.py yes
+XD_CMD=$(EXAMPLE_CFG="$EXAMPLE_CFG" node -e '
+    const ex = JSON.parse(require("fs").readFileSync(process.env.EXAMPLE_CFG, "utf-8"));
+    console.log(Object.values(ex.repos)[0].checks.find(c => /cov/.test(c.name)).command);
+')
+XD_FAIL=0
+for XD_RUN in present absent; do
+    XD_PY="$TMPROOT/fakepy-$XD_RUN"
+    mkdir -p "$XD_PY"
+    printf '#!/usr/bin/env bash\nexit %s\n' "$([ "$XD_RUN" = present ] && echo 0 || echo 1)" > "$XD_PY/python"
+    chmod +x "$XD_PY/python"
+    export FAKE_LOG_DIR="$TMPROOT/log-xdist-$XD_RUN"
+    mkdir -p "$FAKE_LOG_DIR"
+    XD_ERR=$(cd "$TREPO" && PATH="$XD_PY:$FAKEBIN:$PATH" STAGED_PY="$TREPO/pkg/mod.py" STAGED_PY_PKGS=pkg bash -c "$XD_CMD" 2>&1 >/dev/null || true)
+    XD_LOG="$(cat "$FAKE_LOG_DIR/pytest.log" 2>/dev/null || true)"
+    while IFS='|' read -r run in_log in_err needle; do
+        [ "$run" = "$XD_RUN" ] || continue
+        if printf '%s' "$XD_LOG" | grep -qF -- "$needle"; then got_log=yes; else got_log=no; fi
+        if printf '%s' "$XD_ERR" | grep -qF -- "$needle"; then got_err=yes; else got_err=no; fi
+        if [ "$got_log" != "$in_log" ] || [ "$got_err" != "$in_err" ]; then
+            XD_FAIL=1
+            echo "  $run: '$needle' log=$got_log (want $in_log) stderr=$got_err (want $in_err)"
+            echo "  pytest log: $XD_LOG"
+        fi
+    done <<'TABLE'
+present|yes|no|-n auto --dist loadfile
+present|no|no|WARNING
+absent|no|no|-n auto
+absent|no|yes|WARNING: pytest-xdist missing
+absent|yes|no|tests/test_mod.py
+TABLE
+done
+if [ "$XD_FAIL" -eq 0 ]; then
+    echo "PASS: pytest runs -n auto when xdist imports, serial with a WARNING when it does not"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: xdist present/absent behaviour of the pytest-cov recipe"
+    FAIL=$((FAIL + 1))
+fi
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
