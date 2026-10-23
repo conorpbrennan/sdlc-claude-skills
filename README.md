@@ -11,14 +11,17 @@ The toolchain ships as a Claude Code plugin named `sdlc`. This repository is
 also the marketplace that serves it. Inside Claude Code:
 
 ```
-/plugin marketplace add conorpbrennan/sdlc-claude-skills
+/plugin marketplace add https://github.com/conorpbrennan/sdlc-claude-skills.git
 /plugin install sdlc@sdlc-claude-skills
 ```
+
+Run them as two separate commands. In the `/plugin` menu's "Add Marketplace"
+box, enter only the URL.
 
 Or from a shell:
 
 ```bash
-claude plugin marketplace add conorpbrennan/sdlc-claude-skills
+claude plugin marketplace add https://github.com/conorpbrennan/sdlc-claude-skills.git
 claude plugin install sdlc@sdlc-claude-skills
 ```
 
