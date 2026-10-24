@@ -54,10 +54,16 @@ function scratchHome(settings, opts) {
 const CLEAN_HOME = scratchHome();
 
 // Run a hook script with stdin `{}`; parse stdout as exactly one JSON object.
-function run(script, home) {
+// Env vars the cache-TTL check reads; stripped so the machine's own do not leak in.
+const INHERITED = /^(ANTHROPIC_|CLAUDE_CODE_|FORCE_|ENABLE_)/;
+
+function run(script, home, extraEnv, cwd) {
     const h = home || CLEAN_HOME;
-    const env = { ...process.env, HOME: h, USERPROFILE: h };
-    const res = spawnSync('node', [script], { input: '{}', encoding: 'utf-8', env });
+    const env = {};
+    for (const [k, v] of Object.entries(process.env)) if (!INHERITED.test(k)) env[k] = v;
+    Object.assign(env, { HOME: h, USERPROFILE: h }, extraEnv);
+    const input = JSON.stringify(cwd ? { cwd } : {});
+    const res = spawnSync('node', [script], { input, encoding: 'utf-8', env });
     let json = null;
     try {
         json = JSON.parse(res.stdout);
@@ -319,6 +325,170 @@ console.log('\nAn unparseable settings.json:');
     assert('additionalContext begins with a warning', ctx.startsWith(WARNING_HEAD), true);
     assert('the sections still follow', ctx.includes(SECTIONS[0][1] + '\n'), true);
     fs.rmSync(home, { recursive: true, force: true });
+}
+
+console.log('\nThe prompt-cache TTL warning and the 1h write:');
+{
+    const GATEWAY = { ANTHROPIC_BASE_URL: 'https://gw.example.test' };
+    const SECRET = 'sk-secret-token-value-123';
+    const FIX_LINE = 'export CLAUDE_CODE_PROMPT_CACHE_TTL=1h';
+    const WARN_HEAD = '> sdlc plugin WARNING: the main conversation will use the 5-minute prompt cache';
+    const WROTE_HEAD = '> sdlc plugin WARNING: sdlc set `"promptCacheTtl": "1h"` in ';
+    const RICH = {
+        model: 'opus',
+        enabledPlugins: { 'sdlc@sdlc-claude-skills': true },
+        hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'node x.js' }] }] },
+    };
+    const MALFORMED = '{ "env": ';
+    // Marker: user settings.json is a symlink to a real file elsewhere in the scratch dir.
+    const SYMLINKED = 'symlinked';
+    // Outcomes: WROTE = settings.json now has the 1h key and the message says so;
+    // WARN = no write, the manual-fix warning; SILENT = no write, no TTL line.
+    const WROTE = 'wrote';
+    const WARN = 'warn';
+    const SILENT = 'silent';
+    // [name, env, user settings, project settings, outcome]
+    const rows = [
+        ['gateway URL, no TTL, empty settings', GATEWAY, {}, undefined, WROTE],
+        ['gateway URL, no TTL, settings missing', GATEWAY, undefined, undefined, WROTE],
+        ['gateway + env 1h', { ...GATEWAY, CLAUDE_CODE_PROMPT_CACHE_TTL: '1h' }, undefined, undefined, SILENT],
+        ['gateway + user settings 1h', GATEWAY, { promptCacheTtl: '1h' }, undefined, SILENT],
+        ['gateway + project settings 1h', GATEWAY, undefined, { promptCacheTtl: '1h' }, SILENT],
+        ['gateway + ENABLE_PROMPT_CACHING_1H', { ...GATEWAY, ENABLE_PROMPT_CACHING_1H: '1' }, undefined, undefined, SILENT],
+        ['gateway + explicit env 5m', { ...GATEWAY, CLAUDE_CODE_PROMPT_CACHE_TTL: '5m' }, undefined, undefined, SILENT],
+        ['gateway + explicit setting 5m', GATEWAY, { promptCacheTtl: '5m' }, undefined, SILENT],
+        ['FORCE_PROMPT_CACHING_5M', { ...GATEWAY, FORCE_PROMPT_CACHING_5M: '1' }, undefined, undefined, SILENT],
+        ['no backend vars', {}, undefined, undefined, SILENT],
+        ['backend only in settings env', {}, { env: { ANTHROPIC_BASE_URL: 'https://gw.example.test' } }, undefined, WROTE],
+        ['backend only in project settings env', {}, undefined, { env: { ANTHROPIC_API_KEY: SECRET } }, WROTE],
+        ['Bedrock flag', { CLAUDE_CODE_USE_BEDROCK: '1' }, undefined, undefined, WROTE],
+        ['malformed user settings', GATEWAY, MALFORMED, undefined, WARN],
+        ['user settings is a JSON array', GATEWAY, '[1, 2]', undefined, WARN],
+        ['user settings.json is a symlink', GATEWAY, SYMLINKED, undefined, WARN],
+        ['malformed project settings', GATEWAY, undefined, '{ nope', WROTE],
+        ['API key value never printed', { ANTHROPIC_API_KEY: SECRET }, undefined, undefined, WROTE],
+    ];
+    // Run one hook call over a scratch HOME (and cwd). Returns the pieces the rows check.
+    const userPath = home => path.join(home, '.claude', 'settings.json');
+    const backups = home => {
+        const dir = path.join(home, '.claude');
+        return fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.includes('.backup.')) : [];
+    };
+    for (const [name, env, userSettings, projectSettings, outcome] of rows) {
+        const home = scratchHome(userSettings === SYMLINKED ? {} : userSettings);
+        let realPath = null;
+        if (userSettings === SYMLINKED) {
+            realPath = path.join(home, 'dotfiles-settings.json');
+            fs.renameSync(userPath(home), realPath);
+            fs.symlinkSync(realPath, userPath(home));
+        }
+        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-cwd-'));
+        if (projectSettings !== undefined) {
+            fs.mkdirSync(path.join(cwd, '.claude'));
+            fs.writeFileSync(path.join(cwd, '.claude', 'settings.json'),
+                typeof projectSettings === 'string' ? projectSettings : JSON.stringify(projectSettings));
+        }
+        const before = fs.existsSync(userPath(home)) && fs.statSync(userPath(home)).isFile()
+            ? fs.readFileSync(userPath(home), 'utf-8') : null;
+        const r = run(HOOK, home, env, cwd);
+        const ctx = context(r);
+        const after = fs.existsSync(userPath(home)) ? fs.readFileSync(userPath(home), 'utf-8') : null;
+        assert(`${name}: exit 0 and one JSON object`, r.status === 0 && r.json !== null, true);
+        assert(`${name}: warns to set by hand`, ctx.includes(WARN_HEAD), outcome === WARN);
+        assert(`${name}: says sdlc set the key`, ctx.includes(WROTE_HEAD), outcome === WROTE);
+        if (outcome === WARN) {
+            assert(`${name}: names the fix`, ctx.includes(FIX_LINE) && ctx.includes('"promptCacheTtl": "1h"'), true);
+        }
+        if (outcome === WROTE) {
+            assert(`${name}: says next session and sub-agents and the opt-out`,
+                /next\s+session/.test(ctx) && ctx.includes('Sub-agents stay on 5 minutes') &&
+                ctx.includes('touch ' + path.join(home, '.claude', 'sdlc-cache-ttl.disabled')), true);
+            let key;
+            try {
+                key = JSON.parse(after).promptCacheTtl;
+            } catch (e) { /* key stays undefined */ }
+            assert(`${name}: settings.json holds promptCacheTtl 1h`, key, '1h');
+        } else {
+            assert(`${name}: settings.json not written`, after, before);
+            assert(`${name}: no backup`, backups(home), []);
+        }
+        if (realPath) {
+            assert(`${name}: still a symlink to the same target`,
+                fs.lstatSync(userPath(home)).isSymbolicLink() && fs.readlinkSync(userPath(home)) === realPath, true);
+            assert(`${name}: real file bytes unchanged`, fs.readFileSync(realPath, 'utf-8'), before);
+        }
+        assert(`${name}: no secret in output`, r.stdout.includes(SECRET) || r.stdout.includes('gw.example.test'), false);
+        fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(cwd, { recursive: true, force: true });
+    }
+
+    console.log('\nThe write keeps the file and is idempotent:');
+    {
+        const home = scratchHome(RICH);
+        const r1 = run(HOOK, home, GATEWAY);
+        const written = JSON.parse(fs.readFileSync(userPath(home), 'utf-8'));
+        const { promptCacheTtl, ...rest } = written;
+        assert('the key is 1h', promptCacheTtl, '1h');
+        assert('every other key is unchanged (deep-equal)', rest, RICH);
+        assert('the file is 2-space JSON with a trailing newline',
+            fs.readFileSync(userPath(home), 'utf-8'), JSON.stringify(written, null, 2) + '\n');
+        const b = backups(home);
+        assert('one backup, named pre-sdlc-cache-ttl', b.length === 1 &&
+            /^settings\.json\.backup\.\d{4}-\d\d-\d\dT\d{6}-pre-sdlc-cache-ttl$/.test(b[0]), true);
+        assert('the backup holds the old settings',
+            JSON.parse(fs.readFileSync(path.join(home, '.claude', b[0]), 'utf-8')), RICH);
+        assert('no temp file left', fs.readdirSync(path.join(home, '.claude')).some(f => f.includes('.tmp.')), false);
+        assert('the message says next session', /next\s+session/.test(context(r1)), true);
+        const bytes = fs.readFileSync(userPath(home), 'utf-8');
+        const r2 = run(HOOK, home, GATEWAY);
+        assert('second run: no TTL line', context(r2).includes('prompt cache'), false);
+        assert('second run: file unchanged', fs.readFileSync(userPath(home), 'utf-8'), bytes);
+        assert('second run: no new backup', backups(home).length, 1);
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+
+    console.log('\nOpt-out, malformed files, a missing file and CLAUDE_CONFIG_DIR:');
+    {
+        const home = scratchHome(RICH);
+        fs.writeFileSync(path.join(home, '.claude', 'sdlc-cache-ttl.disabled'), '');
+        const before = fs.readFileSync(userPath(home), 'utf-8');
+        const ctx = context(run(HOOK, home, GATEWAY));
+        assert('opt-out: warning text', ctx.includes(WARN_HEAD) && ctx.includes(FIX_LINE), true);
+        assert('opt-out: not written', fs.readFileSync(userPath(home), 'utf-8'), before);
+        assert('opt-out: no backup', backups(home), []);
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+    {
+        const home = scratchHome(MALFORMED);
+        const ctx = context(run(HOOK, home, GATEWAY));
+        assert('malformed: warning text', ctx.includes(WARN_HEAD), true);
+        assert('malformed: bytes unchanged', fs.readFileSync(userPath(home), 'utf-8'), MALFORMED);
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+    {
+        const home = scratchHome();
+        const r = run(HOOK, home, GATEWAY);
+        assert('missing: created with only the key',
+            JSON.parse(fs.readFileSync(userPath(home), 'utf-8')), { promptCacheTtl: '1h' });
+        assert('missing: no backup', backups(home), []);
+        assert('missing: says sdlc set it', context(r).includes(WROTE_HEAD), true);
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+    {
+        const home = scratchHome(RICH);
+        const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-cfg-'));
+        fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify({ model: 'sonnet' }));
+        const homeBefore = fs.readFileSync(userPath(home), 'utf-8');
+        const ctx = context(run(HOOK, home, { ...GATEWAY, CLAUDE_CONFIG_DIR: cfg }));
+        assert('CLAUDE_CONFIG_DIR: written there',
+            JSON.parse(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf-8')), { model: 'sonnet', promptCacheTtl: '1h' });
+        assert('CLAUDE_CONFIG_DIR: HOME/.claude untouched', fs.readFileSync(userPath(home), 'utf-8'), homeBefore);
+        assert('CLAUDE_CONFIG_DIR: message names that path', ctx.includes(path.join(cfg, 'settings.json')), true);
+        const again = context(run(HOOK, home, { ...GATEWAY, CLAUDE_CONFIG_DIR: cfg }));
+        assert('CLAUDE_CONFIG_DIR: its settings are read (second run silent)', again.includes('prompt cache'), false);
+        fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(cfg, { recursive: true, force: true });
+    }
 }
 
 fs.rmSync(CLEAN_HOME, { recursive: true, force: true });
