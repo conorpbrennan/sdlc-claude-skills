@@ -385,7 +385,7 @@ check runs only the tests that match the staged modules
 `smoke` marker or warns, and diff-cover is skipped because no `coverage.xml`
 was written. The full suite runs in `/sdlc:verify` and `/commit-prep`.
 Hygiene pytest cost 436 min/week on 19 Oct 2026, 22 min per commit in the
-barra worktree on the full suite.
+one large worktree, on the full suite.
 
 The recipe runs pytest with `-n auto --dist loadfile` when xdist imports and
 warns and runs serially otherwise; move any fixed-path fixture (`.db`,

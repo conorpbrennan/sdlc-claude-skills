@@ -5,7 +5,7 @@ GATE:
 - `node src/hooks/test-commit-command.js`: 297 passed, 0 failed (baseline unchanged).
 - GUARDS, each exit 0: test-suite-isolation 34; test-plugin-layout 128; test-source-files 67; test-hook-output 19; test-session-start-instructions 73.
 
-RED FIRST: `test-pr-command.js` written first; before any implementation it died: "Error: Cannot find module '/home/coder/dev/sdlc-claude-skills/src/hooks/lib/pr-command.js'". First assertion needed: `isPrCreate('gh pr create') === true`.
+RED FIRST: `test-pr-command.js` written first; before any implementation it died: "Error: Cannot find module '<repo>/src/hooks/lib/pr-command.js'". First assertion needed: `isPrCreate('gh pr create') === true`.
 
 FILES: all declared, none staged.
 - NEW `src/hooks/lib/pr-command.js`, `src/hooks/test-pr-command.js`.

@@ -118,7 +118,7 @@ final `## OUT OF SCOPE` list, one line each, and never changes the verdict.
      IMPORTANT.
    - 2.4 Boundaries over bulk: the failing direction and the edges (empty,
      one, largest, malformed) are rows in the same table.
-   - 2.5 Mocks only at the process boundary (`SfmEnvironment`, subprocess,
+   - 2.5 Mocks only at the process boundary (the project's environment class, subprocess,
      network, clock). A test whose only assertion is that a mock was called
      is not a test: IMPORTANT, with the observable effect it should assert.
      Tests are isolated so they run in parallel: each writes only under its

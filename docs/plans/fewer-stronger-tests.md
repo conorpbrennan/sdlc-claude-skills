@@ -10,7 +10,7 @@ times in 285 review blocks (3.5%; `~/.claude/code-review-timing.jsonl`,
 `review.requested` by `via`: review-required 223, tdd-order 36,
 coverage-gap-patch 10, coverage-stale 10). Hygiene blocks in four target-repo
 transcript sets: 31, of which 24 were failing tests and 3 were diff-cover. The
-one gap-patch sub-agent found in the barra transcripts wrote 3 tests in 101
+one gap-patch sub-agent found in the repo D transcripts wrote 3 tests in 101
 lines. The volume comes from the implementer step and the review loop, and
 from nothing telling anyone to stop.
 
@@ -21,12 +21,12 @@ Measured drivers, in order of weight:
    its TESTS FIRST"), `skills/plan-spec/reference.md:962-964` (TESTS FIRST
    names assertions that must be red, nothing about how many or what shape),
    `skills/plan-spec/reference.md:1523-1524` (the dispatch prompt). In the
-   barra transcripts 31 implementer agents wrote 695 `def test_` (22 per
+   repo D transcripts 31 implementer agents wrote 695 `def test_` (22 per
    step), 12,916 test lines against 9,660 source lines (1.34:1), while the
    TESTS FIRST fields they were handed named 0-3 tests (median 0 over 15
-   steps). ConstraintsSystem general sub-agents: 1,081 tests, 21,849 test
+   steps). repo A general sub-agents: 1,081 tests, 21,849 test
    lines against 17,107 source. Nothing in the form says "table" or
-   "parametrize"; parametrize appears in 49 of 695 barra test writes.
+   "parametrize"; parametrize appears in 49 of 695 repo D test writes.
 - **Driver 2: The reviewer's TESTED pillar only ever asks for more.**
    `agents/code-reviewer.md:102-108`: a bug fix without a failing test is
    IMPORTANT, new behaviour needs the invariant exercised "with inputs a
@@ -35,14 +35,14 @@ Measured drivers, in order of weight:
    trivial branch, a sibling test where a table row would do, or a mock-only
    test beyond `mock.called`. `skills/code-review-implementer/SKILL.md:62`
    then writes whatever was asked for. Measured result in the
-   ConstraintsSystem suite (2,171 tests): 1,013 (47%) carry exactly one
+   repo A suite (2,171 tests): 1,013 (47%) carry exactly one
    assertion, 776 sit in name-families of four or more siblings, 1,274 share a
    statement-shape seen ten or more times, 256 (12%) are parametrised.
-   qdspy: 705 tests, 264 single-assert (37%), 27 mock-only, 52 parametrised.
+   repo B: 705 tests, 264 single-assert (37%), 27 mock-only, 52 parametrised.
 - **Driver 3: The plan form's own GATE example is 100% line coverage of the step.**
    `skills/plan-spec/reference.md:995-996`: "diff-cover reports no uncovered
    line in the step's file set" is the worked example of a good gate. Plans
-   copy it (3 of 31 barra step GATEs name diff-cover). `pre-commit-review.js`
+   copy it (3 of 31 repo D step GATEs name diff-cover). `pre-commit-review.js`
    then holds the diff at 95% line and files at 90% branch
    (`src/hooks/pre-commit-review.js:213-214`). A 95% line target on a
    40-line fix is 2 lines of slack, which is one test per `except` and
@@ -60,10 +60,10 @@ Measured drivers, in order of weight:
    pytest-cov check), `skills/code-review-pre-commit/SKILL.md:158` (gap
    prompt), `skills/code-review-implementer/SKILL.md:63-64`, `CLAUDE.md:41-42`
    all name a serial command. Live `~/.claude/hygiene-repos.json`: 20 of 26
-   pytest checks are serial; the 6 with `-n auto` are barra-risk-reports and
-   reporting-data-services, which already ship `addopts = "-n auto"` and
-   pytest-xdist 3.8. Timing log medians: agg_poc (serial) 86.5 s, max 639 s;
-   barra-risk-reports (`-n auto`) 50.9 s. This repo: 36 suites run one
+   pytest checks are serial; the 6 with `-n auto` are repo D and
+   repo E, which already ship `addopts = "-n auto"` and
+   pytest-xdist 3.8. Timing log medians: repo C (serial) 86.5 s, max 639 s;
+   repo D (`-n auto`) 50.9 s. This repo: 36 suites run one
    process at a time, 87.4 s; the same files under `xargs -P 16` 25.0 s
    (3.5x), `-P 4` 37.6 s; `node --test` over four files 1.73 s to 0.87 s.
 - **Driver 6: This repo practises what it preaches.** 11,097 test lines against
@@ -74,7 +74,7 @@ Measured drivers, in order of weight:
    duplicated across suites. 22 of 29 js/sh suites do not override
    `TIMING_LOG_PATH`, and 78 fixture rows now sit in the real timing log.
 
-Not a driver: qdspy's main session (109 tests, 3,796 test lines against
+Not a driver: repo B's main session (109 tests, 3,796 test lines against
 5,998 source, 20 parametrize) is below the ratio; the pattern is a sub-agent
 pattern.
 
@@ -89,13 +89,13 @@ use.
 
 | Measure | Baseline | Target |
 |---|---|---|
-| Test functions added per implementer step (barra transcripts) | 22 | at most 8 (table rows do not count) |
-| Test lines per source line added (this repo; barra steps) | 1.20; 1.34 | at most 0.8 |
-| Single-assertion share of new tests (ConstraintsSystem) | 47% | at most 25% |
+| Test functions added per implementer step (repo D transcripts) | 22 | at most 8 (table rows do not count) |
+| Test lines per source line added (this repo; repo D steps) | 1.20; 1.34 | at most 0.8 |
+| Single-assertion share of new tests (repo A) | 47% | at most 25% |
 | Parametrised/table share of new test functions | 12% | at least 30% |
-| Mock-only tests in a new diff | 27 in qdspy | 0 |
+| Mock-only tests in a new diff | 27 in repo B | 0 |
 | This repo full suite wall-clock | 87.4 s serial | at most 40% of the serial figure measured in the same session |
-| Hygiene pytest median, agg_poc and ConstraintsSystem | 86.5 s; targeted run | at least 40% lower with `-n auto` (`/sdlc:review-timing`) |
+| Hygiene pytest median, repo C and repo A | 86.5 s; targeted run | at least 40% lower with `-n auto` (`/sdlc:review-timing`) |
 | Branch coverage on changed files | 90% gate | unchanged |
 
 ## Risks and where each is handled
@@ -107,8 +107,8 @@ use.
   `src/hooks/test-pre-commit-hygiene.sh` failed once in 9 parallel runs;
   step 2 pins any case that fails under `-P N` during its gate runs, and
   isolates the timing log per run. Python repos:
-  `--dist loadfile` keeps module fixtures on one worker; 8 ConstraintsSystem
-  and 4 qdspy test hits name a fixed `.db`/`.sqlite` path and need
+  `--dist loadfile` keeps module fixtures on one worker; 8 repo A
+  and 4 repo B test hits name a fixed `.db`/`.sqlite` path and need
   `tmp_path_factory` before `-n auto` is switched on there (owner task, Section 6).
 - **xdist missing.** The recipe (Section 2) detects `import xdist` and falls
   back to the serial command with a printed `WARNING`. pytest-cov 7.1 combines
@@ -134,7 +134,7 @@ and a table-first rule; a gap-patching prompt that adds rows, not tests;
 advisory tests-added line in the review block message.
 
 Does NOT: change the 95/90 thresholds; remove or weaken the TDD mandate;
-edit any target repo (ConstraintsSystem, qdspy, agg_poc) — those are owner
+edit any target repo (repo A, repo B, repo C) — those are owner
 tasks listed in Section 6; add mutation testing (dropped on 19 Oct 2026 evidence,
 `skills/plan-spec/reference.md:818-820`).
 
@@ -342,7 +342,7 @@ criteria, numbered 2.1-2.7 so other files can cite them:
   same expression as the implementation restates it and is IMPORTANT.
 - 2.4 Boundaries over bulk: the failing direction and the edges (empty,
   one, largest, malformed) are rows in the same table.
-- 2.5 Mocks only at the process boundary (`SfmEnvironment`, subprocess,
+- 2.5 Mocks only at the process boundary (the project's environment class, subprocess,
   network, clock). A test whose only assertion is that a mock was called is
   not a test: IMPORTANT, with the observable effect it should assert.
   Tests are isolated so they run in parallel: each writes only under its
@@ -477,7 +477,7 @@ EXTEND `.claude/hygiene-repos.json.example`, `instructions/hygiene-snippet.md`,
 `commands/commit-prep.md`, `commands/verify.md`, `README.md`,
 `src/hooks/test-pre-commit-hygiene.sh`.
 
-WHY NOW: 20 of 26 live pytest checks are serial; agg_poc median 86.5 s,
+WHY NOW: 20 of 26 live pytest checks are serial; repo C median 86.5 s,
 max 639 s; the one repo on `-n auto` has pytest-xdist 3.8, pytest-cov 7.1
 and diff-cover 10.6 working together today.
 
@@ -587,7 +587,7 @@ Close-out steps C1-C3 (review advisories) live in `docs/plans/fewer-stronger-tes
 - Do not add `pragma: no cover` anywhere; UNCOVERABLE lines are reported.
 - Do not flip target-repo hygiene checks to `-n auto` from this repo.
   Owner tasks, in the target repos, in this order: add `pytest-xdist>=3.8`
-  to ConstraintsSystem, qdspy and agg_poc; move the 8 and 4 fixed-path
+  to repo A, repo B and repo C; move the 8 and 4 fixed-path
   `.db`/`.sqlite` fixtures to `tmp_path_factory`; run the suite three times
   with `-n auto --dist loadfile`; then edit `~/.claude/hygiene-repos.json`
   to call the step-6 recipe.
@@ -646,7 +646,7 @@ Round 2 (consistency, fold-in sections; NOT YET, one finding). Folded in:
    step 2 EXTEND lists the flake-pin targets without a named edit; step 5
    REVIEW Q1 is answered by the plan.
 
-Below the bar: baseline ratio fixed to 1.20 (barra 1.34); `isolateGitEnv()`
+Below the bar: baseline ratio fixed to 1.20 (repo D 1.34); `isolateGitEnv()`
 added to step 1; `commands/verify.md` cited at 41. Noted, not actioned: §17's
 new size test is the sixth, not fifth; step 7's diff reader is
 `readStagedDiff` in `pre-commit-review.js`; README has no "fast-path

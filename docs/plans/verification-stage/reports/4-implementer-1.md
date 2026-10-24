@@ -8,7 +8,7 @@ GATE:
 
 RED FIRST:
 - Layout: `FAIL: agents/ holds the two review agents and the verifier`, expected `["code-reviewer-deep.md","code-reviewer.md","verifier.md"]`, actual `["code-reviewer-deep.md","code-reviewer.md"]`.
-- Verification: crashed with `ENOENT ... open '/home/coder/dev/sdlc-claude-skills/agents/verifier.md'`.
+- Verification: crashed with `ENOENT ... open '<repo>/agents/verifier.md'`.
 - Both green after the two markdown files were written.
 
 FILES: `agents/verifier.md` (new), `commands/verify.md` (new), `src/test-plugin-layout.js`, `src/hooks/test-verification.js`, plan §9. Declared set exactly. `agents/code-reviewer*.md` and `skills/` untouched.

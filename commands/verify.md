@@ -41,7 +41,7 @@ None.
    `XD=$(python -c 'import xdist' 2>/dev/null && printf -- '-n auto --dist loadfile' || echo 'WARNING: pytest-xdist missing; serial run' >&2); pytest $XD --cov --cov-branch --cov-report=xml -q`), and report a failing
    suite as `VERIFY_GATE: FAIL`. The per-commit hygiene gate runs only the
    tests that match the staged modules (hygiene pytest cost 436 min/week on
-   19 Oct 2026, 22 min per commit in the barra worktree), so this is the
+   19 Oct 2026, 22 min per commit in one large worktree), so this is the
    one place the whole suite runs before the PR.
 5. Write the sub-agent's report verbatim, with the Write tool, to a file in
    the session scratchpad. Do not edit it.

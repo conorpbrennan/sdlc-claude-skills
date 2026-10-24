@@ -68,7 +68,7 @@ STEP 5: PASS
   files:   as declared
   decisions: UNCOVERABLE inserted as gap-prompt step 3 (7 steps now); recipe on one line inside the existing fence
   budget:  about 6 of 15 calls
-  gap:     xdist-present path (one merged coverage.xml) unverified here: no xdist installed. Owner verifies in a target repo with xdist (barra-risk-reports already runs -n auto with pytest-cov 7.1 + diff-cover 10.6).
+  gap:     xdist-present path (one merged coverage.xml) unverified here: no xdist installed. Owner verifies in a target repo with xdist (repo D already runs -n auto with pytest-cov 7.1 + diff-cover 10.6).
 
 STEP 6: PASS
   commit:  b274715
@@ -120,7 +120,7 @@ STEP C3: PASS (inserted, unreviewed block)
 
 OPEN GAPS (named, not built):
   - skills/plan-spec/reference.md:1042 "The other three tests" is stale against six size tests.
-  - One merged coverage.xml under real xdist + pytest-cov is unverified here (no xdist). Owner checks in a repo that has it (barra-risk-reports runs -n auto with pytest-cov 7.1 + diff-cover 10.6 today).
+  - One merged coverage.xml under real xdist + pytest-cov is unverified here (no xdist). Owner checks in a repo that has it (repo D runs -n auto with pytest-cov 7.1 + diff-cover 10.6 today).
   - hygiene-snippet.md sentence omits `.sqlite` and "serial otherwise" (README has both; snippet byte budget).
   - testFunctions reads 0 for this repo's custom-harness JS suites; testLines is the measure here.
   - Target-repo rollout (pytest-xdist, fixed-path fixtures, hygiene-repos.json) is the owner's, per plan Section 6.
