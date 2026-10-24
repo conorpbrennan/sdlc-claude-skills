@@ -588,6 +588,78 @@ const backupsOf = home => fs.readdirSync(path.join(home, '.claude')).filter(f =>
     }
 }
 
+console.log('\nAuto-update for the marketplace (extraKnownMarketplaces in the user settings):');
+{
+    const NAME = 'sdlc-claude-skills';
+    const REPO = 'conorpbrennan/sdlc-claude-skills';
+    const SRC = { source: 'github', repo: REPO };
+    const OURS = { [NAME]: { source: SRC, installLocation: '/x', lastUpdated: 'now' } };
+    const FORK = { [NAME]: { source: { source: 'github', repo: 'someone/fork' } } };
+    const LOCAL = { [NAME]: { source: { source: 'directory', path: '/work/sdlc' } } };
+    const AUTO = '> sdlc plugin WARNING: sdlc turned on auto-update';
+    const OTHER = { 'other-mp': { source: { source: 'github', repo: 'a/b' } } };
+    // Each row: name, known_marketplaces.json (object or string, undefined = none),
+    // settings.json (undefined = none), opt-out file present, expected
+    // extraKnownMarketplaces after the run (undefined = key absent), expect the
+    // "turned on" line, expect a backup.
+    const rows = [
+        ['registered, no key', OURS, { theme: 'dark' }, false, { [NAME]: { source: SRC, autoUpdate: true } }, true, true],
+        ['registered, other marketplace kept', OURS, { extraKnownMarketplaces: OTHER }, false, { ...OTHER, [NAME]: { source: SRC, autoUpdate: true } }, true, true],
+        ['registered, entry without autoUpdate', OURS, { extraKnownMarketplaces: { [NAME]: { source: SRC, note: 'mine' } } }, false, { [NAME]: { source: SRC, note: 'mine', autoUpdate: true } }, true, true],
+        ['explicit false is respected', OURS, { extraKnownMarketplaces: { [NAME]: { source: SRC, autoUpdate: false } } }, false, { [NAME]: { source: SRC, autoUpdate: false } }, false, false],
+        ['already true, silent', OURS, { extraKnownMarketplaces: { [NAME]: { source: SRC, autoUpdate: true } } }, false, { [NAME]: { source: SRC, autoUpdate: true } }, false, false],
+        ['settings missing, created', OURS, undefined, false, { [NAME]: { source: SRC, autoUpdate: true } }, true, false],
+        ['opt-out file', OURS, { theme: 'dark' }, true, undefined, false, false],
+        ['no known_marketplaces.json', undefined, { theme: 'dark' }, false, undefined, false, false],
+        ['known_marketplaces malformed', '{nope', { theme: 'dark' }, false, undefined, false, false],
+        ['fork of the same name', FORK, { theme: 'dark' }, false, undefined, false, false],
+        ['local-path marketplace', LOCAL, { theme: 'dark' }, false, undefined, false, false],
+        ['another marketplace only', OTHER, { theme: 'dark' }, false, undefined, false, false],
+        ['settings malformed', OURS, '{nope', false, undefined, false, false],
+        ['extraKnownMarketplaces not an object', OURS, { extraKnownMarketplaces: 'x' }, false, 'x', false, false],
+    ];
+    for (const [name, known, settings, optOut, expected, line, backup] of rows) {
+        const home = scratchHome(settings);
+        const dir = path.join(home, '.claude');
+        if (known !== undefined) {
+            fs.mkdirSync(path.join(dir, 'plugins'), { recursive: true });
+            fs.writeFileSync(path.join(dir, 'plugins', 'known_marketplaces.json'), typeof known === 'string' ? known : JSON.stringify(known));
+        }
+        if (optOut) fs.writeFileSync(path.join(dir, 'sdlc-autoupdate.disabled'), '');
+        const before = fs.existsSync(settingsOf(home)) ? fs.readFileSync(settingsOf(home), 'utf-8') : null;
+        const r = run(HOOK, home);
+        const ctx = context(r);
+        assert(`${name}: exit 0 and one JSON object`, r.status === 0 && r.json !== null, true);
+        assert(`${name}: "turned on" line`, ctx.includes(AUTO), line);
+        let after = null;
+        try {
+            after = JSON.parse(fs.readFileSync(settingsOf(home), 'utf-8'));
+        } catch (e) { /* malformed or missing */ }
+        assert(`${name}: extraKnownMarketplaces`, after ? after.extraKnownMarketplaces : undefined, expected);
+        assert(`${name}: backup`, backupsOf(home).filter(f => f.endsWith('-pre-sdlc-autoupdate')).length, backup ? 1 : 0);
+        if (line && settings && typeof settings === 'object') {
+            const { extraKnownMarketplaces: ignored, ...rest } = after;
+            const { extraKnownMarketplaces: ignored2, ...restBefore } = settings;
+            assert(`${name}: other keys kept`, rest, restBefore);
+            assert(`${name}: message names the opt-out`, ctx.includes('sdlc-autoupdate.disabled') && ctx.includes('autoUpdate'), true);
+        }
+        if (!line && before !== null) {
+            assert(`${name}: settings bytes unchanged`, fs.readFileSync(settingsOf(home), 'utf-8'), before);
+        }
+        if (line) {
+            const again = context(run(HOOK, home));
+            assert(`${name}: second run silent`, again.includes(AUTO), false);
+        }
+        assert(`${name}: no temp file left`, fs.readdirSync(dir).some(f => f.includes('.tmp.')), false);
+        fs.rmSync(home, { recursive: true, force: true });
+    }
+    // The constants the hook writes must be the marketplace this repo publishes.
+    const mp = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '.claude-plugin', 'marketplace.json'), 'utf-8'));
+    const hookSrc = fs.readFileSync(HOOK, 'utf-8');
+    assert('hook marketplace name matches marketplace.json', (/const MARKETPLACE_NAME = '([^']*)'/.exec(hookSrc) || [])[1], mp.name);
+    assert('hook marketplace repo is conorpbrennan/sdlc-claude-skills', (/const MARKETPLACE_REPO = '([^']*)'/.exec(hookSrc) || [])[1], REPO);
+}
+
 fs.rmSync(CLEAN_HOME, { recursive: true, force: true });
 
 console.log(`\n================================`);

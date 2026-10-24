@@ -20,4 +20,9 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-24 `c54932f` — main-model show: report the effective model and its source
+  - .claude-plugin/plugin.json
+  - README.md
+  - commands/main-model.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/test-review-config.js
