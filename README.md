@@ -19,8 +19,9 @@ Both reviewers carry a `maxTurns` cap (75 and 60) that only cuts runaways; a rep
 Your own config stays in `~/.claude/`: `tdd-mandate.json`,
 `review-policy.json`, `hygiene-repos.json`, `verify-repos.json` and
 `sdlc-review.json`. Each is optional. The plugin writes to `~/.claude/` in one
-place only: the session-start hook sets `promptCacheTtl` and `model` in
-`settings.json` (see [Model steering](#model-steering)). See
+place only: the session-start hook sets `promptCacheTtl`, `model` and
+`extraKnownMarketplaces` in `settings.json` (see
+[Model steering](#model-steering) and [Auto-update](#auto-update)). See
 [Configuration](#configuration) and the `.claude/*.json.example` templates.
 
 ### Install
@@ -61,6 +62,32 @@ claude plugin update sdlc@sdlc-claude-skills
 ```
 
 Then restart Claude Code; the update takes effect only after a restart.
+
+### Auto-update
+
+You do not need to run the update steps by hand. Claude Code leaves
+auto-update off for a third-party marketplace, and a plugin cannot switch it
+on through its own `settings.json`. So the session-start hook does it. On the
+first session after install it sets `"autoUpdate": true` on the
+`sdlc-claude-skills` entry of `extraKnownMarketplaces` in
+`~/.claude/settings.json`, with a `settings.json.backup.<UTC timestamp>-pre-sdlc-autoupdate`
+copy. Claude Code then checks for a new version after the first message of
+each session (up to 10 minutes later), updates the files on disk and asks for
+`/reload-plugins`. A new version is detected by the `version` in
+`.claude-plugin/plugin.json`, which every commit raises.
+
+The hook acts only when Claude Code's own record
+(`~/.claude/plugins/known_marketplaces.json`) shows the marketplace was added
+from `conorpbrennan/sdlc-claude-skills`. A fork or local-path marketplace of
+the same name is left alone. A value you set yourself is kept, true or false.
+To opt out, set `"autoUpdate": false` on that entry, or
+`touch ~/.claude/sdlc-autoupdate.disabled`. `DISABLE_UPDATES`,
+`DISABLE_AUTOUPDATER` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` switch
+Claude Code's update pass off whatever the setting says.
+
+Because updates now flow in unattended, a change pushed to this repo reaches
+every install. That includes changes to the shipped defaults (see
+[Model steering](#model-steering)).
 
 ### Developing the plugin
 
@@ -130,7 +157,7 @@ into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
 | `src/hooks/*.js`, `src/hooks/lib/*.js` (not `test-*`) | run in place from the cache | the gates and their shared helpers |
 | `src/hooks/pre-pr-verify.js` | PreToolUse on `Bash` | the `gh pr create` gate, per repo |
 | `src/hooks/record-verification.js` | run by `/sdlc:verify` | turns a verifier report into the `## Verification` section and the marker |
-| `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired, sets `"promptCacheTtl": "1h"` in the user settings file when a per-token backend would use the 5-minute prompt cache (opt out with `~/.claude/sdlc-cache-ttl.disabled`), and copies `mainModel` from `~/.claude/sdlc-review.json` into settings `model`; both apply from the next session |
+| `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired, turns on auto-update for this plugin's marketplace (see Auto-update below), sets `"promptCacheTtl": "1h"` in the user settings file when a per-token backend would use the 5-minute prompt cache (opt out with `~/.claude/sdlc-cache-ttl.disabled`), and copies `mainModel` from `~/.claude/sdlc-review.json` into settings `model`; both apply from the next session |
 | `tools/*.py` | run in place, found by `/sdlc:review-timing` | timing analyser |
 | `.claude/*.json.example` | templates only | thresholds, repo opt-ins, TDD exemptions |
 | `legacy/hooks-config.json` | read only by `uninstall.sh` | the pre-plugin wiring it strips from `settings.json` |

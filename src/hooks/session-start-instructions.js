@@ -31,6 +31,14 @@
 //     existing "model". "off" is the owner's opt-out; a malformed user file
 //     gets no default. With ANTHROPIC_MODEL set it warns
 //     that the variable overrides settings (the name only, never the value).
+//   - Third side effect, same writer: when Claude Code's own record
+//     (<config dir>/plugins/known_marketplaces.json) shows the "sdlc-claude-skills"
+//     marketplace was added from github conorpbrennan/sdlc-claude-skills, it sets
+//     "autoUpdate": true on that entry of "extraKnownMarketplaces" in settings.json
+//     (backup suffix "-pre-sdlc-autoupdate"), so version bumps pushed to git reach
+//     installed copies. A plugin cannot set this itself. An autoUpdate the owner
+//     already set (true or false) is kept; <config dir>/sdlc-autoupdate.disabled
+//     opts out; a fork or local-path marketplace of the same name is left alone.
 //   - Self-contained (no requires beyond node built-ins), so the test can run
 //     a copy of it against a scratch instructions/ directory. For that reason
 //     mainModel is read here directly with minimal validation instead of
@@ -101,6 +109,13 @@ const MAIN_MODEL_COMMAND = '/' + PLUGIN_NAME + ':main-model';
 const REVIEW_CONFIG_NAME = 'sdlc-review.json';
 const REVIEW_CONFIG_USER_ENV = 'SDLC_REVIEW_CONFIG_USER';
 const MODEL_ENV = 'ANTHROPIC_MODEL';
+const MARKETPLACES_SETTING = 'extraKnownMarketplaces';
+const AUTO_UPDATE_KEY = 'autoUpdate';
+const MARKETPLACE_NAME = 'sdlc-claude-skills';   // name in .claude-plugin/marketplace.json
+const MARKETPLACE_REPO = 'conorpbrennan/sdlc-claude-skills';
+const KNOWN_MARKETPLACES_FILE = path.join('plugins', 'known_marketplaces.json');
+const AUTO_UPDATE_OPT_OUT_FILE = 'sdlc-autoupdate.disabled';
+const BACKUP_SUFFIX_AUTO_UPDATE = '-pre-sdlc-autoupdate';
 const DEFAULTS_FILE = path.join(__dirname, '..', '..', 'defaults', REVIEW_CONFIG_NAME);
 
 const FIX = 'Fix: run `./uninstall.sh` from a checkout of the pre-plugin toolchain or of ' +
@@ -359,6 +374,51 @@ function mainModelLines(cwd) {
     return lines;
 }
 
+// Turns on auto-update for this plugin's marketplace in the user settings, so
+// new versions pushed to git reach installed copies with no manual step. A
+// plugin cannot do this itself: its settings.json honours only `agent` and
+// `subagentStatusLine`. Writes only the extraKnownMarketplaces key, through the
+// same safe single-key writer, and only when Claude Code's own record shows the
+// marketplace was added from this repo (a fork or a local path of the same name
+// is left alone). An autoUpdate value the owner already set, true or false, is
+// kept, as is any other key of the entry.
+//
+// Args:
+//     None.
+// Returns:
+//     An array of lines, empty when nothing was done or nothing was needed.
+function autoUpdateLines() {
+    const dir = configDir();
+    if (fs.existsSync(path.join(dir, AUTO_UPDATE_OPT_OUT_FILE))) return [];
+    const known = readObject(path.join(dir, KNOWN_MARKETPLACES_FILE));
+    const registered = known && known[MARKETPLACE_NAME] && known[MARKETPLACE_NAME].source;
+    if (!registered || registered.source !== 'github' || registered.repo !== MARKETPLACE_REPO) return [];
+    const settingsPath = path.join(dir, SETTINGS_FILE);
+    const settings = readObject(settingsPath);
+    if (!settings && fs.existsSync(settingsPath)) return [];
+    const marketplaces = settings ? settings[MARKETPLACES_SETTING] : undefined;
+    if (marketplaces !== undefined && (!marketplaces || typeof marketplaces !== 'object' || Array.isArray(marketplaces))) return [];
+    const entry = marketplaces ? marketplaces[MARKETPLACE_NAME] : undefined;
+    if (entry !== undefined && (!entry || typeof entry !== 'object' || Array.isArray(entry))) return [];
+    if (entry && entry[AUTO_UPDATE_KEY] !== undefined) return [];
+    const merged = {
+        ...(marketplaces || {}),
+        [MARKETPLACE_NAME]: {
+            source: { source: 'github', repo: MARKETPLACE_REPO },
+            ...(entry || {}),
+            [AUTO_UPDATE_KEY]: true,
+        },
+    };
+    const optOut = path.join(dir, AUTO_UPDATE_OPT_OUT_FILE);
+    if (writeSetting(dir, MARKETPLACES_SETTING, merged, BACKUP_SUFFIX_AUTO_UPDATE)) {
+        return [warning(`sdlc turned on auto-update for its marketplace (\`${MARKETPLACE_NAME}\`) in ${settingsPath}, so new
+            versions pushed to git reach this install on their own. Claude Code checks after the first message of a
+            session and asks for /reload-plugins. Opt out by setting \`"${AUTO_UPDATE_KEY}": false\` in that
+            \`${MARKETPLACES_SETTING}\` entry, or with \`touch ${optOut}\`. Tell the owner this at the start of the session.`)];
+    }
+    return [];
+}
+
 // The cwd from the hook's stdin JSON, else process.cwd().
 function sessionCwd() {
     try {
@@ -397,7 +457,12 @@ function build() {
     try {
         model = mainModelLines(cwd);
     } catch (e) { /* a failed check yields no lines */ }
+    let autoUpdate = [];
+    try {
+        autoUpdate = autoUpdateLines();
+    } catch (e) { /* a failed check yields no lines */ }
     const parts = SECTIONS.map(readSection);
+    parts.unshift(...autoUpdate);
     parts.unshift(...model);
     if (ttl) parts.unshift(ttl);
     if (head) parts.unshift(head);
