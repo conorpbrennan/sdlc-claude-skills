@@ -5,42 +5,23 @@ hooks and slash commands that turn a change into a planned, reviewed,
 tested commit. Extracted from `risk-claude-skills` so the generic
 engineering workflow lives apart from the domain skills.
 
-## Install
-
-The toolchain ships as a Claude Code plugin named `sdlc`. This repository is
-also the marketplace that serves it. Inside Claude Code:
-
-```
-/plugin marketplace add https://github.com/conorpbrennan/sdlc-claude-skills.git
-/plugin install sdlc@sdlc-claude-skills
-```
-
-Run them as two separate commands. In the `/plugin` menu's "Add Marketplace"
-box, enter only the URL.
-
-Or from a shell:
-
-```bash
-claude plugin marketplace add https://github.com/conorpbrennan/sdlc-claude-skills.git
-claude plugin install sdlc@sdlc-claude-skills
-```
-
-Node is required, because the hooks are Node. The repository is private, so
-git needs credentials for GitHub before the marketplace can be added. Restart
-Claude Code after installing.
+## Using the plugin
 
 Plugin components are namespaced, so commands and skills are invoked with
 the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
-`/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:plan-spec` and
-`/sdlc:code-review-pre-commit`. The review agents are `sdlc:code-reviewer` and
-`sdlc:code-reviewer-deep`; the verification agent is `sdlc:verifier`.
+`/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:orchestrate`, `/sdlc:handoff`,
+`/sdlc:model-spend`, `/sdlc:main-model`, `/sdlc:plan-spec`,
+`/sdlc:code-review-pre-commit` and `/sdlc:code-review-implementer`. The review
+agents are `sdlc:code-reviewer` and `sdlc:code-reviewer-deep`; the plan-step
+agent is `sdlc:implementer`; the verification agent is `sdlc:verifier`.
 Both reviewers carry a `maxTurns` cap (75 and 60) that only cuts runaways; a report cut off without its `TDD_GATE` trailer counts as FAIL.
 
-Your own config stays in `~/.claude/`, and the plugin never writes to it:
-`tdd-mandate.json`, `review-policy.json`, `hygiene-repos.json` and
-`verify-repos.json`. Each is
-optional. See [Configuration](#configuration) and the `.claude/*.json.example`
-templates.
+Your own config stays in `~/.claude/`: `tdd-mandate.json`,
+`review-policy.json`, `hygiene-repos.json`, `verify-repos.json` and
+`sdlc-review.json`. Each is optional. The plugin writes to `~/.claude/` in one
+place only: the session-start hook sets `promptCacheTtl` and `model` in
+`settings.json` (see [Model steering](#model-steering)). See
+[Configuration](#configuration) and the `.claude/*.json.example` templates.
 
 ### Update
 
@@ -59,36 +40,6 @@ claude plugin update sdlc@sdlc-claude-skills
 ```
 
 Then restart Claude Code; the update takes effect only after a restart.
-
-### Uninstall or disable
-
-```bash
-claude plugin disable sdlc@sdlc-claude-skills     # keep it installed, turn it off
-claude plugin uninstall sdlc@sdlc-claude-skills
-```
-
-### Migrating from `install.sh`
-
-An `install.sh` deployment and the plugin must not run together, because every
-gate would fire twice. The plugin checks for this: while `~/.claude/settings.json`
-still wires one of the legacy hook scripts, every session opens with a warning
-naming them and this fix. Remove the legacy copy first, then install the plugin:
-
-```bash
-cd ~/dev/sdlc-claude-skills
-./uninstall.sh --dry-run    # list what would go
-./uninstall.sh              # remove copied files, settings.json hooks and CLAUDE.md sections
-```
-
-Your tuned `~/.claude/*.json` config is kept. See [Uninstall](#uninstall) for
-exactly what is removed.
-
-An install older than the install record (no
-`~/.claude/backups/sdlc-claude-skills/installed.tsv`) may leave two flat skill
-files that neither a reinstall nor `uninstall.sh` removes:
-`~/.claude/skills/code-review-pre-commit.md` and
-`~/.claude/skills/code-review-implementer.md`. Delete them by hand after
-uninstalling.
 
 ### Developing the plugin
 
@@ -152,13 +103,13 @@ into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
 | `agents/implementer.md` | `sdlc:implementer` (Sonnet, 80 turns) | the plan-step implementer; at 60 turns it wraps up, past 80 it reports PARTIAL |
 | `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
-| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new` | slash commands |
+| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:orchestrate`, `/sdlc:handoff`, `/sdlc:model-spend`, `/sdlc:main-model` | slash commands |
 | `commands/verify.md` | `/sdlc:verify` | dispatches the verifier, then runs the recorder |
 | `hooks/hooks.json` | registered while the plugin is enabled | wires `src/hooks/*.js` to events through `${CLAUDE_PLUGIN_ROOT}` |
 | `src/hooks/*.js`, `src/hooks/lib/*.js` (not `test-*`) | run in place from the cache | the gates and their shared helpers |
 | `src/hooks/pre-pr-verify.js` | PreToolUse on `Bash` | the `gh pr create` gate, per repo |
 | `src/hooks/record-verification.js` | run by `/sdlc:verify` | turns a verifier report into the `## Verification` section and the marker |
-| `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired and, when a per-token backend would use the 5-minute prompt cache, sets `"promptCacheTtl": "1h"` in the user settings file (effective from the next session; opt out with `~/.claude/sdlc-cache-ttl.disabled`) |
+| `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired, sets `"promptCacheTtl": "1h"` in the user settings file when a per-token backend would use the 5-minute prompt cache (opt out with `~/.claude/sdlc-cache-ttl.disabled`), and copies `mainModel` from `~/.claude/sdlc-review.json` into settings `model`; both apply from the next session |
 | `tools/*.py` | run in place, found by `/sdlc:review-timing` | timing analyser |
 | `.claude/*.json.example` | templates only | thresholds, repo opt-ins, TDD exemptions |
 | `legacy/hooks-config.json` | read only by `uninstall.sh` | the pre-plugin wiring it strips from `settings.json` |
@@ -212,6 +163,10 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/review-timing [--days N] [--repo PATH] [--json]` | Fast-path hit rate, per-gate breakdown, p50/p95 on coverage regen and diff-cover. |
 | `/feature <slug>` / `/feature list` | Recall prior context for a feature branch. |
 | `/feature-new <slug> "<requirement>" ["<criterion>" ...]` | Seed or update `features/<slug>.md`, including its 2–5 `## Acceptance` criteria. |
+| `/sdlc:orchestrate on\|off\|status` | Switch orchestrator mode: the main session dispatches sub-agents instead of editing source. See [Model steering](#model-steering). |
+| `/sdlc:handoff [slug]` | Write a fixed-form handoff file in `tmp/` and print the line that resumes it in a fresh session. |
+| `/sdlc:model-spend [--days N] [--json]` | Weekly model spend from local transcripts: Opus and Sonnet share, orchestration, untiered Opus dispatches, review round 3, and (section 8) main-session prompt cache cost by backend and TTL. |
+| `/sdlc:main-model [haiku\|sonnet\|opus\|off]` | Show or set the persistent main-session model (`mainModel` in `~/.claude/sdlc-review.json`). |
 | `/verify` | Check the branch against its `## Acceptance` criteria: dispatches the `verifier` sub-agent, then records the result in the feature record and, on PASS, writes `.git/.claude-last-verify`. Needs a clean tree. Never commits or opens the PR. |
 
 ---
@@ -225,6 +180,10 @@ in order, cheapest rejection first.
 |---|---|---|
 | `session-start-feature.js` | SessionStart | Creates `features/<branch>.md` on a new feature branch and asks for the requirement |
 | `enforce-review-implementer.js` | UserPromptSubmit | Routes review-fix prompts through the implementer skill |
+| `orchestrator-mode.js` | UserPromptSubmit, PreToolUse (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`), PostToolUse (`Read`, `Bash`, `Skill`, `Agent`) | Orchestrator mode: turns on from a handoff, denies main-session source edits, nudges after inline Bash |
+| `session-start-instructions.js` | SessionStart | Injects the session instructions; sets `promptCacheTtl` and `model` in settings.json (see [Model steering](#model-steering)) |
+| `agent-tier-gate.js` | PreToolUse (`Agent`) | Opus dispatch needs a `TIER` reason; unset models on built-in agents go to Sonnet |
+| `read-trim.js` | PostToolUse (`Read`) | Trims whole-file Reads over 12,000 chars inside sub-agents |
 | `pre-commit-feature.js` | PreToolUse | Blocks source commits on trunk, and on a branch until the feature file has a real requirement |
 | `pre-commit-review.js` | PreToolUse | Blocks unless `.git/.claude-last-review` is fresh and both hashes match |
 | `pending-review-gate.js` | PreToolUse | Dormant — nothing writes its marker today |
@@ -399,9 +358,9 @@ Prompt-cache TTL. Claude Code gives the main conversation a 1-hour prompt cache 
 
 Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc-review.json` makes the main-session model persistent when settings.json is reset on container start. At session start `session-start-instructions.js` writes it into `model` in `<config dir>/settings.json` when they differ, with the same safe single-key writer and a `settings.json.backup.<UTC timestamp>-pre-sdlc-model` copy, and tells the owner. It applies from the next session. It is read from the user file only (a repo file's `mainModel` is ignored with a warning, since settings.json is global), and an invalid value does nothing. If `ANTHROPIC_MODEL` is set it overrides settings, so the hook warns that `mainModel` has no effect. `/sdlc:main-model [haiku|sonnet|opus|off]` shows or changes it; `/model` changes only the current session.
 
-- **Goal.** The main Opus session orchestrates. Volume work (building, reviewing, investigating) runs on Sonnet. Opus is used where it is stated on purpose: plans, plan source review, round-2 code review.
+- **Goal.** The main session runs on Sonnet (`mainModel`). Volume work (building, reviewing, investigating) runs on Sonnet. Opus is used where it is stated on purpose: plan writing (switch with `/model`), plan source review, round-2 code review.
 - **`sdlc-review.json`** sets the models. Layers, weakest first: built-in defaults, `~/.claude/sdlc-review.json`, `<repo>/.claude/sdlc-review.json`, path rules, then a one-off `--model` on `/sdlc:code-review-pre-commit`. A rule is `{ "paths": [...], "round1": "<model>", "round2": "<model>" }`. Rules from both files apply, and the strongest matching model wins (opus, then sonnet, then haiku). Copy `.claude/sdlc-review.json.example`; every key is optional.
-- **Keys.** `round1` (default sonnet) and `round2` (default opus) are the models for the first review and for reruns. Round 1 always runs `code-reviewer`, later rounds `code-reviewer-deep`: only the model is configurable. `maxRounds` (default 2) is enforced by the gate: it refuses a marker for a higher round. `planReview.source` (opus), `planReview.consistency` (sonnet) and `planReview.cap` (3) steer the `plan-spec` review rounds. `orchestrator.bashNudge` (8) is the nudge threshold below. The gate message names the reviewer and model it expects.
+- **Keys.** `round1` (default sonnet) and `round2` (default opus) are the models for the first review and for reruns. Round 1 always runs `code-reviewer`, later rounds `code-reviewer-deep`: only the model is configurable. `maxRounds` (default 2) is enforced by the gate: it refuses a marker for a higher round. `planReview.source` (opus), `planReview.consistency` (sonnet) and `planReview.cap` (2) steer the `plan-spec` review rounds. `orchestrator.bashNudge` (8) is the nudge threshold below. The gate message names the reviewer and model it expects.
 - **Globs.** `**/*.md` does not match a root-level file such as `README.md`. List `*.md` too, as the example does.
 - **A bad file never blocks.** Invalid JSON or an invalid value is ignored with a one-line warning, and the next layer applies.
 - **`agent-tier-gate.js`** (PreToolUse on `Agent`). An Opus or Fable dispatch needs a `TIER: opus: <category>` line, where the category is plan writing, plan source review, fail triage, or user asked (the last raises a confirm prompt), or it is denied. Any other reason is denied; the dispatch goes on Sonnet. A `general-purpose`, `Explore` or `Plan` dispatch with no model (or `inherit`) is rewritten to Sonnet. The same three types get a short context-budget block appended to the prompt (`lib/context-budget.js`, once, in the same `updatedInput`). `sdlc:*` agents, `fork` and custom agents are untouched.
@@ -411,6 +370,9 @@ Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc
 - **`/sdlc:model-spend [--days N] [--json]`** reads `~/.claude/projects` transcripts and reports the Opus and Sonnet share of cost, main-session work versus orchestration, Opus sub-agents without a `TIER` line, and sessions that reached review round 3. List-price estimates, local files only.
 
 ## Configuration
+
+### `~/.claude/sdlc-review.json`
+Model steering: `round1`, `round2`, `maxRounds`, `planReview`, `orchestrator.bashNudge`, path `rules` and `mainModel`. A repo file `<repo>/.claude/sdlc-review.json` layers over it, except `mainModel`, which is read from the user file only. Template: `.claude/sdlc-review.json.example`. Details under [Model steering](#model-steering).
 
 ### `~/.claude/hygiene-repos.json`
 Per-repo opt-in for the hygiene gate: `setup` shell lines plus a list of
@@ -489,97 +451,6 @@ touch .claude/feature-tracking.disabled
 
 ---
 
-## Uninstall
-
-The plugin is removed like any other:
-
-```bash
-claude plugin disable sdlc@sdlc-claude-skills     # keep it, turn it off
-claude plugin uninstall sdlc@sdlc-claude-skills   # remove it from the cache
-```
-
-That touches nothing outside the plugin cache. Your `~/.claude/*.json` config and
-the timing log stay; delete them by hand if you want them gone.
-
-### Removing a pre-plugin install (`uninstall.sh`)
-
-`uninstall.sh` is the one-time migration for a machine that ran the retired
-`install.sh`, which copied files into `~/.claude/` and merged into
-`settings.json` and `CLAUDE.md`. Run it from a checkout of this repository (or
-of the pre-plugin toolchain):
-
-```bash
-./uninstall.sh --dry-run        # list what would go
-./uninstall.sh                  # remove, keeping your tuned config
-./uninstall.sh --purge-config   # also delete hygiene-repos.json, review-policy.json and tdd-mandate.json
-```
-
-Removal is read from the install record the old `install.sh` wrote to
-`~/.claude/backups/sdlc-claude-skills/`: `installed.tsv` lists every file it
-deployed with a checksum, and uninstall deletes a file only while it still
-matches. Anything added after that install — a new agent, a file dropped into
-one of its skill directories, a hook another tool overwrote — is not in the
-record or no longer matches it, and stays. `backups.tsv` lists what the install
-moved aside to make room: an `original` (yours before this project was
-installed there) is put back once the path is free; an `edited` copy (its file
-with your changes) stays in `~/.claude/backups/`. The record also keeps its
-own copies of the hooks wiring and the CLAUDE.md snippets that were merged
-(the wiring as it stood at that install, of which `legacy/hooks-config.json`
-is the final form), so uninstall strips exactly what was installed even
-though this tree has moved on.
-
-Without a record — an install older than it — uninstall falls back to this
-tree's file list, the snippets in `instructions/` and the frozen pre-plugin
-wiring in `legacy/hooks-config.json`, and says so. Read the flat-skill-file note
-under [Migrating](#migrating-from-installsh) before relying on that fallback.
-
-`settings.json` is edited surgically — `src/unmerge-hooks.js` strips only the
-entries naming this project's hook scripts, and hooks you added from elsewhere
-survive. It runs before any file is deleted, so a `settings.json` that will not
-parse stops the uninstall with the hooks still wired to scripts that exist.
-`CLAUDE.md` loses only the blocks this project wrote — byte for byte, verified
-by a round-trip test — which it can identify exactly because the install
-wrapped them in sentinels:
-
-```
-<!-- sdlc-claude-skills:begin Feature Tracking -->
-## Feature Tracking
-...
-<!-- sdlc-claude-skills:end Feature Tracking -->
-```
-
-Every lookup is a literal string search for those markers — there is no markdown
-parsing, so a heading of ours quoted in a code example, a section of yours called
-`## Feature Tracking Notes`, a sentence mentioning one of the headings, CRLF line
-endings and tabs are all simply irrelevant. A `CLAUDE.md` merged before the
-sentinels existed is found by searching for the snippet's exact text instead. If
-neither search matches — you edited the section, or its wording changed since —
-nothing is deleted: uninstall leaves the old text alone and tells you.
-
-Ambiguity is refused, never resolved by guessing. A begin marker with no end, a
-second begin marker before the matching end (which a marker quoted in prose or
-pasted from this page would produce), more than one verbatim copy of a snippet,
-a target that is not valid UTF-8, or a read that fails for any reason other than
-"not there" all abort with a message naming the problem, leaving the file
-untouched — and under `uninstall.sh`'s `set -e` that stops the run.
-
-A timestamped `CLAUDE.md.backup.*` is written before overwriting, on every path.
-Nothing outside a block is rewritten: blank-line runs are adjusted only where a
-block was removed, so blank lines inside your own fenced code and any minority
-line endings come back byte for byte.
-
-Left in place on purpose: the timing log (`~/.claude/code-review-timing.jsonl`),
-the per-repo `.git/` markers, which expire on their own, the timestamped
-`settings.json` and `CLAUDE.md` backups, and whatever stays in
-`~/.claude/backups/` (edited copies, and originals whose path is in use).
-
-**If another project installed the same hooks** — `risk-claude-skills` did — a
-copy it wrote over ours no longer matches the record, so uninstall here leaves
-it. A byte-identical copy cannot be told apart and is removed; re-run that
-project's install script afterwards.
-
----
-
 ## Tests
 
 ```bash
@@ -629,14 +500,6 @@ makes them block. It passes from any repo with history.
 ---
 
 ## Known issues
-
-**The first install after the sentinel change may leave a duplicate section.**
-If your `CLAUDE.md` holds a section whose wording no longer matches the snippet
-in this repository — the hygiene section was de-identified during the split, for
-instance — the exact-text search cannot find it, so install appends a wrapped
-copy and prints a NOTE. Delete the older copy by hand; there is no way to
-identify it without the heading-matching that caused six consecutive text-loss
-defects, and a false positive there costs you your own writing.
 
 **`protect-user-dir.js` ships but is not wired.** The hook and its passing
 test came across, but `hooks/hooks.json` declares no `Edit`/`Write` matcher
