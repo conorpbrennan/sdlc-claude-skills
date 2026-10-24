@@ -23,9 +23,16 @@
 
 - .claude-plugin/plugin.json
 - README.md
+- commands/model-spend.md
 - src/hooks/session-start-instructions.js
 - src/hooks/test-session-start-instructions.js
+- tools/model-spend.js
+- tools/test-model-spend.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-24 `dacd2c2` — Set a 1h prompt cache for the main session on a per-token backend
+  - .claude-plugin/plugin.json
+  - README.md
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-session-start-instructions.js

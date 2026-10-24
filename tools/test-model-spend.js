@@ -199,6 +199,51 @@ console.log('\nNo transcripts:');
 const empty = spawnSync('node', [SCRIPT, '--projects', path.join(sb, 'nope')], { encoding: 'utf-8' });
 ok('a missing projects dir is reported, not a crash', empty.status === 0 && /no transcripts/i.test(empty.stdout + empty.stderr), { out: empty.stdout, err: empty.stderr });
 
+// ---- prompt cache section: its own tree, so the totals above stay put ----
+// Opus input is $4/M: 100k 5m writes = $0.50, 100k 1h writes = $0.80.
+const MIN = 60 * 1000;
+const cacheRoot = path.join(sb, 'cache-projects');
+const cacheProj = path.join(cacheRoot, '-home-me-cache');
+fs.mkdirSync(path.join(cacheProj, 'c1', 'subagents'), { recursive: true });
+function writes(n, ttl, geo) {
+    const cc = ttl === '1h' ? { ephemeral_1h_input_tokens: n } : { ephemeral_5m_input_tokens: n };
+    return { cache_creation_input_tokens: n, cache_creation: cc, inference_geo: geo };
+}
+function calls(file, geo, ttl, minsAgo) {
+    const rows = minsAgo.map((m, i) => line({ ts: iso(m * MIN), req: 'r' + i, id: file + i, model: OPUS, usage: writes(100000, ttl, geo) }));
+    return rows.join('\n') + '\n';
+}
+// claude.ai: two calls 10 min apart (1h writes). Gateway: calls at 0, +3, +13, +103 min (5m writes).
+fs.writeFileSync(path.join(cacheProj, 'ai.jsonl'), calls('ai', 'global', '1h', [200, 190]));
+fs.writeFileSync(path.join(cacheProj, 'gw.jsonl'), calls('gw', '', '5m', [300, 297, 287, 197]));
+// A sub-agent file with 5m writes must not count.
+fs.writeFileSync(path.join(cacheProj, 'c1', 'subagents', 'agent-z.jsonl'), calls('z', '', '5m', [100, 50]));
+const cj = JSON.parse(spawnSync('node', [SCRIPT, '--json', '--projects', cacheRoot], { encoding: 'utf-8' }).stdout).promptCache;
+console.log('\nMain-session prompt cache:');
+const PC_ROWS = [
+    ['claude.ai sessions', cj['claude.ai'].sessions, 1],
+    ['gateway sessions (sub-agent excluded)', cj['gateway/API'].sessions, 1],
+    ['claude.ai 1h write cost', cj['claude.ai'].write1h, 1.6],
+    ['claude.ai 5m write cost', cj['claude.ai'].write5m, 0],
+    ['gateway 5m write cost (4 calls)', cj['gateway/API'].write5m, 2],
+    ['gateway 1h write cost', cj['gateway/API'].write1h, 0],
+    ['claude.ai rebuild 5-60m cost', cj['claude.ai'].rebuild5to60m.cost, 0.8],
+    ['gateway rebuild 5-60m: 10 min gap only, 3 min not counted', cj['gateway/API'].rebuild5to60m.cost, 0.5],
+    ['gateway rebuild 5-60m calls', cj['gateway/API'].rebuild5to60m.calls, 1],
+    ['gateway rebuild >60m cost', cj['gateway/API'].rebuildOver60m.cost, 0.5],
+    ['gateway rebuild >60m calls', cj['gateway/API'].rebuildOver60m.calls, 1],
+];
+for (const [name, got, want] of PC_ROWS) ok(name, near(got, want), { got, want });
+const FIX = 'export CLAUDE_CODE_PROMPT_CACHE_TTL=1h';
+const ctext = spawnSync('node', [SCRIPT, '--projects', cacheRoot], { encoding: 'utf-8' }).stdout;
+ok('mostly-5m gateway prints the fix line', ctext.includes(FIX), ctext.slice(-400));
+// Gateway on 1h writes: no fix line.
+const okRoot = path.join(sb, 'ok-projects', 'p');
+fs.mkdirSync(okRoot, { recursive: true });
+fs.writeFileSync(path.join(okRoot, 'gw1h.jsonl'), calls('g1', '', '1h', [60, 50]));
+const otext = spawnSync('node', [SCRIPT, '--projects', path.join(sb, 'ok-projects')], { encoding: 'utf-8' }).stdout;
+ok('gateway on 1h prints no fix line but has the section', !otext.includes(FIX) && /prompt cache/i.test(otext), otext.slice(-400));
+
 fs.rmSync(sb, { recursive: true, force: true });
 
 console.log('\n====================');
