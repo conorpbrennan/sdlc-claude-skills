@@ -4,7 +4,7 @@ Reduced form (plan-spec §22): one step, one file pair, one sitting, no frozen t
 
 ## Why
 
-Reported from a session committing from `repo A/`, a subdirectory of its repository. The timing log showed 33 staged code files, a 0-byte diff read with `ok: true`, 0 semantic lines, and approval via the `trivial-diff` fast path. Four earlier commits from that directory were very likely waved through the same way.
+Reported from a session committing from a subdirectory of its repository. The timing log showed 33 staged code files, a 0-byte diff read with `ok: true`, 0 semantic lines, and approval via the `trivial-diff` fast path. Four earlier commits from that directory were very likely waved through the same way.
 
 Cause, reproduced here: `readStagedCodeFiles` in `src/hooks/pre-commit-review.js` lists paths with `git diff --cached --name-only`, which prints them relative to the repository root whatever the cwd. The classifier step then calls `readStagedDiff(codeFiles)` with no `cwd`, so `git diff --cached -U0 -- <paths>` resolves each pathspec against the hook's cwd. From a subdirectory every pathspec points at `<sub>/<sub>/...`, matches nothing, and git returns an empty diff with exit 0. `readStagedDiff` already fails closed on a thrown error, but not on a silent empty result.
 
