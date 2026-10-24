@@ -19,4 +19,8 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-24 `9cbf288` — Turn on marketplace auto-update from the SessionStart hook
+  - .claude-plugin/plugin.json
+  - README.md
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-session-start-instructions.js
