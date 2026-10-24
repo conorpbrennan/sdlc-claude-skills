@@ -6,9 +6,10 @@ description: Switch orchestrator mode on or off, or show its state. While on, th
 
 Orchestrator mode keeps the main session thin. It turns on by itself when
 the session reads a handoff or tracker file or runs `plan-spec run`. While
-it is on, the hook denies source edits in the main session and nudges after
-several inline Bash commands. Briefs, reports, trackers, feature records,
-plans, memory and scratch files stay writable.
+it is on, the hook denies code edits in the main session and nudges after
+several inline Bash commands. Only code is denied. Docs, config and data
+stay writable, as do briefs, reports, trackers, feature records, plans,
+memory and scratch files.
 
 ## Arguments: $ARGUMENTS
 
