@@ -195,7 +195,7 @@ console.log('deny inline source edits');
         assert(`reason ${tool}`, r.out.hookSpecificOutput.permissionDecisionReason, DENY_REASON);
     }
     assert('notebook_path is read too', decision(pre(sid, 'NotebookEdit', { notebook_path: '/home/u/dev/proj/a.ipynb' })), 'deny');
-    assert('plain .md outside special dirs denied', decision(pre(sid, 'Write', { file_path: '/home/u/dev/proj/README.md' })), 'deny');
+    assert('plain .md outside special dirs allowed', pre(sid, 'Write', { file_path: '/home/u/dev/proj/README.md' }).out, '');
     assert('exit code on deny', pre(sid, 'Edit', { file_path: '/home/u/x.js' }).status, 0);
 }
 
@@ -242,9 +242,14 @@ console.log('allowed paths while on');
         '/home/u/dev/proj/notes/my_plan.md', '/home/u/dev/proj/commands/plan-x.md', '/home/u/dev/proj/v2.plan.md']) {
         assert(`plan basename allowed ${p}`, pre(sid, 'Write', { file_path: p }).out, '');
     }
+    // Non-source files are writable whatever they are called: docs, config, data.
     for (const p of ['/home/u/dev/proj/skills/plan-spec/SKILL.md', '/home/u/dev/proj/commands/planner.md',
-        '/home/u/dev/proj/docs/explanation.md', '/home/u/dev/proj/skills/plan-spec/README.md']) {
-        assert(`plan-ish source doc denied ${p}`, decision(pre(sid, 'Write', { file_path: p })), 'deny');
+        '/home/u/dev/proj/docs/explanation.md', '/home/u/dev/proj/CLAUDE.md', '/home/u/dev/proj/hooks/hooks.json',
+        '/home/u/dev/proj/.claude/sdlc-review.json.example', '/home/u/dev/proj/LICENSE', '/home/u/dev/proj/pyproject.toml']) {
+        assert(`non-source file allowed ${p}`, pre(sid, 'Write', { file_path: p }).out, '');
+    }
+    for (const p of ['/home/u/dev/proj/a.py', '/home/u/dev/proj/run.sh', '/home/u/dev/proj/vendor/x.js', '/home/u/dev/proj/A.JS']) {
+        assert(`source file denied ${p}`, decision(pre(sid, 'Write', { file_path: p })), 'deny');
     }
     assert('features non-md denied', decision(pre(sid, 'Write', { file_path: '/home/u/dev/proj/features/x.js' })), 'deny');
     assert('plans non-md denied', decision(pre(sid, 'Write', { file_path: '/home/u/dev/proj/plans/x.js' })), 'deny');
