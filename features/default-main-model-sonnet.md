@@ -25,4 +25,14 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-24 `81ed9e7` — Ship a Sonnet main-model default applied by the SessionStart hook
+  - .claude-plugin/plugin.json
+  - .claude/sdlc-review.json.example
+  - README.md
+  - commands/main-model.md
+  - defaults/sdlc-review.json
+  - src/hooks/lib/review-config.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-review-config.js
+  - src/hooks/test-session-start-instructions.js

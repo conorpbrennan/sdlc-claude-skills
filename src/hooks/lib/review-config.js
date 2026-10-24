@@ -214,6 +214,7 @@ function resolveOrchestrator({ repoRoot } = {}) {
 const MAIN_MODEL_KEY = 'mainModel';
 // Stored in place of a model name: the owner opted out of the shipped default.
 const MAIN_MODEL_OFF = 'off';
+const SHIPPED_DEFAULTS = path.join(__dirname, '..', '..', '..', 'defaults', CONFIG_NAME);
 
 // The main-session model. Read from the user file only: settings.json `model`
 // is global, so a per-repo value would flip it on every session start in a
@@ -223,8 +224,12 @@ const MAIN_MODEL_OFF = 'off';
 //   repoRoot: Repository root; its file is read only to warn that its
 //     mainModel is ignored.
 // Returns:
-//   { mainModel, path, warnings }: mainModel is a model name or null (unset,
-//   opted out with "off", or invalid); path is the user file.
+//   { mainModel, effective, source, path, warnings }: mainModel is the model
+//   name the user file holds, or null (unset, opted out with "off", or invalid).
+//   effective is the model the session-start hook will apply: mainModel, else
+//   the plugin's shipped default when the user file has no mainModel key (or no
+//   file), else null. source says which: "user", "default", "off" or "none".
+//   path is the user file.
 function resolveMainModel({ repoRoot } = {}) {
     const layers = loadLayers(repoRoot);
     const [repo, user] = layers;
@@ -238,14 +243,37 @@ function resolveMainModel({ repoRoot } = {}) {
         if (isModel(v)) mainModel = v;
         else warnings.push(`${user.path}: ${MAIN_MODEL_KEY} ${JSON.stringify(v)} is not valid; ignored`);
     }
-    return { mainModel, path: user.path, warnings };
+    // As the hook: a malformed or unreadable file (data null with a warning) gets
+    // no default, and so does an invalid value.
+    let effective = mainModel;
+    let source = mainModel ? 'user' : (v === MAIN_MODEL_OFF ? 'off' : 'none');
+    const noFile = user.data === null && user.warnings.length === 0;
+    if (v === undefined && (user.data !== null || noFile)) {
+        const shipped = shippedMainModel();
+        if (shipped) {
+            effective = shipped;
+            source = 'default';
+        }
+    }
+    return { mainModel, effective, source, path: user.path, warnings };
+}
+
+// Returns: the mainModel in the plugin's defaults/sdlc-review.json, or null when
+// the file is missing, malformed or holds no valid model.
+function shippedMainModel() {
+    try {
+        const d = JSON.parse(fs.readFileSync(SHIPPED_DEFAULTS, 'utf-8'));
+        return isObject(d) && isModel(d[MAIN_MODEL_KEY]) ? d[MAIN_MODEL_KEY] : null;
+    } catch (e) {
+        return null;
+    }
 }
 
 // Sets mainModel in the user file, keeping every other key. Creates the file
 // when missing. "off" is stored as the owner's opt-out from the plugin's shipped
-// default, so removing the key would bring the default back. Refuses a symlink, unreadable or malformed
-// file, or a non-object top level, writing nothing. The write is a temp file
-// plus rename.
+// default, so removing the key would bring the default back. Refuses a
+// symlink, unreadable or malformed file, or a non-object top level, writing
+// nothing. The write is a temp file plus rename.
 //
 // Args:
 //   model: A model name, or MAIN_MODEL_OFF.
