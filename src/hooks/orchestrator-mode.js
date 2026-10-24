@@ -5,7 +5,7 @@
 // hook_event_name:
 //   PostToolUse       turns the mode on (handoff read, plan-spec run), counts inline
 //                     Bash commands and nudges, resets the count on an Agent dispatch.
-//   PreToolUse        denies source edits while the mode is on.
+//   PreToolUse        denies code edits while the mode is on; docs, config and data stay writable.
 //   UserPromptSubmit  the owner's /sdlc:orchestrate on|off switch.
 // Everything applies to the main session only: stdin has no agent_id there and has
 // one inside a sub-agent, where this hook prints nothing.
@@ -22,6 +22,7 @@ const { execFileSync } = require('child_process');
 const { deny } = require('./lib/hook-output');
 const { resolveOrchestrator } = require('./lib/review-config');
 const { PLUGIN, cmd } = require('./lib/plugin-names');
+const { SOURCE_EXTENSIONS } = require('./lib/source-files');
 
 const STATE_DIR_ENV = 'SDLC_ORCHESTRATOR_STATE_DIR';
 const DEFAULT_NUDGE = 8;
@@ -51,7 +52,11 @@ const ORCHESTRATION_CMD = new RegExp(
     + '|printf\\b|gh\\s'
     + '|node\\s+\\S*(?:/src/hooks/|tools/plugin-version\\.js))');
 
-// Where the main session may still write while the mode is on.
+// Code the gates do not list but the main session must still not edit inline.
+const EXTRA_CODE_EXTENSIONS = ['.ipynb'];
+
+// Where the main session may still write while the mode is on. Anything that is
+// not code (docs, config, data) is writable too; see isAllowedPath.
 const ALLOWED_PATH_PARTS = [/tracker/i, /\/run\/reports\//, /\/reports\//, /brief/i];
 const FEATURE_RECORD = /\/features\/[^/]+\.md$/;
 const PLAN_DIR = /\/plans\//;
@@ -140,6 +145,8 @@ function isAllowedPath(filePath, cwd) {
     // Normalise separators first so every pattern below only has to know "/".
     const p = path.resolve(cwd || '/', filePath).replace(/\\/g, '/');
     const base = p.slice(p.lastIndexOf('/') + 1);
+    const ext = path.extname(base).toLowerCase();
+    if (!SOURCE_EXTENSIONS.includes(ext) && !EXTRA_CODE_EXTENSIONS.includes(ext)) return true;
     if (/handoff/i.test(base)) return true;
     if (ALLOWED_PATH_PARTS.some((re) => re.test(p))) return true;
     if (FEATURE_RECORD.test(p)) return true;
