@@ -1,8 +1,9 @@
 {
-  "_comment": "Model steering. Copy to <repo>/.claude/sdlc-review.json (this repo) or ~/.claude/sdlc-review.json (all repos). Every key is optional; the values shown are the defaults. Models: haiku, sonnet, opus. Rules apply to the round they name; among matching rules the strongest model wins.",
+  "_comment": "Model steering. Copy to <repo>/.claude/sdlc-review.json (this repo) or ~/.claude/sdlc-review.json (all repos). Every key is optional; the values shown are the defaults. Models: haiku, sonnet, opus. `mainModel` (haiku, sonnet or opus) is read from the user file only, never a repo file: the session-start hook copies it into settings.json `model`, applied from the next session; set it with /sdlc:main-model. Rules apply to the round they name; among matching rules the strongest model wins.",
   "round1": "sonnet",
   "round2": "opus",
   "maxRounds": 2,
+  "mainModel": "sonnet",
   "planReview": { "source": "opus", "consistency": "sonnet", "cap": 2 },
   "orchestrator": { "bashNudge": 8 },
   "rules": [

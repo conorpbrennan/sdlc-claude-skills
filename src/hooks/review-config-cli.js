@@ -3,6 +3,7 @@
 //
 //   node review-config-cli.js review --round <n> [--model <m>] [--repo <path>]
 //   node review-config-cli.js plan-review [--repo <path>]
+//   node review-config-cli.js main-model show [--repo <path>] | set <haiku|sonnet|opus> | off
 //
 // Prints one JSON line. The repo defaults to the git toplevel of the cwd and
 // the staged paths come from `git diff --cached`. A git failure does not stop
@@ -11,7 +12,7 @@
 
 const path = require('path');
 const { gitRead, locateRepo, splitNul } = require('./lib/git-read.js');
-const { resolveReview, resolvePlanReview } = require('./lib/review-config.js');
+const { resolveReview, resolvePlanReview, resolveMainModel, setMainModel } = require('./lib/review-config.js');
 
 // A flag with no value (last on the line, or followed by another flag) is a
 // usage error, reported through `error`.
@@ -28,6 +29,27 @@ function parseArgs(argv) {
         i++;
     }
     return out;
+}
+
+// main-model show | set <m> | off against the user sdlc-review.json. Exit 2 for
+// a usage error or an invalid model, 1 when the file cannot be safely written.
+function mainModelCmd(argv, repoRoot) {
+    const [, action, value] = argv;
+    if (action === 'show') {
+        console.log(JSON.stringify(resolveMainModel({ repoRoot })));
+        return 0;
+    }
+    if (action !== 'off' && !(action === 'set' && value && !value.startsWith('--'))) {
+        console.error('usage: review-config-cli.js main-model show | set <haiku|sonnet|opus> | off');
+        return 2;
+    }
+    const res = setMainModel(action === 'off' ? null : value);
+    if (res.ok) {
+        console.log(JSON.stringify({ mainModel: action === 'off' ? null : value, path: res.path }));
+        return 0;
+    }
+    console.error(`${res.path}: ${res.error}`);
+    return /is not one of/.test(res.error) ? 2 : 1;
 }
 
 function main(argv) {
@@ -47,6 +69,7 @@ function main(argv) {
         }
     }
 
+    if (cmd === 'main-model') return mainModelCmd(argv, repoRoot);
     if (cmd === 'plan-review') {
         const res = resolvePlanReview({ repoRoot });
         res.warnings = warnings.concat(res.warnings);
