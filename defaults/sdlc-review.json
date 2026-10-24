@@ -1,0 +1,4 @@
+{
+  "_comment": "Plugin defaults, read by the SessionStart hook when the user file ~/.claude/sdlc-review.json has no mainModel key. mainModel is copied into settings.json as the main-session model. Opt out with /sdlc:main-model off.",
+  "mainModel": "sonnet"
+}

@@ -212,6 +212,8 @@ function resolveOrchestrator({ repoRoot } = {}) {
 }
 
 const MAIN_MODEL_KEY = 'mainModel';
+// Stored in place of a model name: the owner opted out of the shipped default.
+const MAIN_MODEL_OFF = 'off';
 
 // The main-session model. Read from the user file only: settings.json `model`
 // is global, so a per-repo value would flip it on every session start in a
@@ -221,8 +223,8 @@ const MAIN_MODEL_KEY = 'mainModel';
 //   repoRoot: Repository root; its file is read only to warn that its
 //     mainModel is ignored.
 // Returns:
-//   { mainModel, path, warnings }: mainModel is a model name or null (unset or
-//   invalid); path is the user file.
+//   { mainModel, path, warnings }: mainModel is a model name or null (unset,
+//   opted out with "off", or invalid); path is the user file.
 function resolveMainModel({ repoRoot } = {}) {
     const layers = loadLayers(repoRoot);
     const [repo, user] = layers;
@@ -232,26 +234,27 @@ function resolveMainModel({ repoRoot } = {}) {
     }
     let mainModel = null;
     const v = user.data ? user.data[MAIN_MODEL_KEY] : undefined;
-    if (v !== undefined) {
+    if (v !== undefined && v !== MAIN_MODEL_OFF) {
         if (isModel(v)) mainModel = v;
         else warnings.push(`${user.path}: ${MAIN_MODEL_KEY} ${JSON.stringify(v)} is not valid; ignored`);
     }
     return { mainModel, path: user.path, warnings };
 }
 
-// Sets or removes mainModel in the user file, keeping every other key. Creates
-// the file when missing (set only). Refuses a symlink, unreadable or malformed
+// Sets mainModel in the user file, keeping every other key. Creates the file
+// when missing. "off" is stored as the owner's opt-out from the plugin's shipped
+// default, so removing the key would bring the default back. Refuses a symlink, unreadable or malformed
 // file, or a non-object top level, writing nothing. The write is a temp file
 // plus rename.
 //
 // Args:
-//   model: A model name, or null to remove the key.
+//   model: A model name, or MAIN_MODEL_OFF.
 // Returns:
 //   { ok, path, error }: error is set only when ok is false.
 function setMainModel(model) {
     const target = userConfigPath();
     const tmp = `${target}.tmp.${process.pid}`;
-    if (model !== null && !isModel(model)) return { ok: false, path: target, error: `${JSON.stringify(model)} is not one of ${MODELS.join(', ')}` };
+    if (model !== MAIN_MODEL_OFF && !isModel(model)) return { ok: false, path: target, error: `${JSON.stringify(model)} is not one of ${MODELS.join(', ')}` };
     try {
         let data = {};
         let mode = 0o600;
@@ -262,11 +265,9 @@ function setMainModel(model) {
             mode = fs.statSync(target).mode & 0o777;
         } catch (e) {
             if (!(e && e.code === 'ENOENT')) return { ok: false, path: target, error: `cannot be read as JSON (${e.code || e.message})` };
-            if (model === null) return { ok: true, path: target };
             fs.mkdirSync(path.dirname(target), { recursive: true });
         }
-        if (model === null) delete data[MAIN_MODEL_KEY];
-        else data[MAIN_MODEL_KEY] = model;
+        data[MAIN_MODEL_KEY] = model;
         fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode });
         fs.renameSync(tmp, target);
         return { ok: true, path: target };
@@ -278,4 +279,4 @@ function setMainModel(model) {
     }
 }
 
-module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV };
+module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV };

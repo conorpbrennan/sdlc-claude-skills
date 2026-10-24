@@ -5,7 +5,9 @@ description: Set, show or clear the persistent main-session model (haiku, sonnet
 # Main-session model
 
 `mainModel` in `~/.claude/sdlc-review.json` is the model the main session
-starts on. At session start the SessionStart hook copies it into `model` in
+starts on. The plugin ships `defaults/sdlc-review.json` with `mainModel` set
+to `sonnet`, used whenever the user file has no `mainModel` key, so a fresh
+install runs on Sonnet with no setup. At session start the SessionStart hook copies it into `model` in
 `~/.claude/settings.json` when the two differ. The owner's settings.json may
 be reset on container start; `sdlc-review.json` is not, so this sticks.
 
@@ -18,7 +20,7 @@ be reset on container start; `sdlc-review.json` is not, so this sticks.
 `<plugin>` is `${CLAUDE_PLUGIN_ROOT}`.
 
 1. Empty: run `node <plugin>/src/hooks/review-config-cli.js main-model show`.
-   Print `mainModel` from its JSON (null means unset) and its warnings. Then
+   Print `mainModel` from its JSON (null means unset or `off`; with no key the shipped default `sonnet` applies) and its warnings. Then
    print the `model` key of `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json`
    (`grep '"model"'` is enough; say "not set" if absent). If the
    `ANTHROPIC_MODEL` environment variable is set (test with
@@ -26,8 +28,9 @@ be reset on container start; `sdlc-review.json` is not, so this sticks.
    both.
 2. `haiku`, `sonnet` or `opus`: run
    `node <plugin>/src/hooks/review-config-cli.js main-model set <model>`.
-3. `off`: run `... main-model off`. This removes `mainModel`; settings.json
-   `model` is left as it is.
+3. `off`: run `... main-model off`. This stores `"mainModel": "off"`, which
+   opts out of the shipped Sonnet default; settings.json `model` is left as it
+   is. Removing the key by hand brings the default back.
 4. Any other argument: say the four valid values and stop.
 5. After a set or off, tell the owner in two lines: the change applies from
    the next session, and `/model` changes only the current session.

@@ -274,7 +274,14 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     assert('main-model show prints the value', JSON.parse(mm(['show']).stdout).mainModel, 'sonnet');
     assert('main-model leaves no temp file', fs.readdirSync(path.dirname(mmFile)).filter(f => f.includes('.tmp.')), []);
     r = mm(['off']);
-    assert('main-model off removes only that key', [r.status, read()], [0, { round1: 'haiku', rules: [{ paths: ['a'] }] }]);
+    assert('main-model off writes an explicit opt-out and keeps other keys', [r.status, read()],
+        [0, { round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'off' }]);
+    r = mm(['show']);
+    assert('main-model show after off: null and no warning', [r.status, JSON.parse(r.stdout).mainModel, JSON.parse(r.stdout).warnings], [0, null, []]);
+    fs.rmSync(mmFile);
+    r = mm(['off']);
+    assert('main-model off creates the file when missing', [r.status, read()], [0, { mainModel: 'off' }]);
+    fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }] }));
     r = mm(['set', 'gpt']);
     assert('main-model set with a bad model exits 2, file unchanged', [r.status, read().mainModel], [2, undefined]);
     r = mm(['set']);

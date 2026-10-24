@@ -25,7 +25,11 @@
 //     to haiku, sonnet or opus and it differs from "model" in settings.json, it
 //     writes "model" there, with the timestamped backup "-pre-sdlc-model". A
 //     repo file's mainModel is ignored with a warning, since settings.json is
-//     global. An invalid value does nothing. With ANTHROPIC_MODEL set it warns
+//     global. An invalid value does nothing. When the user file has no
+//     "mainModel" key, or there is no user file, the plugin's own
+//     defaults/sdlc-review.json supplies it (sonnet), and it overwrites an
+//     existing "model". "off" is the owner's opt-out; a malformed user file
+//     gets no default. With ANTHROPIC_MODEL set it warns
 //     that the variable overrides settings (the name only, never the value).
 //   - Self-contained (no requires beyond node built-ins), so the test can run
 //     a copy of it against a scratch instructions/ directory. For that reason
@@ -91,11 +95,13 @@ const BACKUP_SUFFIX_MODEL = '-pre-sdlc-model';
 const MODEL_SETTING = 'model';
 const MAIN_MODEL_KEY = 'mainModel';
 const MAIN_MODELS = ['haiku', 'sonnet', 'opus'];   // as MODELS in lib/review-config.js
+const MAIN_MODEL_OFF = 'off';   // as MAIN_MODEL_OFF in lib/review-config.js
 const PLUGIN_NAME = 'sdlc';   // canonical spelling: lib/plugin-names.js
 const MAIN_MODEL_COMMAND = '/' + PLUGIN_NAME + ':main-model';
 const REVIEW_CONFIG_NAME = 'sdlc-review.json';
 const REVIEW_CONFIG_USER_ENV = 'SDLC_REVIEW_CONFIG_USER';
 const MODEL_ENV = 'ANTHROPIC_MODEL';
+const DEFAULTS_FILE = path.join(__dirname, '..', '..', 'defaults', REVIEW_CONFIG_NAME);
 
 const FIX = 'Fix: run `./uninstall.sh` from a checkout of the pre-plugin toolchain or of ' +
     'this repo, then restart Claude Code.';
@@ -320,18 +326,27 @@ function mainModelLines(cwd) {
     const override = process.env[REVIEW_CONFIG_USER_ENV];
     const userFile = override || path.join(os.homedir(), '.claude', REVIEW_CONFIG_NAME);
     const user = readObject(userFile);
-    const wanted = user ? user[MAIN_MODEL_KEY] : undefined;
+    let wanted = user ? user[MAIN_MODEL_KEY] : undefined;
+    if (wanted === MAIN_MODEL_OFF) return lines;
+    // The shipped default applies only when the owner has not spoken: no key, in
+    // a readable file or no file at all. A malformed file gets nothing.
+    let shipped = false;
+    if (wanted === undefined && (user || !fs.existsSync(userFile))) {
+        const defaults = readObject(DEFAULTS_FILE);
+        wanted = defaults ? defaults[MAIN_MODEL_KEY] : undefined;
+        shipped = true;
+    }
     if (!MAIN_MODELS.includes(wanted)) return lines;
     const dir = configDir();
     const current = readObject(path.join(dir, SETTINGS_FILE));
     if (!current || current[MODEL_SETTING] !== wanted) {
         const written = writeSetting(dir, MODEL_SETTING, wanted, BACKUP_SUFFIX_MODEL);
         if (written) {
-            lines.push(warning(`main-session model set to \`${wanted}\` in ${written} from ${MAIN_MODEL_KEY} in
-                ${userFile}. It applies from the next session. Change it with the main-model command of this plugin (${MAIN_MODEL_COMMAND}); \`/model\`
+            const from = shipped ? `the plugin's shipped default (${DEFAULTS_FILE})` : `${MAIN_MODEL_KEY} in ${userFile}`;
+            lines.push(warning(`main-session model set to \`${wanted}\` in ${written} from ${from}. It applies from the next session. Change it with the main-model command of this plugin (${MAIN_MODEL_COMMAND}); \`/model\`
                 changes only the current session. Tell the owner this at the start of the session.`));
         } else {
-            lines.push(warning(`${MAIN_MODEL_KEY} is ${wanted} in ${userFile}, but ${path.join(dir, SETTINGS_FILE)}
+            lines.push(warning(`${MAIN_MODEL_KEY} is ${wanted} (${shipped ? 'the shipped default' : userFile}), but ${path.join(dir, SETTINGS_FILE)}
                 could not be updated (a symlink, not a JSON object, or not writable). Set \`"${MODEL_SETTING}":
                 "${wanted}"\` there by hand. Tell the owner this at the start of the session.`));
         }
