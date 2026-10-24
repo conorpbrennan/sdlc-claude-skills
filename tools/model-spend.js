@@ -8,6 +8,9 @@
 //   --json         print the same data as JSON
 //   --projects DIR transcripts root (default ~/.claude/projects)
 //
+// Section 8 shows the main-session prompt cache by backend (claude.ai login vs
+// gateway/API key), split by cache-write TTL, with the cost of rebuilds after idle gaps.
+//
 // Files are streamed line by line: the real tree is about 2 GB.
 'use strict';
 
@@ -29,6 +32,15 @@ const PRICES = {
 const CACHE_WRITE_5M = 1.25;
 const CACHE_WRITE_1H = 2;
 const OTHER = 'other';
+
+// Main-session prompt cache. Claude Code picks the TTL by auth route: 1h on a
+// claude.ai login (inference_geo "global"), 5m through an API key or gateway.
+const BACKEND_CLAUDE_AI = 'claude.ai';
+const BACKEND_GATEWAY = 'gateway/API';
+const GEO_CLAUDE_AI = 'global';
+const REBUILD_MIN_MS = 5 * 60 * 1000;
+const REBUILD_MAX_MS = 60 * 60 * 1000;
+const FIX_LINE = 'export CLAUDE_CODE_PROMPT_CACHE_TTL=1h';
 
 const MS_PER_DAY = 86400 * 1000;
 const DEFAULT_DAYS = 7;
@@ -90,6 +102,21 @@ function cost(model, u) {
         + w1h * p.input * CACHE_WRITE_1H
         + (u.cache_read_input_tokens || 0) * p.cacheRead
         + (u.output_tokens || 0) * p.output) / 1e6;
+}
+
+// Cache-write cost of one API message, split by TTL.
+//
+// Args:
+//   model: model id string.
+//   u: the message's usage object.
+// Returns:
+//   {w5m, w1h} in USD, both 0 for a model with no price.
+function cacheWriteCost(model, u) {
+    const p = PRICES[family(model)];
+    if (!p) return { w5m: 0, w1h: 0 };
+    const t1h = ((u.cache_creation || {}).ephemeral_1h_input_tokens) || 0;
+    const t5m = (u.cache_creation_input_tokens || 0) - t1h;
+    return { w5m: t5m * p.input * CACHE_WRITE_5M / 1e6, w1h: t1h * p.input * CACHE_WRITE_1H / 1e6 };
 }
 
 // Sorts one tool call into a turn group and label.
@@ -233,7 +260,14 @@ async function buildReport(root, days, now) {
         contextBands: {},
         opusDispatches: { count: 0, cost: 0, withTier: 0, withoutTier: 0, unmatched: 0 },
         reviews: { byAgent: {}, highestRound: {} },
+        promptCache: {},
     };
+    for (const name of [BACKEND_CLAUDE_AI, BACKEND_GATEWAY]) {
+        rep.promptCache[name] = {
+            sessions: 0, write5m: 0, write1h: 0,
+            rebuild5to60m: { calls: 0, cost: 0 }, rebuildOver60m: { calls: 0, cost: 0 },
+        };
+    }
     for (const b of BANDS) rep.contextBands[b.name] = { calls: 0, cost: 0, costPerCall: 0 };
 
     const seen = new Set();
@@ -248,6 +282,8 @@ async function buildReport(root, days, now) {
         const { messages, lastText } = await readTranscript(file, since, dispatches);
         const meta = isSub ? readMeta(file) : {};
         const agentType = meta.agentType || UNKNOWN;
+        const backendsSeen = new Set();
+        let prevTs = null;
         const sub = { file, agentType, toolUseId: meta.toolUseId, cost: 0, firstTs: Infinity, expensive: false, lastText, calls: 0 };
 
         for (const [key, msg] of messages) {
@@ -267,6 +303,19 @@ async function buildReport(root, days, now) {
                 continue;
             }
             const u = msg.usage;
+            // Prompt cache: one backend per call; a rebuild is a cache write after an idle gap.
+            const backend = u.inference_geo === GEO_CLAUDE_AI ? BACKEND_CLAUDE_AI : BACKEND_GATEWAY;
+            const pc = rep.promptCache[backend];
+            if (!backendsSeen.has(backend)) { backendsSeen.add(backend); pc.sessions += 1; }
+            const w = cacheWriteCost(msg.model, u);
+            pc.write5m += w.w5m;
+            pc.write1h += w.w1h;
+            if (prevTs !== null && msg.ts - prevTs > REBUILD_MIN_MS) {
+                const rb = msg.ts - prevTs <= REBUILD_MAX_MS ? pc.rebuild5to60m : pc.rebuildOver60m;
+                rb.calls += 1;
+                rb.cost += w.w5m + w.w1h;
+            }
+            prevTs = msg.ts;
             const size = (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.input_tokens || 0);
             const band = BANDS.find((b) => size >= b.lo && size < b.hi);
             bump(rep.contextBands[band.name], c);
@@ -389,6 +438,15 @@ function render(rep) {
     const hr = rep.reviews.highestRound;
     const rounds = Object.keys(hr).sort((a, b) => a - b);
     out.push('  highest round reached per session: ' + (rounds.length ? rounds.map((r) => `round ${r}: ${hr[r]} session(s)`).join(', ') : 'none'));
+    out.push('');
+    out.push('8. Main-session prompt cache, by backend (cache writes only)');
+    for (const name of Object.keys(rep.promptCache)) {
+        const x = rep.promptCache[name];
+        out.push(`  ${name.padEnd(12)} sessions ${String(x.sessions).padStart(4)}  5m writes ${usd(x.write5m).padStart(9)}  1h writes ${usd(x.write1h).padStart(9)}`
+            + `  rebuild 5-60m ${usd(x.rebuild5to60m.cost).padStart(8)} (${x.rebuild5to60m.calls})  rebuild >60m ${usd(x.rebuildOver60m.cost).padStart(8)} (${x.rebuildOver60m.calls})`);
+    }
+    const gw = rep.promptCache[BACKEND_GATEWAY];
+    if (gw.write5m > gw.write1h) out.push(`  Gateway/API sessions wrote mostly 5m cache. Fix: ${FIX_LINE}`);
     return out.join('\n');
 }
 

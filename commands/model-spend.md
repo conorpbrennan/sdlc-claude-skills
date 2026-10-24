@@ -35,7 +35,8 @@ Lead with the finding, in plain short sentences: what share of the window's cost
 - how much main-session Opus cost is work (reading, editing, running tests) versus orchestration versus text-only turns. Work on Opus is the leak this steering aims to close;
 - how much cost sits in calls with main context over 300K;
 - how many Opus sub-agents ran, and how many prompts had no `TIER: opus:` line (the reason starts with plan writing, plan source review, fail triage or user asked);
-- review rounds: any session that reached round 3 or more.
+- review rounds: any session that reached round 3 or more;
+- main-session prompt cache (section 8): cache-write cost by backend and TTL, and the rebuild cost after idle gaps. If it prints the `CLAUDE_CODE_PROMPT_CACHE_TTL=1h` fix line, repeat it.
 
 State that the figures are list-price estimates. Do not pad. If the tool prints "No transcripts found", say so and stop.
 </output>
