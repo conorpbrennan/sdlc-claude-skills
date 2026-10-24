@@ -23,9 +23,30 @@ place only: the session-start hook sets `promptCacheTtl` and `model` in
 `settings.json` (see [Model steering](#model-steering)). See
 [Configuration](#configuration) and the `.claude/*.json.example` templates.
 
+### Install
+
+Add this repository as a marketplace, then install the plugin from it:
+
+```
+/plugin marketplace add conorpbrennan/sdlc-claude-skills
+/plugin install sdlc@sdlc-claude-skills
+```
+
+or from a shell:
+
+```bash
+claude plugin marketplace add conorpbrennan/sdlc-claude-skills
+claude plugin install sdlc@sdlc-claude-skills
+```
+
+Then restart Claude Code; the plugin loads only after a restart.
+
 ### Update
 
 Two steps, in order: refresh the marketplace, then update the plugin from it.
+If either step fails with `Marketplace 'sdlc-claude-skills' not found` or
+`Plugin "sdlc" not found`, the marketplace was never added on this machine:
+run the [Install](#install) steps instead.
 
 ```
 /plugin marketplace update sdlc-claude-skills
