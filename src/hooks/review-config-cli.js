@@ -12,7 +12,7 @@
 
 const path = require('path');
 const { gitRead, locateRepo, splitNul } = require('./lib/git-read.js');
-const { resolveReview, resolvePlanReview, resolveMainModel, setMainModel } = require('./lib/review-config.js');
+const { resolveReview, resolvePlanReview, resolveMainModel, setMainModel, MAIN_MODEL_OFF } = require('./lib/review-config.js');
 
 // A flag with no value (last on the line, or followed by another flag) is a
 // usage error, reported through `error`.
@@ -43,9 +43,10 @@ function mainModelCmd(argv, repoRoot) {
         console.error('usage: review-config-cli.js main-model show | set <haiku|sonnet|opus> | off');
         return 2;
     }
-    const res = setMainModel(action === 'off' ? null : value);
+    const model = action === 'off' ? MAIN_MODEL_OFF : value;
+    const res = setMainModel(model);
     if (res.ok) {
-        console.log(JSON.stringify({ mainModel: action === 'off' ? null : value, path: res.path }));
+        console.log(JSON.stringify({ mainModel: model, path: res.path }));
         return 0;
     }
     console.error(`${res.path}: ${res.error}`);

@@ -40,6 +40,10 @@ function assert(name, actual, expected) {
 function scratchHome(settings, opts) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-home-'));
     const target = path.join(home, '.claude', 'settings.json');
+    // Opted out of the shipped main-model default, so tests about other things
+    // see no model line. The main-model rows replace or remove this file.
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'sdlc-review.json'), JSON.stringify({ mainModel: 'off' }));
     if (opts && opts.dir) {
         fs.mkdirSync(target, { recursive: true });
     } else if (settings !== undefined) {
@@ -263,7 +267,7 @@ console.log('\nA hook the legacy wiring never had is not a legacy install:');
 console.log('\nAn expanded home path is detected too:');
 {
     const home = scratchHome();
-    fs.mkdirSync(path.join(home, '.claude'));
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
     fs.writeFileSync(path.join(home, '.claude', 'settings.json'),
         JSON.stringify(wired(`node "${home}/.claude/hooks/enforce-co-author.js"`)));
     const ctx = context(run(HOOK, home));
@@ -504,8 +508,14 @@ const backupsOf = home => fs.readdirSync(path.join(home, '.claude')).filter(f =>
         ['set, differs', { mainModel: 'opus' }, { model: 'sonnet', theme: 'dark' }, undefined, {}, 'opus', true, true, 'from the next session'],
         ['set, settings missing', { mainModel: 'haiku' }, undefined, undefined, {}, 'haiku', true, false, '/sdlc:main-model'],
         ['set, equal', { mainModel: 'opus' }, { model: 'opus' }, undefined, {}, 'opus', false, false, ''],
-        ['absent', { round1: 'sonnet' }, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
-        ['no user file', undefined, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['absent, settings already sonnet', { round1: 'sonnet' }, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['no user file, settings already sonnet', undefined, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['shipped default, absent key overrides opus', { round1: 'sonnet' }, { model: 'opus', theme: 'dark' }, undefined, {}, 'sonnet', true, true, 'shipped default'],
+        ['shipped default, no user file overrides opus', undefined, { model: 'opus' }, undefined, {}, 'sonnet', true, true, 'shipped default'],
+        ['shipped default, settings has no model', undefined, { theme: 'dark' }, undefined, {}, 'sonnet', true, true, 'shipped default'],
+        ['shipped default, settings missing', undefined, undefined, undefined, {}, 'sonnet', true, false, 'shipped default'],
+        ['explicit off keeps the user model', { mainModel: 'off' }, { model: 'opus' }, undefined, {}, 'opus', false, false, ''],
+        ['explicit mainModel beats the shipped default', { mainModel: 'opus' }, { model: 'sonnet' }, undefined, {}, 'opus', true, true, ''],
         ['invalid value', { mainModel: 'gpt' }, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
         ['malformed user file', '{nope', { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
         ['repo layer ignored', undefined, { model: 'sonnet' }, { mainModel: 'opus' }, {}, 'sonnet', false, false, 'ignored'],
@@ -527,6 +537,8 @@ const backupsOf = home => fs.readdirSync(path.join(home, '.claude')).filter(f =>
         fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
         if (user !== undefined) {
             fs.writeFileSync(path.join(home, '.claude', 'sdlc-review.json'), typeof user === 'string' ? user : JSON.stringify(user));
+        } else {
+            fs.rmSync(path.join(home, '.claude', 'sdlc-review.json'), { force: true });
         }
         const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-cwd-'));
         if (repo !== undefined) {
