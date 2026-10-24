@@ -256,7 +256,59 @@ j = JSON.parse(nr.stdout);
 assert('outside a repo falls back to defaults', [j.model, j.agent], ['sonnet', 'code-reviewer']);
 assert('outside a repo warns', j.warnings.length > 0, true);
 
+// main-model: show, set and off, against the user file only.
+{
+    const mmDir = fs.mkdtempSync(path.join(sb, 'mm-'));
+    const mmFile = path.join(mmDir, 'sub', 'sdlc-review.json');
+    const mmEnv = { ...process.env, SDLC_REVIEW_CONFIG_USER: mmFile };
+    const mm = args => spawnSync('node', [cli, 'main-model', ...args], { cwd: mmDir, encoding: 'utf-8', env: mmEnv });
+    const read = () => JSON.parse(fs.readFileSync(mmFile, 'utf-8'));
+    let r = mm(['show']);
+    assert('main-model show, no file: exit 0, null', [r.status, JSON.parse(r.stdout).mainModel], [0, null]);
+    r = mm(['set', 'opus']);
+    assert('main-model set creates the file', [r.status, read()], [0, { mainModel: 'opus' }]);
+    fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'opus' }));
+    r = mm(['set', 'sonnet']);
+    assert('main-model set merges and keeps other keys', [r.status, read()],
+        [0, { round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'sonnet' }]);
+    assert('main-model show prints the value', JSON.parse(mm(['show']).stdout).mainModel, 'sonnet');
+    assert('main-model leaves no temp file', fs.readdirSync(path.dirname(mmFile)).filter(f => f.includes('.tmp.')), []);
+    r = mm(['off']);
+    assert('main-model off removes only that key', [r.status, read()], [0, { round1: 'haiku', rules: [{ paths: ['a'] }] }]);
+    r = mm(['set', 'gpt']);
+    assert('main-model set with a bad model exits 2, file unchanged', [r.status, read().mainModel], [2, undefined]);
+    r = mm(['set']);
+    assert('main-model set with no model exits 2', r.status, 2);
+    fs.writeFileSync(mmFile, '{nope');
+    r = mm(['set', 'opus']);
+    assert('malformed file: refused, untouched', [r.status, fs.readFileSync(mmFile, 'utf-8')], [1, '{nope']);
+    r = mm(['off']);
+    assert('malformed file: off refused too', [r.status, fs.readFileSync(mmFile, 'utf-8')], [1, '{nope']);
+    fs.writeFileSync(mmFile, JSON.stringify({ mainModel: 'opus' }));
+    const real = path.join(mmDir, 'real.json');
+    fs.renameSync(mmFile, real);
+    fs.symlinkSync(real, mmFile);
+    r = mm(['set', 'haiku']);
+    assert('symlinked file: refused, still a link to the same bytes',
+        [r.status, fs.lstatSync(mmFile).isSymbolicLink(), JSON.parse(fs.readFileSync(real, 'utf-8')).mainModel], [1, true, 'opus']);
+    // An invalid stored value is reported, not echoed as a model.
+    fs.rmSync(mmFile);
+    fs.writeFileSync(mmFile, JSON.stringify({ mainModel: 'gpt' }));
+    r = JSON.parse(mm(['show']).stdout);
+    assert('show: invalid stored value is null with a warning', [r.mainModel, r.warnings.length > 0], [null, true]);
+    // A repo file's mainModel is ignored.
+    fs.writeFileSync(mmFile, JSON.stringify({ mainModel: 'haiku' }));
+    fs.mkdirSync(path.join(mmDir, '.claude'));
+    fs.writeFileSync(path.join(mmDir, '.claude', 'sdlc-review.json'), JSON.stringify({ mainModel: 'opus' }));
+    r = JSON.parse(spawnSync('node', [cli, 'main-model', 'show', '--repo', mmDir], { encoding: 'utf-8', env: mmEnv }).stdout);
+    assert('show: repo mainModel ignored with a warning', [r.mainModel, r.warnings.some(w => w.includes('mainModel'))], ['haiku', true]);
+}
+
 fs.rmSync(sb, { recursive: true, force: true });
+
+const hookSrc = fs.readFileSync(path.join(__dirname, 'session-start-instructions.js'), 'utf8');
+const hookModels = /const MAIN_MODELS = (\[[^\]]*\])/.exec(hookSrc);
+assert('hook MAIN_MODELS matches lib MODELS', hookModels && JSON.parse(hookModels[1].replace(/'/g, '"')), cfg.MODELS);
 
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);

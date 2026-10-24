@@ -53,7 +53,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `code-reviewer` / `code-reviewer-deep` agents | `agents/` |
 | `implementer` agent (Sonnet, turn budget) | `agents/implementer.md` |
 | `verifier` agent (read-only, outside-in) | `agents/verifier.md` |
-| `/commit-prep`, `/review-timing`, `/feature`, `/feature-new` | `commands/` |
+| `/commit-prep`, `/review-timing`, `/feature`, `/feature-new`, `/sdlc:main-model` | `commands/` |
 | `/verify` and its recorder | `commands/verify.md`, `src/hooks/record-verification.js` |
 | `gh pr create` gate (advisory by default) | `src/hooks/pre-pr-verify.js` |
 | Pre/post-commit hooks and their libs | `src/hooks/` |

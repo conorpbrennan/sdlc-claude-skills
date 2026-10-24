@@ -55,7 +55,7 @@ const CLEAN_HOME = scratchHome();
 
 // Run a hook script with stdin `{}`; parse stdout as exactly one JSON object.
 // Env vars the cache-TTL check reads; stripped so the machine's own do not leak in.
-const INHERITED = /^(ANTHROPIC_|CLAUDE_CODE_|FORCE_|ENABLE_)/;
+const INHERITED = /^(ANTHROPIC_|CLAUDE_CODE_|FORCE_|ENABLE_|SDLC_)/;
 
 function run(script, home, extraEnv, cwd) {
     const h = home || CLEAN_HOME;
@@ -488,6 +488,91 @@ console.log('\nThe prompt-cache TTL warning and the 1h write:');
         assert('CLAUDE_CONFIG_DIR: its settings are read (second run silent)', again.includes('prompt cache'), false);
         fs.rmSync(home, { recursive: true, force: true });
         fs.rmSync(cfg, { recursive: true, force: true });
+    }
+}
+
+console.log('\nThe main-session model (mainModel in the user sdlc-review.json):');
+const DIRECT = '> sdlc plugin WARNING: main-session model set to';
+const settingsOf = home => path.join(home, '.claude', 'settings.json');
+const backupsOf = home => fs.readdirSync(path.join(home, '.claude')).filter(f => f.includes('.backup.'));
+{
+    // Each row: name, user sdlc-review.json (object or string, undefined = none),
+    // settings.json, repo sdlc-review.json, env, expected model after the run,
+    // expect a "set to" line, expect a backup, extra text the output must hold.
+    const SYMLINK = 'symlink';
+    const rows = [
+        ['set, differs', { mainModel: 'opus' }, { model: 'sonnet', theme: 'dark' }, undefined, {}, 'opus', true, true, 'from the next session'],
+        ['set, settings missing', { mainModel: 'haiku' }, undefined, undefined, {}, 'haiku', true, false, '/sdlc:main-model'],
+        ['set, equal', { mainModel: 'opus' }, { model: 'opus' }, undefined, {}, 'opus', false, false, ''],
+        ['absent', { round1: 'sonnet' }, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['no user file', undefined, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['invalid value', { mainModel: 'gpt' }, { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['malformed user file', '{nope', { model: 'sonnet' }, undefined, {}, 'sonnet', false, false, ''],
+        ['repo layer ignored', undefined, { model: 'sonnet' }, { mainModel: 'opus' }, {}, 'sonnet', false, false, 'ignored'],
+        ['repo layer ignored, user wins', { mainModel: 'haiku' }, { model: 'sonnet' }, { mainModel: 'opus' }, {}, 'haiku', true, true, 'ignored'],
+        ['ANTHROPIC_MODEL set', { mainModel: 'opus' }, { model: 'sonnet' }, undefined, { ANTHROPIC_MODEL: 'claude-x-1' }, 'opus', true, true, 'ANTHROPIC_MODEL'],
+        ['ANTHROPIC_MODEL set, equal', { mainModel: 'opus' }, { model: 'opus' }, undefined, { ANTHROPIC_MODEL: 'claude-x-1' }, 'opus', false, false, 'ANTHROPIC_MODEL'],
+        ['ANTHROPIC_MODEL, no mainModel', undefined, { model: 'sonnet' }, undefined, { ANTHROPIC_MODEL: 'claude-x-1' }, 'sonnet', false, false, ''],
+        ['settings symlinked', { mainModel: 'opus' }, SYMLINK, undefined, {}, 'sonnet', false, false, ''],
+        ['settings malformed', { mainModel: 'opus' }, '{nope', undefined, {}, undefined, false, false, ''],
+    ];
+    for (const [name, user, settings, repo, env, model, direct, backup, extra] of rows) {
+        const home = scratchHome(settings === SYMLINK ? { model: 'sonnet' } : settings);
+        let real = null;
+        if (settings === SYMLINK) {
+            real = path.join(home, 'dotfiles.json');
+            fs.renameSync(settingsOf(home), real);
+            fs.symlinkSync(real, settingsOf(home));
+        }
+        fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+        if (user !== undefined) {
+            fs.writeFileSync(path.join(home, '.claude', 'sdlc-review.json'), typeof user === 'string' ? user : JSON.stringify(user));
+        }
+        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-cwd-'));
+        if (repo !== undefined) {
+            fs.mkdirSync(path.join(cwd, '.claude'));
+            fs.writeFileSync(path.join(cwd, '.claude', 'sdlc-review.json'), JSON.stringify(repo));
+        }
+        const before = fs.existsSync(settingsOf(home)) ? fs.readFileSync(real || settingsOf(home), 'utf-8') : null;
+        const r = run(HOOK, home, env, cwd);
+        const ctx = context(r);
+        assert(`${name}: exit 0 and one JSON object`, r.status === 0 && r.json !== null, true);
+        assert(`${name}: "set to" line`, ctx.includes(DIRECT), direct);
+        if (extra) assert(`${name}: output holds "${extra}"`, ctx.includes(extra), true);
+        let after = null;
+        try {
+            after = JSON.parse(fs.readFileSync(settingsOf(home), 'utf-8'));
+        } catch (e) { /* malformed or missing */ }
+        if (model !== undefined) assert(`${name}: model in settings.json`, after && after.model, model);
+        assert(`${name}: backup`, backupsOf(home).length, backup ? 1 : 0);
+        if (direct && settings && typeof settings === 'object') {
+            const { model: ignored, ...rest } = after;
+            const { model: ignored2, ...restBefore } = settings;
+            assert(`${name}: other keys kept`, rest, restBefore);
+            assert(`${name}: backup holds the old file`,
+                JSON.parse(fs.readFileSync(path.join(home, '.claude', backupsOf(home)[0]), 'utf-8')), settings);
+            assert(`${name}: message names the file`, ctx.includes(settingsOf(home)), true);
+        }
+        if (!direct && settings !== undefined) {
+            assert(`${name}: settings bytes unchanged`, fs.readFileSync(real || settingsOf(home), 'utf-8'), before);
+        }
+        if (real) assert(`${name}: still a symlink`, fs.lstatSync(settingsOf(home)).isSymbolicLink(), true);
+        assert(`${name}: no env value printed`, r.stdout.includes('claude-x-1'), false);
+        assert(`${name}: no temp file left`, fs.readdirSync(path.join(home, '.claude')).some(f => f.includes('.tmp.')), false);
+        fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(cwd, { recursive: true, force: true });
+    }
+    {
+        const home = scratchHome({ model: 'sonnet' });
+        fs.writeFileSync(path.join(home, '.claude', 'sdlc-review.json'), JSON.stringify({ mainModel: 'opus' }));
+        run(HOOK, home);
+        const bytes = fs.readFileSync(settingsOf(home), 'utf-8');
+        const again = context(run(HOOK, home));
+        assert('second run: silent', again.includes(DIRECT), false);
+        assert('second run: file unchanged, one backup', [fs.readFileSync(settingsOf(home), 'utf-8'), backupsOf(home).length], [bytes, 1]);
+        const named = backupsOf(home)[0];
+        assert('backup is named pre-sdlc-model', /-pre-sdlc-model$/.test(named), true);
+        fs.rmSync(home, { recursive: true, force: true });
     }
 }
 

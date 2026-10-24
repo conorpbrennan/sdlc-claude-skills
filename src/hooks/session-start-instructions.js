@@ -20,8 +20,17 @@
 //     <config dir>/sdlc-cache-ttl.disabled exists, when settings.json is not a
 //     JSON object, or on any write error; it warns instead. The setting applies
 //     from the next session, not the one that wrote it.
+//   - Second side effect, same writer: when the user's sdlc-review.json (env
+//     SDLC_REVIEW_CONFIG_USER, else ~/.claude/sdlc-review.json) sets "mainModel"
+//     to haiku, sonnet or opus and it differs from "model" in settings.json, it
+//     writes "model" there, with the timestamped backup "-pre-sdlc-model". A
+//     repo file's mainModel is ignored with a warning, since settings.json is
+//     global. An invalid value does nothing. With ANTHROPIC_MODEL set it warns
+//     that the variable overrides settings (the name only, never the value).
 //   - Self-contained (no requires beyond node built-ins), so the test can run
-//     a copy of it against a scratch instructions/ directory.
+//     a copy of it against a scratch instructions/ directory. For that reason
+//     mainModel is read here directly with minimal validation instead of
+//     requiring lib/review-config.js, which a copy would not find.
 
 const fs = require('fs');
 const os = require('os');
@@ -77,7 +86,16 @@ const TTL_5M = '5m';
 const SETTINGS_FILE = 'settings.json';
 const CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
 const OPT_OUT_FILE = 'sdlc-cache-ttl.disabled';
-const BACKUP_SUFFIX = '-pre-sdlc-cache-ttl';
+const BACKUP_SUFFIX_TTL = '-pre-sdlc-cache-ttl';
+const BACKUP_SUFFIX_MODEL = '-pre-sdlc-model';
+const MODEL_SETTING = 'model';
+const MAIN_MODEL_KEY = 'mainModel';
+const MAIN_MODELS = ['haiku', 'sonnet', 'opus'];   // as MODELS in lib/review-config.js
+const PLUGIN_NAME = 'sdlc';   // canonical spelling: lib/plugin-names.js
+const MAIN_MODEL_COMMAND = '/' + PLUGIN_NAME + ':main-model';
+const REVIEW_CONFIG_NAME = 'sdlc-review.json';
+const REVIEW_CONFIG_USER_ENV = 'SDLC_REVIEW_CONFIG_USER';
+const MODEL_ENV = 'ANTHROPIC_MODEL';
 
 const FIX = 'Fix: run `./uninstall.sh` from a checkout of the pre-plugin toolchain or of ' +
     'this repo, then restart Claude Code.';
@@ -183,20 +201,22 @@ function settingsFiles(cwd) {
     return out;
 }
 
-// Set "promptCacheTtl": "1h" in the user settings file, keeping every other key.
+// Set one key in the user settings file, keeping every other key.
 // An existing file is copied to a timestamped backup first, and the new text goes
 // through a temp file in the same directory plus a rename.
 //
 // Args:
 //     dir: The config directory.
+//     key: The settings key to set.
+//     value: Its new value.
+//     backupSuffix: Ends the backup file name, after the timestamp.
 // Returns:
-//     The settings file path on success, or '' when nothing was written (opt-out
-//     file present, file not a JSON object, or any read or write error).
-function writeTtlSetting(dir) {
+//     The settings file path on success, or '' when nothing was written (file a
+//     symlink or not a JSON object, or any read or write error).
+function writeSetting(dir, key, value, backupSuffix) {
     const target = path.join(dir, SETTINGS_FILE);
     const tmp = `${target}.tmp.${process.pid}`;
     try {
-        if (fs.existsSync(path.join(dir, OPT_OUT_FILE))) return '';
         let settings = {};
         let mode = 0o600;
         let existed = true;
@@ -214,11 +234,11 @@ function writeTtlSetting(dir) {
         }
         if (existed) {
             const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '');
-            fs.copyFileSync(target, `${target}.backup.${stamp}${BACKUP_SUFFIX}`);
+            fs.copyFileSync(target, `${target}.backup.${stamp}${backupSuffix}`);
         } else {
             fs.mkdirSync(dir, { recursive: true });
         }
-        settings[TTL_SETTING] = TTL_1H;
+        settings[key] = value;
         fs.writeFileSync(tmp, JSON.stringify(settings, null, 2) + '\n', { mode });
         fs.renameSync(tmp, target);
         return target;
@@ -256,7 +276,8 @@ function cacheTtlWarning(cwd) {
     if (explicit.length > 0) return '';
     if (truthy(lookup(ENABLE_1H_ENV))) return '';
     const dir = configDir();
-    const written = writeTtlSetting(dir);
+    const written = fs.existsSync(path.join(dir, OPT_OUT_FILE))
+        ? '' : writeSetting(dir, TTL_SETTING, TTL_1H, BACKUP_SUFFIX_TTL);
     if (written) {
         return warning(`sdlc set \`"${TTL_SETTING}": "${TTL_1H}"\` in ${written} so the main conversation
             uses the 1-hour prompt cache on this per-token backend. It takes effect from the next
@@ -268,6 +289,59 @@ function cacheTtlWarning(cwd) {
         \`export ${TTL_ENV}=${TTL_1H}\` to the shell profile that launches claude, or set
         \`"${TTL_SETTING}": "${TTL_1H}"\` in ~/.claude/settings.json. Sub-agents stay on 5m by design.
         Tell the owner this at the start of the session.`);
+}
+
+// A JSON object parsed from a file, or null when missing, unreadable or not an object.
+function readObject(file) {
+    try {
+        const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// The lines for the main-session model: set "model" in the user settings from
+// mainModel in the user sdlc-review.json, warn about a repo-level mainModel,
+// and warn when ANTHROPIC_MODEL overrides settings.
+//
+// Args:
+//     cwd: The session's working directory.
+// Returns:
+//     An array of lines, empty when mainModel is unset or invalid in the user
+//     file and no repo file sets it. No environment value is ever included.
+function mainModelLines(cwd) {
+    const lines = [];
+    const repo = readObject(path.join(cwd, '.claude', REVIEW_CONFIG_NAME));
+    if (repo && repo[MAIN_MODEL_KEY] !== undefined) {
+        lines.push(warning(`${path.join(cwd, '.claude', REVIEW_CONFIG_NAME)} sets ${MAIN_MODEL_KEY}; it is
+            ignored, because it is read from the user file only (settings.json is global).`));
+    }
+    const override = process.env[REVIEW_CONFIG_USER_ENV];
+    const userFile = override || path.join(os.homedir(), '.claude', REVIEW_CONFIG_NAME);
+    const user = readObject(userFile);
+    const wanted = user ? user[MAIN_MODEL_KEY] : undefined;
+    if (!MAIN_MODELS.includes(wanted)) return lines;
+    const dir = configDir();
+    const current = readObject(path.join(dir, SETTINGS_FILE));
+    if (!current || current[MODEL_SETTING] !== wanted) {
+        const written = writeSetting(dir, MODEL_SETTING, wanted, BACKUP_SUFFIX_MODEL);
+        if (written) {
+            lines.push(warning(`main-session model set to \`${wanted}\` in ${written} from ${MAIN_MODEL_KEY} in
+                ${userFile}. It applies from the next session. Change it with the main-model command of this plugin (${MAIN_MODEL_COMMAND}); \`/model\`
+                changes only the current session. Tell the owner this at the start of the session.`));
+        } else {
+            lines.push(warning(`${MAIN_MODEL_KEY} is ${wanted} in ${userFile}, but ${path.join(dir, SETTINGS_FILE)}
+                could not be updated (a symlink, not a JSON object, or not writable). Set \`"${MODEL_SETTING}":
+                "${wanted}"\` there by hand. Tell the owner this at the start of the session.`));
+        }
+    }
+    if (typeof process.env[MODEL_ENV] === 'string' && process.env[MODEL_ENV] !== '') {
+        lines.push(warning(`the ${MODEL_ENV} environment variable overrides the settings \`${MODEL_SETTING}\`, so
+            ${MAIN_MODEL_KEY} has no effect until ${MODEL_ENV} is removed from the shell profile that launches
+            claude. Tell the owner this at the start of the session.`));
+    }
+    return lines;
 }
 
 // The cwd from the hook's stdin JSON, else process.cwd().
@@ -299,11 +373,17 @@ function build() {
     } catch (e) {
         head = warning(`the check for a pre-plugin install failed (${e && e.message}). ${FIX}`);
     }
+    const cwd = sessionCwd();
     let ttl = '';
     try {
-        ttl = cacheTtlWarning(sessionCwd());
+        ttl = cacheTtlWarning(cwd);
     } catch (e) { /* a failed check yields no warning */ }
+    let model = [];
+    try {
+        model = mainModelLines(cwd);
+    } catch (e) { /* a failed check yields no lines */ }
     const parts = SECTIONS.map(readSection);
+    parts.unshift(...model);
     if (ttl) parts.unshift(ttl);
     if (head) parts.unshift(head);
     return parts.join('\n\n---\n\n') + '\n';
