@@ -37,6 +37,18 @@
 
 ## History
 
+- 2026-10-24 `104f841` — Make the main-session model persistent: mainModel and /sdlc:main-model
+  - .claude-plugin/plugin.json
+  - .claude/sdlc-review.json.example
+  - CLAUDE.md
+  - README.md
+  - commands/main-model.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-review-config.js
+  - src/hooks/test-session-start-instructions.js
+
 - 2026-10-24 `2ca90c8` — model-spend: report main-session prompt cache TTL and rebuild cost by backend
   - .claude-plugin/plugin.json
   - commands/model-spend.md
