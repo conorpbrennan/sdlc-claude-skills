@@ -265,6 +265,8 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     const read = () => JSON.parse(fs.readFileSync(mmFile, 'utf-8'));
     let r = mm(['show']);
     assert('main-model show, no file: exit 0, null', [r.status, JSON.parse(r.stdout).mainModel], [0, null]);
+    assert('main-model show, no file: the shipped default is the effective model',
+        [JSON.parse(r.stdout).effective, JSON.parse(r.stdout).source], ['sonnet', 'default']);
     r = mm(['set', 'opus']);
     assert('main-model set creates the file', [r.status, read()], [0, { mainModel: 'opus' }]);
     fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'opus' }));
@@ -272,12 +274,21 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     assert('main-model set merges and keeps other keys', [r.status, read()],
         [0, { round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'sonnet' }]);
     assert('main-model show prints the value', JSON.parse(mm(['show']).stdout).mainModel, 'sonnet');
+    fs.writeFileSync(mmFile, JSON.stringify({ mainModel: 'opus' }));
+    r = JSON.parse(mm(['show']).stdout);
+    assert('main-model show, user value: effective is it, source user', [r.effective, r.source], ['opus', 'user']);
+    fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'sonnet' }));
     assert('main-model leaves no temp file', fs.readdirSync(path.dirname(mmFile)).filter(f => f.includes('.tmp.')), []);
     r = mm(['off']);
     assert('main-model off writes an explicit opt-out and keeps other keys', [r.status, read()],
         [0, { round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'off' }]);
     r = mm(['show']);
     assert('main-model show after off: null and no warning', [r.status, JSON.parse(r.stdout).mainModel, JSON.parse(r.stdout).warnings], [0, null, []]);
+    assert('main-model show after off: no effective model, source off', [JSON.parse(r.stdout).effective, JSON.parse(r.stdout).source], [null, 'off']);
+    fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku' }));
+    r = JSON.parse(mm(['show']).stdout);
+    assert('main-model show, file without the key: default applies', [r.mainModel, r.effective, r.source], [null, 'sonnet', 'default']);
+    fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'off' }));
     fs.rmSync(mmFile);
     r = mm(['off']);
     assert('main-model off creates the file when missing', [r.status, read()], [0, { mainModel: 'off' }]);
@@ -303,6 +314,10 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     fs.writeFileSync(mmFile, JSON.stringify({ mainModel: 'gpt' }));
     r = JSON.parse(mm(['show']).stdout);
     assert('show: invalid stored value is null with a warning', [r.mainModel, r.warnings.length > 0], [null, true]);
+    assert('show: invalid stored value gets no effective model', [r.effective, r.source], [null, 'none']);
+    fs.writeFileSync(mmFile, '{nope');
+    r = JSON.parse(mm(['show']).stdout);
+    assert('show: malformed file gets no default', [r.mainModel, r.effective, r.source], [null, null, 'none']);
     // A repo file's mainModel is ignored.
     fs.writeFileSync(mmFile, JSON.stringify({ mainModel: 'haiku' }));
     fs.mkdirSync(path.join(mmDir, '.claude'));
@@ -316,6 +331,10 @@ fs.rmSync(sb, { recursive: true, force: true });
 const hookSrc = fs.readFileSync(path.join(__dirname, 'session-start-instructions.js'), 'utf8');
 const hookModels = /const MAIN_MODELS = (\[[^\]]*\])/.exec(hookSrc);
 assert('hook MAIN_MODELS matches lib MODELS', hookModels && JSON.parse(hookModels[1].replace(/'/g, '"')), cfg.MODELS);
+const hookOff = /const MAIN_MODEL_OFF = '([^']*)'/.exec(hookSrc);
+assert('hook MAIN_MODEL_OFF matches lib MAIN_MODEL_OFF', hookOff && hookOff[1], cfg.MAIN_MODEL_OFF);
+const shipped = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'defaults', 'sdlc-review.json'), 'utf8'));
+assert('shipped default mainModel is a valid model', cfg.MODELS.includes(shipped.mainModel), true);
 
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);

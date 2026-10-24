@@ -20,7 +20,7 @@ be reset on container start; `sdlc-review.json` is not, so this sticks.
 `<plugin>` is `${CLAUDE_PLUGIN_ROOT}`.
 
 1. Empty: run `node <plugin>/src/hooks/review-config-cli.js main-model show`.
-   Print `mainModel` from its JSON (null means unset or `off`; with no key the shipped default `sonnet` applies) and its warnings. Then
+   Print `effective` (the model the next session start applies; null means none) and `source` (`user`, `default` for the shipped Sonnet, `off` or `none`) from its JSON and its warnings. Then
    print the `model` key of `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json`
    (`grep '"model"'` is enough; say "not set" if absent). If the
    `ANTHROPIC_MODEL` environment variable is set (test with
