@@ -17,9 +17,15 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- CLAUDE.md
+- README.md
+- commands/fit.md
 - tools/test-usage-fit.js
 - tools/usage-fit.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-25 `d8f7183` — Add usage-fit: per-week context, reset, model and cache indicators from local transcripts
+  - .claude-plugin/plugin.json
+  - tools/test-usage-fit.js
+  - tools/usage-fit.js

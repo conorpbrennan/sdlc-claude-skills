@@ -66,6 +66,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | Orchestrator mode hook and `/sdlc:orchestrate` | `src/hooks/orchestrator-mode.js`, `commands/orchestrate.md` |
 | `/sdlc:handoff` | `commands/handoff.md` |
 | `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js` |
+| `/sdlc:fit` and its tool | `commands/fit.md`, `tools/usage-fit.js` |
 
 See `README.md` for how the pieces fit together at run time.
 

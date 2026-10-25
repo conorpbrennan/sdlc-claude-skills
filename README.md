@@ -10,7 +10,7 @@ engineering workflow lives apart from the domain skills.
 Plugin components are namespaced, so commands and skills are invoked with
 the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
 `/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:orchestrate`, `/sdlc:handoff`,
-`/sdlc:model-spend`, `/sdlc:main-model`, `/sdlc:plan-spec`,
+`/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:plan-spec`,
 `/sdlc:code-review-pre-commit` and `/sdlc:code-review-implementer`. The review
 agents are `sdlc:code-reviewer` and `sdlc:code-reviewer-deep`; the plan-step
 agent is `sdlc:implementer`; the verification agent is `sdlc:verifier`.
@@ -151,7 +151,7 @@ into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
 | `agents/implementer.md` | `sdlc:implementer` (Sonnet, 80 turns) | the plan-step implementer; at 60 turns it wraps up, past 80 it reports PARTIAL |
 | `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
-| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:orchestrate`, `/sdlc:handoff`, `/sdlc:model-spend`, `/sdlc:main-model` | slash commands |
+| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:orchestrate`, `/sdlc:handoff`, `/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model` | slash commands |
 | `commands/verify.md` | `/sdlc:verify` | dispatches the verifier, then runs the recorder |
 | `hooks/hooks.json` | registered while the plugin is enabled | wires `src/hooks/*.js` to events through `${CLAUDE_PLUGIN_ROOT}` |
 | `src/hooks/*.js`, `src/hooks/lib/*.js` (not `test-*`) | run in place from the cache | the gates and their shared helpers |
@@ -214,6 +214,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/sdlc:orchestrate on\|off\|status` | Switch orchestrator mode: the main session dispatches sub-agents instead of editing source. See [Model steering](#model-steering). |
 | `/sdlc:handoff [slug]` | Write a fixed-form handoff file in `tmp/` and print the line that resumes it in a fresh session. |
 | `/sdlc:model-spend [--days N] [--json]` | Weekly model spend from local transcripts: Opus and Sonnet share, orchestration, untiered Opus dispatches, review round 3, and (section 8) main-session prompt cache cost by backend and TTL. |
+| `/sdlc:fit [--days N] [--json]` | Usage fit from local transcripts: context size, resets, model mix, cache backend, and what each lever would have saved on your own history. Counterfactuals at list prices, not forecasts. |
 | `/sdlc:main-model [haiku\|sonnet\|opus\|off]` | Show or set the persistent main-session model (`mainModel` in `~/.claude/sdlc-review.json`; Sonnet by default). `off` opts out of the shipped default. |
 | `/verify` | Check the branch against its `## Acceptance` criteria: dispatches the `verifier` sub-agent, then records the result in the feature record and, on PASS, writes `.git/.claude-last-verify`. Needs a clean tree. Never commits or opens the PR. |
 
@@ -416,6 +417,7 @@ Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc
 - **Orchestrator mode** (`orchestrator-mode.js`). It turns on when the main session reads a handoff or tracker file (a `.md` named `*handoff*`, or with `tracker` in its path) or runs `plan-spec run`. While on, it denies Edit, Write, MultiEdit and NotebookEdit in the main session on code: the extensions in `lib/source-files.js` (`SOURCE_EXTENSIONS`) plus `.ipynb`. Every other file stays writable: docs, config, data, handoffs, trackers, reports, briefs, plans, feature records, memory and temp files. Code under `/tmp` and the handoff, tracker, report and brief paths stays writable too. After `bashNudge` inline Bash commands with no Agent dispatch in between, it adds a nudge to hand the work to a sub-agent. Commands such as `git add`, `git status`, `gh` and `printf` do not count. Sub-agents are never affected. `/sdlc:orchestrate on|off|status` is the owner's switch; after `off`, triggers do not turn it back on in that session.
 - **`/sdlc:handoff [slug]`** writes `tmp/HANDOFF-<slug>-<timestamp>.md` in a fixed form (next action, state, in flight, decisions, verified facts) and prints the line to paste into a fresh session. Reading that file turns orchestrator mode on there.
 - **`/sdlc:model-spend [--days N] [--json]`** reads `~/.claude/projects` transcripts and reports the Opus and Sonnet share of cost, main-session work versus orchestration, Opus sub-agents without a `TIER` line, and sessions that reached review round 3. List-price estimates, local files only.
+- **`/sdlc:fit [--days N] [--json]`** reads the same transcripts and prints, per week, how much main-session cost sits in long-context calls, how often you reset, the model mix and the cache rebuild cost, then prices four levers (context reset, Sonnet for the main session, a 1h main-session cache, a cap on runaway sub-agents) and a combined figure that does not double-count. These are counterfactuals on your own history at list prices, not forecasts. Read-only; the output holds numbers and fixed labels only.
 
 ## Configuration
 

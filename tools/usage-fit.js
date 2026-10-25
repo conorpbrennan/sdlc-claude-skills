@@ -2,7 +2,8 @@
 // Usage indicator report, read from local Claude Code transcripts
 // (~/.claude/projects/**/*.jsonl). Per 7-day week it reports where main-session
 // cost sits: context size, /clear resets, Opus work turns, long sub-agent runs and
-// prompt-cache rebuilds. Step 2 of the usage-fit feature turns these into levers.
+// prompt-cache rebuilds. It then prices four levers as counterfactuals on that
+// same history, and a combined figure that does not add overlapping levers.
 //
 // Usage: node tools/usage-fit.js <transcripts-dir> [--days N] [--json]
 //   --days N  window in days (default 56); weeks are 7-day buckets ending now
@@ -71,6 +72,31 @@ const KIND_USER_CONTENT = 'user-content-shape';
 // The turn group that counts as work: the group classifyTurn gives a Read.
 const GROUP_WORK = classifyTurn([{ name: 'Read', input: {} }]).group;
 const FAMILY_OPUS = 'opus';
+const FAMILY_FABLE = 'fable';
+const FAMILY_SONNET = 'sonnet';
+const FAMILY_OTHER = 'other'; // a model with no price: costs $0 today
+// Fixed family labels for the model mix. Model ids are never printed.
+const FAMILIES = [FAMILY_OPUS, FAMILY_FABLE, FAMILY_SONNET, 'haiku', FAMILY_OTHER];
+
+const SUB_CAP_AFTER_CALL = 40;
+
+// Lever names, confidence labels and fixed wording.
+const LEVER_CONTEXT_RESET = 'context-reset';
+const LEVER_SONNET_MAIN = 'sonnet-main';
+const LEVER_CACHE_1H_MAIN = 'cache-1h-main';
+const LEVER_CAP_RUNAWAY = 'cap-runaway-subagents';
+const CONF_ARITHMETIC = 'arithmetic';
+const CONF_UPPER_BOUND = 'upper-bound';
+const CONF_ESTIMATE = 'estimate';
+// Sonnet is half the Opus price on input, output and cache writes but the same on
+// cache reads, and cache reads dominate at long context. So moving Opus or Fable
+// work turns to Sonnet saves 30% (reads dominate) to 45% (writes and output dominate).
+const SONNET_SAVE_LOW = 0.30;
+const SONNET_SAVE_HIGH = 0.45;
+// A 1h main-session cache avoids about this share of the gateway rebuild cost.
+const CACHE_1H_AVOIDED = 0.70;
+const NOTE_COUNTERFACTUAL = 'Counterfactuals on your own history at list prices, not forecasts.';
+const NOTE_CLAUDE_AI = 'claude.ai sessions are subscription: dollars are list-price estimates; read the shares.';
 
 // Counts one unrecognised-shape occurrence.
 //
@@ -204,6 +230,8 @@ function newWeek(index, endMs) {
         bands: BAND_NAMES.map((name) => ({ name, calls: 0, cost: 0 })),
         segments: 0, clearStarts: 0, handoffStarts: 0, resetsPer100Calls: 0, handoffStyleShare: 0,
         opusCost: 0, opusWorkCost: 0,
+        mix: Object.fromEntries(FAMILIES.map((f) => [f, { cost: 0, workCost: 0 }])),
+        unpricedCalls: 0, subCost: 0, subCostPast40: 0, gatewayRebuildCost: 0,
         subRuns: 0, subRunsOver100: 0, subCalls: 0,
         gatewayCalls: 0, gatewayCost: 0, claudeaiCalls: 0, claudeaiCost: 0,
         write5mCost: 0, write1hCost: 0, rebuildGaps: 0, rebuildCost: 0,
@@ -249,7 +277,12 @@ async function buildWeeks(dir, opts) {
             if (!w) continue;
             w.subRuns += 1;
             w.subCalls += all.length;
-            if (all.length > SUB_LONG_RUN_CALLS) w.subRunsOver100 += 1;
+            for (const e of all) w.subCost += cost(e.model, e.usage);
+            if (all.length > SUB_LONG_RUN_CALLS) {
+                w.subRunsOver100 += 1;
+                for (const e of all.slice(SUB_CAP_AFTER_CALL)) w.subCostPast40 += cost(e.model, e.usage);
+            }
+            for (const e of all) if (family(e.model) === FAMILY_OTHER) w.unpricedCalls += 1;
             if (readAgentType(file).startsWith(SDLC_AGENT_PREFIX)) w.sdlcAgentRuns += 1;
             continue;
         }
@@ -282,9 +315,14 @@ async function buildWeeks(dir, opts) {
                 const b = w.bands[bandOf(ctx)];
                 b.calls += 1;
                 b.cost += c;
-                if (family(e.model) === FAMILY_OPUS) {
+                const fam = family(e.model);
+                const isWork = classifyTurn(e.tools).group === GROUP_WORK;
+                w.mix[fam].cost += c;
+                if (isWork) w.mix[fam].workCost += c;
+                if (fam === FAMILY_OTHER) w.unpricedCalls += 1;
+                if (fam === FAMILY_OPUS) {
                     w.opusCost += c;
-                    if (classifyTurn(e.tools).group === GROUP_WORK) w.opusWorkCost += c;
+                    if (isWork) w.opusWorkCost += c;
                 }
                 if (claudeai) { w.claudeaiCalls += 1; w.claudeaiCost += c; } else { w.gatewayCalls += 1; w.gatewayCost += c; }
                 const cc = u.cache_creation_input_tokens || 0;
@@ -299,7 +337,9 @@ async function buildWeeks(dir, opts) {
                     const gap = (e.ts - prev.ts) / MS_PER_MIN;
                     if (gap > REBUILD_MIN_MIN && gap <= REBUILD_MAX_MIN) {
                         w.rebuildGaps += 1;
-                        w.rebuildCost += cost(e.model, { cache_creation_input_tokens: Math.min(cc, prev.ctx) });
+                        const rc = cost(e.model, { cache_creation_input_tokens: Math.min(cc, prev.ctx) });
+                        w.rebuildCost += rc;
+                        if (!claudeai) w.gatewayRebuildCost += rc;
                     }
                 }
             }
@@ -312,8 +352,93 @@ async function buildWeeks(dir, opts) {
         w.shareOver300 = w.mainCalls ? w.over300 / w.mainCalls : 0;
         w.resetsPer100Calls = w.mainCalls ? 100 * w.clearStarts / w.mainCalls : 0;
         w.handoffStyleShare = w.segments ? w.handoffStarts / w.segments : 0;
+        w.levers = computeLevers(w);
     }
-    return { weeks, unknown };
+    const total = sumWeeks(weeks);
+    const window = {
+        mainCost: total.mainCost,
+        unpricedModelCalls: total.unpricedCalls,
+        subCost: total.subCost,
+        totalCost: total.mainCost + total.subCost,
+        subCostPast40: total.subCostPast40,
+        modelMix: total.mix,
+        levers: computeLevers(total),
+        claudeAiOnly: total.mainCost > 0 && total.gatewayCost === 0,
+    };
+    return { weeks, unknown, window };
+}
+
+// Sums the additive counters of the week rows into one window row.
+//
+// Args:
+//   weeks: rows from buildWeeks, before or after their derived shares are set.
+// Returns:
+//   a week-shaped object holding the window totals (shares are not recomputed).
+function sumWeeks(weeks) {
+    const t = newWeek(0, 0);
+    for (const w of weeks) {
+        for (const k of Object.keys(t)) if (typeof t[k] === 'number' && k !== 'weeksAgo') t[k] += w[k];
+        w.bands.forEach((b, i) => { t.bands[i].calls += b.calls; t.bands[i].cost += b.cost; });
+        for (const f of FAMILIES) { t.mix[f].cost += w.mix[f].cost; t.mix[f].workCost += w.mix[f].workCost; }
+    }
+    return t;
+}
+
+// Prices the levers as counterfactuals on one row of history.
+//
+// Args:
+//   t: a week row or the window total from sumWeeks.
+// Returns:
+//   {levers, combined}. Each lever is {name, confidence, applies, reason, low, high,
+//   pctOfTotal}; reason is '' when it applies and low and high are 0 when it does not.
+//   combined is {low, high, pctOfTotal}. Percentages are of total cost (main plus sub-agents).
+//
+// The levers overlap, so the combined figure applies them in sequence: context-reset
+// first; then sonnet-main on the work-turn cost that remains, and cache-1h-main on the
+// rebuild cost that remains (both scaled by 1 minus context-reset's share of main
+// cost, since resetting removes that share of every long-context call); then
+// cap-runaway-subagents, which is sub-agent cost and independent. So combined is
+// at most the sum of the levers.
+function computeLevers(t) {
+    const main = t.mainCost;
+    const total = t.mainCost + t.subCost; // denominator of every percentage
+    const mk = (name, confidence, applies, reason, low, high) => ({
+        name, confidence, applies, reason: applies ? '' : reason,
+        low: applies ? low : 0, high: applies ? high : 0,
+        pctOfTotal: applies && total > 0 ? high / total : 0,
+    });
+
+    // context-reset: calls over 300K, minus the same number of calls at this
+    // history's under-100K cost per call.
+    const under = t.bands[0];
+    let crDollars = 0;
+    let crReason = '';
+    if (!under.calls) crReason = 'no calls under 100K context to compare against';
+    else if (!t.over300) crReason = 'no calls over 300K context';
+    else {
+        crDollars = t.costOver300 - t.over300 * (under.cost / under.calls);
+        if (crDollars <= 0) crReason = 'calls over 300K cost no more than calls under 100K';
+    }
+    const cr = mk(LEVER_CONTEXT_RESET, CONF_ARITHMETIC, crDollars > 0, crReason, crDollars, crDollars);
+    const keep = main > 0 ? 1 - cr.high / main : 1; // share of main cost left after a reset
+
+    const work = t.mix[FAMILY_OPUS].workCost + t.mix[FAMILY_FABLE].workCost;
+    const sm = mk(LEVER_SONNET_MAIN, CONF_ESTIMATE, work > 0,
+        'no Opus or Fable work-turn cost (already on Sonnet or no work turns)',
+        SONNET_SAVE_LOW * work, SONNET_SAVE_HIGH * work);
+
+    const c1h = mk(LEVER_CACHE_1H_MAIN, CONF_ESTIMATE, t.gatewayRebuildCost > 0,
+        'no gateway cache rebuild cost (claude.ai already gets the 1h cache)',
+        CACHE_1H_AVOIDED * t.gatewayRebuildCost, CACHE_1H_AVOIDED * t.gatewayRebuildCost);
+
+    // Upper bound: a fresh agent redoes some of the work past call 40, so not all of it is saved.
+    const cap = mk(LEVER_CAP_RUNAWAY, CONF_UPPER_BOUND, t.subCostPast40 > 0,
+        'no sub-agent run over 100 calls', t.subCostPast40, t.subCostPast40);
+
+    const levers = [cr, sm, c1h, cap];
+    const low = cr.low + sm.low * keep + c1h.low * keep + cap.low;
+    const high = cr.high + sm.high * keep + c1h.high * keep + cap.high;
+    return { levers, combined: { low, high, pctOfTotal: total > 0 ? high / total : 0 } };
 }
 
 // Rows for the human table: label and a formatter over a week.
@@ -337,24 +462,52 @@ const ROWS = [
     ['cache: 5m write cost', (w) => usd(w.write5mCost)],
     ['cache: 1h write cost', (w) => usd(w.write1hCost)],
     ['cache: rebuild cost', (w) => usd(w.rebuildCost)],
+    ...FAMILIES.map((f) => ['mix ' + f + ' cost / work', (w) => usd(w.mix[f].cost) + ' / ' + usd(w.mix[f].workCost)]),
+    ['sub-agent cost past call ' + SUB_CAP_AFTER_CALL, (w) => usd(w.subCostPast40)],
     ['sdlc commands', (w) => num(w.sdlcCommands)],
     ['sdlc agent runs', (w) => num(w.sdlcAgentRuns)],
 ];
+
+// Formats the lever section.
+//
+// Args:
+//   window: the window object from buildWeeks.
+// Returns:
+//   array of text lines.
+function renderLevers(window) {
+    const out = ['', 'Levers (whole window; total cost ' + usd(window.totalCost) + ' (main ' + usd(window.mainCost)
+        + ', sub-agents ' + usd(window.subCost) + '))'];
+    const range = (l) => (l.low === l.high ? usd(l.high) : usd(l.low) + '-' + usd(l.high));
+    for (const l of window.levers.levers) {
+        out.push(l.applies
+            ? '  ' + l.name + ': ' + range(l) + ' (' + pct(l.pctOfTotal) + ' of total cost), ' + l.confidence
+            : '  ' + l.name + ': not applicable, ' + l.reason);
+    }
+    const c = window.levers.combined;
+    out.push('  combined (levers applied in sequence, overlaps removed): ' + usd(c.low) + '-' + usd(c.high)
+        + ' (' + pct(c.pctOfTotal) + ' of total cost at the high end)');
+    out.push('');
+    out.push('unpriced-model calls: ' + window.unpricedModelCalls + ' (cost not included)');
+    out.push(NOTE_COUNTERFACTUAL);
+    if (window.claudeAiOnly) out.push(NOTE_CLAUDE_AI);
+    return out;
+}
 
 // Renders the weeks as a text table, one column per week, oldest first.
 //
 // Args:
 //   weeks: rows from buildWeeks.
+//   window: the window object from buildWeeks.
 // Returns:
-//   the table as a string.
-function render(weeks) {
+//   the table and lever section as a string.
+function render(weeks, window) {
     const label = Math.max(...ROWS.map((r) => r[0].length));
     const head = ['week starting'.padEnd(label)].concat(weeks.map((w) => w.weekStart.padStart(10)));
     const lines = [head.join('  ')];
     for (const [name, fmt] of ROWS) {
         lines.push([name.padEnd(label)].concat(weeks.map((w) => fmt(w).padStart(10))).join('  '));
     }
-    return lines.join('\n');
+    return lines.concat(renderLevers(window)).join('\n');
 }
 
 // Parses the command line.
@@ -398,13 +551,18 @@ async function main() {
         process.stderr.write((opts.error || 'transcripts directory not found') + '\nUsage: usage-fit.js <transcripts-dir> [--days N] [--json]\n');
         process.exit(EXIT_USAGE);
     }
-    const { weeks, unknown } = await buildWeeks(opts.dir, { days: opts.days, now: Date.now() });
+    const { weeks, unknown, window } = await buildWeeks(opts.dir, { days: opts.days, now: Date.now() });
     if (unknown.size) {
         const kinds = [...unknown].map(([k, n]) => k + '=' + n).join(', ');
         process.stderr.write('Unrecognised transcript shapes: ' + kinds + '\n');
         process.exit(EXIT_UNRECOGNISED);
     }
-    process.stdout.write((opts.json ? JSON.stringify({ weeks }, null, 2) : render(weeks)) + '\n');
+    process.stdout.write((opts.json ? JSON.stringify({
+        weeks,
+        window,
+        counterfactualNote: NOTE_COUNTERFACTUAL,
+        claudeAiNote: window.claudeAiOnly ? NOTE_CLAUDE_AI : null,
+    }, null, 2) : render(weeks, window)) + '\n');
 }
 
 if (require.main === module) {
