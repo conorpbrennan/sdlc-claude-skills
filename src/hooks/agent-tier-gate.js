@@ -17,6 +17,12 @@
 const { deny } = require('./lib/hook-output');
 const { withBudget } = require('./lib/context-budget');
 const { agent } = require('./lib/plugin-names');
+const { stepStates } = require('./lib/steps');
+
+const STEP_TIER = 'agent-tier-gate';
+const STEP_MODEL = 'agent-default-model';
+const STEP_BUDGET = 'context-budget';
+const ALL_ON = Object.freeze({ tier: true, model: true, budget: true });
 
 // Agent types whose model this gate steers. Every other type decides its own model:
 // sdlc:* reviewers via sdlc-review.json, fork by inheriting, user agents by frontmatter.
@@ -145,14 +151,16 @@ function updateOnly(updatedInput) {
 //
 // Args:
 //   toolInput: the Agent tool's input object.
+//   on: which steps are on, { tier, model, budget }; all on when omitted.
 // Returns:
 //   the object to print, or null to leave the call untouched.
-function decide(toolInput) {
-    const tier = decideTier(toolInput);
+function decide(toolInput, on = ALL_ON) {
+    const tier = decideTier(toolInput, on);
     if (tier && tier.hookSpecificOutput.permissionDecision === 'deny') return tier;
     try {
         const type = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type.trim() : '';
         if (!GATED_TYPES.has(type.toLowerCase())) return tier;
+        if (!on.budget) return tier;
         const base = tier ? tier.hookSpecificOutput.updatedInput : toolInput;
         const prompt = withBudget(base.prompt);
         if (prompt === null) return tier;
@@ -172,9 +180,11 @@ function decide(toolInput) {
 //
 // Args:
 //   toolInput: the Agent tool's input object.
+//   on: which steps are on, { tier, model, budget }; all on when omitted. The model
+//     step gates the no-model rewrite, the tier step gates the Opus/Fable branch.
 // Returns:
 //   the object to print, or null to leave the call untouched.
-function decideTier(toolInput) {
+function decideTier(toolInput, on = ALL_ON) {
     const type = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type.trim() : '';
     if (!GATED_TYPES.has(type.toLowerCase())) return null;
 
@@ -187,9 +197,11 @@ function decideTier(toolInput) {
         // allow skips an interactive permission prompt for this Agent call, and
         // deny rules still win. Accepted here: the rewrite only lowers the model
         // tier, and the rewrite needs a decision on the model change.
+        if (!on.model) return null;
         return allowWith({ ...toolInput, model: 'sonnet' });
     }
     if (EXPENSIVE_MODEL.test(model)) {
+        if (!on.tier) return null;
         const prompt = typeof toolInput.prompt === 'string' ? toolInput.prompt : '';
         const match = TIER_LINE.exec(prompt);
         const kind = match ? categoryKind(match[1]) : null;
@@ -205,6 +217,23 @@ function decideTier(toolInput) {
     return null;
 }
 
+// Asks the steps resolver which of this hook's three steps are on. One read. Warnings
+// go to stderr. A resolver failure counts as all on (unchanged behaviour).
+//
+// Args:
+//   cwd: the session's working directory, or undefined.
+// Returns:
+//   { tier, model, budget } booleans.
+function stepsOn(cwd) {
+    try {
+        const r = stepStates([STEP_TIER, STEP_MODEL, STEP_BUDGET], { cwd: cwd || process.cwd() });
+        for (const w of r.warnings) process.stderr.write(`agent-tier-gate: ${w}\n`);
+        return { tier: r.states[STEP_TIER].on, model: r.states[STEP_MODEL].on, budget: r.states[STEP_BUDGET].on };
+    } catch (e) {
+        return ALL_ON;
+    }
+}
+
 let raw = '';
 process.stdin.setEncoding('utf-8');
 process.stdin.on('data', (chunk) => { raw += chunk; });
@@ -213,7 +242,10 @@ process.stdin.on('end', () => {
         const input = JSON.parse(raw);
         const toolInput = input && input.tool_input;
         if (!toolInput || typeof toolInput !== 'object') return;
-        const out = decide(toolInput);
+        // Not my call: a type this gate does not steer never reads config.
+        const type = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type.trim() : '';
+        if (!GATED_TYPES.has(type.toLowerCase())) return;
+        const out = decide(toolInput, stepsOn(input.cwd));
         if (out) process.stdout.write(JSON.stringify(out));
     } catch (e) {
         // Fail open: a cost gate must never break a dispatch.

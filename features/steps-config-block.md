@@ -23,6 +23,7 @@
 - commands/orchestrate.md
 - commands/steps.md
 - docs/plans/steps-config-block/reports/1-implementer-1.md
+- docs/plans/steps-config-block/reports/10-implementer-1.md
 - docs/plans/steps-config-block/reports/2-implementer-1.md
 - docs/plans/steps-config-block/reports/3-implementer-1.md
 - docs/plans/steps-config-block/reports/4-implementer-1.md
@@ -33,6 +34,7 @@
 - docs/plans/steps-config-block/reports/9-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - skills/plan-spec/SKILL.md
+- src/hooks/agent-tier-gate.js
 - src/hooks/claude-attribution-note.js
 - src/hooks/enforce-co-author.js
 - src/hooks/enforce-review-implementer.js
@@ -46,9 +48,11 @@
 - src/hooks/pre-commit-hygiene.js
 - src/hooks/pre-commit-review.js
 - src/hooks/pre-pr-verify.js
+- src/hooks/read-trim.js
 - src/hooks/review-config-cli.js
 - src/hooks/session-start-feature.js
 - src/hooks/steps-cli.js
+- src/hooks/test-agent-tier-gate.js
 - src/hooks/test-claude-attribution-note.sh
 - src/hooks/test-enforce-co-author.sh
 - src/hooks/test-enforce-review-implementer.js
@@ -60,6 +64,7 @@
 - src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-pre-commit-review.js
 - src/hooks/test-pre-pr-verify.js
+- src/hooks/test-read-trim.js
 - src/hooks/test-review-config.js
 - src/hooks/test-session-start-feature.sh
 - src/hooks/test-steps-cli.js
@@ -67,6 +72,16 @@
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `11e637f` — steps: orchestrator-mode gains its permanent switch; enforce-review-implementer honours its step
+  - .claude-plugin/plugin.json
+  - commands/orchestrate.md
+  - docs/plans/steps-config-block/reports/9-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/enforce-review-implementer.js
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-enforce-review-implementer.js
+  - src/hooks/test-orchestrator-mode.js
 
 - 2026-10-25 `46ef586` — steps: the commit-convention hooks honour their steps, user file only
   - .claude-plugin/plugin.json

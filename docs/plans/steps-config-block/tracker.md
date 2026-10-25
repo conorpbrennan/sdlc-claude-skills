@@ -5,8 +5,8 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: dispatch the step 10 implementer (`agent-tier-gate.js` three steps and `read-trim.js`; plan Section 5 step 10 plus Section 2; ASSUMES LANDED 1). Step 9 built (orchestrator-mode 176/0, enforce-review-implementer 6/0, run-tests 45 files 0 failed), commit with this tracker pending review. Reviewer question for step 9: with the mode on, every inline Bash call reads config before counting; the plan's H1 exception allows it ("the nudge"), check the cost is acceptable.
-Last committed: step 8 `46ef586`, step 7 `8eae77e`, step 6 `d58a18d`, step 5 `c7a1049`.
+Next action: dispatch the step 11 implementer (`session-start-instructions.js` four standalone steps; plan Section 5 step 11 plus Section 2; ASSUMES LANDED 1). Step 10 built (agent-tier-gate 145/0, read-trim 29/0, run-tests 45 files 0 failed), commit with this tracker pending review. Reviewer notes for step 10: `agent-tier-gate` off also drops the plan-edit deny and the ask (they live in the Opus branch); read-trim reads the resolver for any sub-agent whole-file Read, small ones included.
+Last committed: step 9 `11e637f`, step 8 `46ef586`, step 7 `8eae77e`, step 6 `d58a18d`, step 5 `c7a1049`.
 Last committed: step 5 `c7a1049`, step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6af81c5`, commit 0 `81d7c19` (the plan).
 Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rewrites the README "Turning steps off" section; at step 13 verify it covers every step and every alias, and that `/sdlc:steps` is documented.
 
@@ -22,8 +22,8 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 | 6 | committed | d58a18d | 1 (PASS) | test-pending-review-gate 21/0; test-review-config 112/0; both steps are guard steps so no honoured repo-off row; reviewer advisory: test-review-config.js does not set CLAUDE_CONFIG_DIR or TDD_MANDATE_CONFIG (harmless for plan-review; set them in step 13) |
 | 7 | committed | 8eae77e | 1 (PASS) | hygiene suite 31/0; verify suite 63/0 (enforce mode, off approves); reviewer IMPORTANT, committed with the gap named: older cases in test-pre-commit-hygiene.sh do not isolate the user's sdlc-review.json |
 | 8 | committed | 46ef586 | 1 (PASS) | co-author 54/0; attribution-note 7/0; notify 10/0; all three are guard steps so no honoured repo-off row; reviewer advisories: no test for a steps.js-missing variant of the co-author crash (covered by the commit-command.js case); the co-author table merges stderr into stdout so it cannot prove H4 by itself |
-| 9 | built | (this commit) | | orchestrator-mode 176/0; enforce-review-implementer 6/0; non-guard area so repo off honoured |
-| 10 | not started | | | |
+| 9 | committed | 11e637f | 1 (PASS) | orchestrator-mode 176/0; enforce-review-implementer 6/0; non-guard area so repo off honoured; reviewer advisories committed with the gaps named |
+| 10 | built | (this commit) | | agent-tier-gate 145/0 (16 STEP_CASES rows); read-trim 29/0; non-guard area so repo off honoured |
 | 11 | not started | | | |
 | 12 | not started | | | |
 | 13 | not started | | | |
@@ -47,4 +47,6 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 - From step 5 report (UNRELATED): header comments in `src/hooks/pre-commit-review.js` around the TDD mandate block still point at `lib/tdd-order.js mandateInForce`, and the TDD block's remedy text does not mention the new `steps.tdd` switch. Update the comment and the remedy text (and its test) in step 13 or step 12.
 - From step 7 review (IMPORTANT, committed with the gap named): `src/hooks/test-pre-commit-hygiene.sh` older cases (outside the new step table) do not export `SDLC_REVIEW_CONFIG_USER`, `CLAUDE_CONFIG_DIR` or `TDD_MANDATE_CONFIG`; run directly with `{"steps":{"hygiene":false}}` in the user file, 15 of 31 fail. Export the three to scratch paths once at the top of the suite. `tools/run-tests.sh` already isolates `SDLC_REVIEW_CONFIG_USER`.
 - From step 7 review (ADVISORY, unverified): the hygiene red-by-mutation was not reproduced by the reviewer (scratch layout lacked `hygiene-repos.json.example`); the implementer's red run is the only evidence. On hygiene's off path `hook.start` is not logged, only `hook.end` with `via: 'step-off'`; the reviewer did not check whether `tools/analyze-review-timing.py` pairs start and end events. Check in step 13.
+- From step 9 review (ADVISORY): with the orchestrator mode on and a malformed config, each inline Bash call prints the config warning twice (once from `stepIsOff`, once from the existing `nudgeThreshold`). Resolve once per event. Stderr only.
+- From step 9 review (ADVISORY): a missing `lib/steps.js` makes `orchestrator-mode.js` and `enforce-review-implementer.js` exit 1 with a stack trace and no stdout (non-blocking in Claude Code), not the silent exit 0 the orchestrator-mode header comment promises. Matches other hooks with a missing lib. Fix the header comment or catch the require, decide in step 13.
 - From step 1 report (UNRELATED): `bash tools/run-tests.sh` takes about 111 s at -j 16, close to the 120 s default tool timeout. Run it with a long timeout or in the background.

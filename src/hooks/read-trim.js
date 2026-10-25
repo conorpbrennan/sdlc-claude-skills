@@ -7,8 +7,26 @@
 'use strict';
 
 const { trimRead } = require('./lib/read-trim');
+const { stepState } = require('./lib/steps');
 
 const TOOL_READ = 'Read';
+const STEP_ID = 'read-trim';
+
+// Asks the steps resolver whether this hook's step is off. Warnings go to stderr.
+//
+// Args:
+//   cwd: the session's working directory, or undefined.
+// Returns:
+//   true when the step is off. A resolver failure counts as on (unchanged behaviour).
+function stepIsOff(cwd) {
+    try {
+        const step = stepState(STEP_ID, { cwd: cwd || process.cwd() });
+        for (const w of step.warnings) process.stderr.write(`read-trim: ${w}\n`);
+        return !step.on;
+    } catch (e) {
+        return false;
+    }
+}
 
 // Decides what to print for one Read result.
 //
@@ -22,6 +40,7 @@ function decide(input) {
     const toolInput = input.tool_input;
     if (!toolInput || typeof toolInput !== 'object') return null;
     if (toolInput.offset != null || toolInput.limit != null) return null;
+    if (stepIsOff(input.cwd)) return null;
     const trimmed = trimRead(input.tool_response);
     if (!trimmed) return null;
     return { hookSpecificOutput: { hookEventName: 'PostToolUse', updatedToolOutput: trimmed } };

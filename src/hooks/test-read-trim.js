@@ -4,8 +4,16 @@
 require('./lib/isolate-git-env.js').isolateGitEnv();
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawnSync, execFileSync } = require('child_process');
+
+// Scratch config so no case reads the owner's real files.
+const sb = fs.mkdtempSync(path.join(os.tmpdir(), 'read-trim-'));
+const userCfg = path.join(sb, 'user-sdlc-review.json');
+process.env.SDLC_REVIEW_CONFIG_USER = userCfg;
+process.env.CLAUDE_CONFIG_DIR = path.join(sb, 'claude');
+process.env.TDD_MANDATE_CONFIG = path.join(sb, 'tdd.json');
 
 const HOOK = path.join(__dirname, 'read-trim.js');
 const HOOKS_JSON = path.join(__dirname, '..', '..', 'hooks', 'hooks.json');
@@ -126,6 +134,32 @@ console.log('trimRead pure function');
     })(), true);
     assert('exactly at threshold untouched', trimRead(event({}, 'y'.repeat(MAX_CHARS)).tool_response), null);
 }
+
+console.log('steps: read-trim switch');
+{
+    const repo = path.join(sb, 'repo');
+    fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    const repoCfg = path.join(repo, '.claude', 'sdlc-review.json');
+    const STEP_CASES = [
+        { name: 'default: trimmed', user: null, repo: null, trimmed: true },
+        { name: 'area off in the user file: untouched', user: { steps: { orchestration: false } }, repo: null, trimmed: false },
+        { name: 'step off inside an on area: untouched', user: { steps: { orchestration: { 'read-trim': false } } }, repo: null, trimmed: false },
+        { name: 'repo file off beats user on: untouched', user: { steps: { orchestration: true } }, repo: { steps: { orchestration: { 'read-trim': false } } }, trimmed: false },
+        { name: 'another step off: still trimmed', user: { steps: { orchestration: { 'context-budget': false } } }, repo: null, trimmed: true },
+    ];
+    for (const c of STEP_CASES) {
+        fs.rmSync(userCfg, { force: true });
+        fs.rmSync(repoCfg, { force: true });
+        if (c.user) fs.writeFileSync(userCfg, JSON.stringify(c.user));
+        if (c.repo) fs.writeFileSync(repoCfg, JSON.stringify(c.repo));
+        const r = run(JSON.stringify(event({ cwd: repo }, bigText)));
+        assert(c.name, [r.status, !!updated(r)], [0, c.trimmed]);
+    }
+    fs.rmSync(userCfg, { force: true });
+    fs.rmSync(repoCfg, { force: true });
+}
+fs.rmSync(sb, { recursive: true, force: true });
 
 console.log('hooks.json wiring');
 {
