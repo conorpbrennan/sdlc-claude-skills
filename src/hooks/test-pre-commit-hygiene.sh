@@ -33,8 +33,8 @@ check() {
     local desc="$1"
     local output="$2"
     local expected="$3"
-    if echo "$output" | grep -q "\"decision\":\"$expected\"" || \
-       echo "$output" | grep -q "\"decision\": \"$expected\""; then
+    if grep -q "\"decision\":\"$expected\"" <<<"$output" || \
+       grep -q "\"decision\": \"$expected\"" <<<"$output"; then
         echo "PASS: $desc"
         PASS=$((PASS + 1))
     elif [ -z "$output" ] && [ "$expected" = "approve" ]; then
@@ -143,7 +143,7 @@ OUT=$(run_hook "$CFG3" "$REPO3" "git commit -m test")
 check "opted in, failing check -> block" "$OUT" "block"
 
 # Also verify the systemMessage contains the check name
-if echo "$OUT" | grep -q "always-fail"; then
+if grep -q "always-fail" <<<"$OUT"; then
     echo "PASS: block output contains failing check name"
     PASS=$((PASS + 1))
 else
@@ -624,7 +624,7 @@ while IFS='|' read -r sname suser srepo sexpect; do
     SOUT=$(cd "$SREPO" && export HYGIENE_REPOS_CONFIG="$SCFG" SDLC_REVIEW_CONFIG_USER="$SUSER" \
         CLAUDE_CONFIG_DIR="$SDIR/claude-config" TDD_MANDATE_CONFIG="$SDIR/no-mandate.json" \
         && printf '%s' '{"tool_input":{"command":"git commit -m test"}}' | node "$HOOK" 2>&1) || true
-    if ! echo "$SOUT" | grep -q "\"decision\":\"$sexpect\""; then
+    if ! grep -q "\"decision\":\"$sexpect\"" <<<"$SOUT"; then
         STEP_FAIL=1
         echo "  step row '$sname': expected $sexpect, got: $SOUT"
     fi

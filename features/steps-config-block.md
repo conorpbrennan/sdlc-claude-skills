@@ -29,6 +29,8 @@
 - docs/plans/steps-config-block/reports/13a-implementer-1.md
 - docs/plans/steps-config-block/reports/13b-implementer-1.md
 - docs/plans/steps-config-block/reports/13c-fix-1.md
+- docs/plans/steps-config-block/reports/14-fix-1.md
+- docs/plans/steps-config-block/reports/14b-fix-1.md
 - docs/plans/steps-config-block/reports/2-implementer-1.md
 - docs/plans/steps-config-block/reports/3-implementer-1.md
 - docs/plans/steps-config-block/reports/4-implementer-1.md
@@ -65,6 +67,7 @@
 - src/hooks/test-orchestrator-mode.js
 - src/hooks/test-pending-review-gate.js
 - src/hooks/test-post-commit-feature.sh
+- src/hooks/test-post-commit-hook.sh
 - src/hooks/test-post-commit-notify.js
 - src/hooks/test-pre-commit-feature.sh
 - src/hooks/test-pre-commit-hygiene.sh
@@ -77,9 +80,31 @@
 - src/hooks/test-steps-cli-replace.js
 - src/hooks/test-steps-cli.js
 - src/hooks/test-steps.js
+- src/hooks/test-stop-hook.sh
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `4f1c522` — steps: close-out applies the batched advisories
+  - .claude-plugin/plugin.json
+  - README.md
+  - docs/plans/steps-config-block/reports/13a-implementer-1.md
+  - docs/plans/steps-config-block/reports/13b-implementer-1.md
+  - docs/plans/steps-config-block/reports/13c-fix-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/pre-commit-review.js
+  - src/hooks/read-trim.js
+  - src/hooks/steps-cli.js
+  - src/hooks/test-agent-tier-gate.js
+  - src/hooks/test-orchestrator-mode.js
+  - src/hooks/test-pre-commit-hygiene.sh
+  - src/hooks/test-pre-commit-review.js
+  - src/hooks/test-read-trim.js
+  - src/hooks/test-review-config.js
+  - src/hooks/test-steps-cli-replace.js
+  - src/hooks/test-steps-cli.js
+  - src/hooks/test-steps.js
 
 - 2026-10-25 `1d46a5a` — steps: session-start-instructions honours its four steps
   - .claude-plugin/plugin.json
@@ -180,3 +205,20 @@
   - src/hooks/lib/steps.js
   - src/hooks/test-steps.js
   - tools/run-tests.sh
+
+## Verification — 2026-10-25 @ 4f1c522
+
+| # | Criterion | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | `bash tools/run-tests.sh` exits 0 with every file `rc=0`. | FAIL | `bash tools/run-tests.sh -j 8` printed `FAIL: steps block table` from test-enforce-co-author.sh (stderr lacks the repo file and key), then `Files: 46  failed: 1` and exit 1. The same file run alone printed `Results: 54 passed, 0 failed`. |
+| 2 | `claude plugin validate .` exits 0. | PASS | `claude plugin validate .` exited 0. |
+| 3 | `node src/hooks/steps-cli.js list` prints one line per step id in the plan's Section 1 table and the guard footer. | UNVERIFIED | `node src/hooks/steps-cli.js list` printed 23 lines: 22 step rows plus the footer `Guard areas (tdd, review, commit-conventions) switch from the user file only.` I did not compare the ids to the plan's Section 1 table. |
+| 4 | With `{"steps":{"features":false}}` in the user `sdlc-review.json`, `node src/hooks/steps-cli.js list` shows the three features steps off with source `user`. | PASS | With `{"steps":{"features":false}}` in the user file, `list` printed `features session-start-feature off user file (steps.features)`, and the same for `pre-commit-feature` and `post-commit-feature`. |
+| 5 | With `{"steps":{"tdd":false}}` only in a repo `sdlc-review.json`, the tdd step stays on and a one-line warning names the file and key. | PASS | In a `git init` scratch repo with `{"steps":{"tdd":false}}` only in `.claude/sdlc-review.json`, `list` printed `tdd tdd-mandate on default` and `warning: <repo>/.claude/sdlc-review.json: steps.tdd is read from the user file only; ignored`. |
+| 6 | With invalid JSON in the user `sdlc-review.json`, every step stays on and a warning is printed. | PASS | With `{bad` in the user file, `list 2>&1\|grep -iv " on  default"` printed only `warning: .../sdlc-review.json: invalid JSON (...); ignored` and the footer. `list` showed no step off (0 rows matching " off"). |
+| 7 | `grep -ln "feature-tracking.disabled')\\|mandateInForce(" src/hooks/*.js \| grep -v /test-` prints nothing: no hook reads an alias itself. | PASS | `grep -ln "feature-tracking.disabled')\|mandateInForce(" src/hooks/*.js\|grep -v /test-` printed nothing. |
+
+**Verdict**: FAIL
+- The verifier ended the report with VERIFY_GATE: FAIL.
+- Row 1 is FAIL.
+- Row 3 is UNVERIFIED.

@@ -33,13 +33,13 @@ run_test() {
 
     # A block must also be a PreToolUse deny: Claude sees permissionDecisionReason,
     # not the legacy reason (lib/hook-output.js).
-    if [ "$expected" = "block" ] && ! echo "$output" | grep -q '"permissionDecision":"deny"'; then
+    if [ "$expected" = "block" ] && ! grep -q '"permissionDecision":"deny"' <<< "$output"; then
         echo "FAIL: $desc"
         echo "  Expected: a PreToolUse deny"
         echo "  Got: $output"
         FAIL=$((FAIL + 1))
-    elif echo "$output" | grep -q "\"decision\":\"$expected\"" || \
-       echo "$output" | grep -q "\"decision\": \"$expected\""; then
+    elif grep -q "\"decision\":\"$expected\"" <<< "$output" || \
+       grep -q "\"decision\": \"$expected\"" <<< "$output"; then
         echo "PASS: $desc"
         PASS=$((PASS + 1))
     elif [ -z "$output" ] && [ "$expected" = "approve" ]; then
@@ -259,17 +259,17 @@ while IFS='|' read -r sname suser srepo scmd sexpect sneedle; do
     fi
     SPAYLOAD="{\"tool_input\":{\"command\":\"$scmd\"}}"
     SOUT=$(cd "$SDIR/repo" && printf '%s' "$SPAYLOAD" | SDLC_REVIEW_CONFIG_USER="$SUSER" node "$HOOK" 2>&1) || true
-    if ! echo "$SOUT" | grep -q "\"decision\":\"$sexpect\""; then
+    if ! grep -q "\"decision\":\"$sexpect\"" <<< "$SOUT"; then
         STEP_FAIL=1
         echo "  step row '$sname': expected $sexpect, got: $SOUT"
     fi
     if [ "$sneedle" = "-" ]; then
-        if echo "$SOUT" | grep -q "read from the user file only"; then
+        if grep -q "read from the user file only" <<< "$SOUT"; then
             STEP_FAIL=1
             echo "  step row '$sname': unexpected warning: $SOUT"
         fi
     else
-        if ! echo "$SOUT" | grep -q "enforce-co-author: .*sdlc-review.json: $sneedle is read from the user file only; ignored"; then
+        if ! grep -q "enforce-co-author: .*sdlc-review.json: $sneedle is read from the user file only; ignored" <<< "$SOUT"; then
             STEP_FAIL=1
             echo "  step row '$sname': stderr lacks the repo file and key: $SOUT"
         fi
