@@ -20,13 +20,24 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- commands/steps.md
 - docs/plans/steps-config-block/reports/1-implementer-1.md
+- docs/plans/steps-config-block/reports/2-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - src/hooks/lib/review-config.js
 - src/hooks/lib/steps.js
+- src/hooks/steps-cli.js
+- src/hooks/test-steps-cli.js
 - src/hooks/test-steps.js
 - tools/run-tests.sh
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-25 `6af81c5` — steps: resolver lib answering is-step-X-on for every sdlc step
+  - .claude-plugin/plugin.json
+  - docs/plans/steps-config-block/reports/1-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/lib/steps.js
+  - src/hooks/test-steps.js
+  - tools/run-tests.sh

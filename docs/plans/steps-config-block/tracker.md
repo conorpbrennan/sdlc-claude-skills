@@ -5,16 +5,15 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: dispatch the step 1 reviewer on the staged diff (throwaway worktree); on PASS write the marker and retry the commit.
-Last committed: commit 0 `81d7c19` (plan, feature record, tracker). Step 1 built, GATE green (test-steps 56/0, run-tests 41 files 0 failed), staged, commit attempt pending review.
-Reviewer to check specifically: `mandateInForce(repoRoot)` is called with no `configPath`, so it reads the real `~/.claude/tdd-mandate.json`; do the tests depend on that file?
+Next action: dispatch the step 3 implementer (plan Section 5 step 3 plus Section 2; ASSUMES LANDED 1, 2).
+Last committed: step 1 `6af81c5` (review PASS, round 1, Sonnet). Commit 0 `81d7c19` is the plan. Step 2 built (test-steps-cli 50/0, run-tests 42 files 0 failed), commit with this tracker pending review.
 
 ## Step state
 
 | Step | Status | Commit | Review rounds | Notes |
 |---|---|---|---|---|
-| 1 | not started | | | |
-| 2 | not started | | | |
+| 1 | committed | 6af81c5 | 1 (PASS) | test-steps 56/0; run-tests 41 files 0 failed |
+| 2 | built | (this commit) | | test-steps-cli 50/0; named reader: owner at the end (D2) |
 | 3 | not started | | | |
 | 4 | not started | | | |
 | 5 | not started | | | |
@@ -37,4 +36,6 @@ Reviewer to check specifically: `mandateInForce(repoRoot)` is called with no `co
 
 ## Advisories outside a step's file set (batched into step 13)
 
-None yet.
+- From step 1 review (IMPORTANT, committed with the gap named): `src/hooks/test-steps.js` CASES tests the repo-guard rule at one key shape only (`steps.review.review-gate`). Add two rows: `repo: { steps: { tdd: false } }` with step `tdd-mandate`, and `repo: { steps: { 'commit-conventions': { enabled: false } } }` with step `enforce-co-author`; both expect `on: true`, source `default`, warning `is read from the user file only; ignored`.
+- From step 1 review (ADVISORY): set `TDD_MANDATE_CONFIG` to a missing file under the scratch dir in `scratch()` of `src/hooks/test-steps.js`, so no case reads the real `~/.claude/tdd-mandate.json`.
+- From step 1 report (UNRELATED): `bash tools/run-tests.sh` takes about 111 s at -j 16, close to the 120 s default tool timeout. Run it with a long timeout or in the background.
