@@ -25,4 +25,7 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-25 `e07c102` — statusline: tests for the status line and its day-cost estimate
+  - .claude-plugin/plugin.json
+  - src/test-day-cost.js
+  - src/test-statusline.js
