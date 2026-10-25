@@ -501,10 +501,31 @@ blocks and never touches a marker. The coverage thresholds stay at 95 and 90 on
 printf 'PASS\n%s' "$(git diff --cached | git hash-object --stdin)" > .git/.claude-last-hygiene
 ```
 
-### Opt out of feature tracking per repo
-```bash
-touch .claude/feature-tracking.disabled
-```
+### Turning steps off
+
+Each area below says how to switch it off today. A step with no switch says
+so. Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
+Repo files live in `<repo>/.claude/`.
+
+| Area | Steps | How to turn it off |
+|---|---|---|
+| Orchestration | `orchestrator-mode.js` | `/sdlc:orchestrate off` for the current session. It turns on again when the session reads a handoff or tracker file or runs `plan-spec run`. No permanent switch. |
+| Orchestration | `agent-tier-gate.js`, `read-trim.js`, `enforce-review-implementer.js` | No switch. Model choices for the review rounds and plan review are set in `sdlc-review.json` (see [Model steering](#model-steering)). |
+| Features | `session-start-feature.js`, `pre-commit-feature.js`, `post-commit-feature.js` | Per repo: `touch .claude/feature-tracking.disabled`. One file switches off all three. |
+| TDD | the TDD mandate inside `pre-commit-review.js` | Per repo: `touch .claude/tdd-mandate.disabled`, or add the repo to `exempt_repos` in `~/.claude/tdd-mandate.json`. Per path: `exempt_paths` in the same file. See [The TDD mandate](#the-tdd-mandate). |
+| Code Review | the review gate in `pre-commit-review.js` | No switch. `pending-review-gate.js` is dormant and needs none. |
+| Hygiene | `pre-commit-hygiene.js` | It is opt-in. Remove the repo from `~/.claude/hygiene-repos.json`. For one commit, use the emergency override above. |
+| Verification | `pre-pr-verify.js` | It is opt-in. Remove the repo from `~/.claude/verify-repos.json`, or set its `mode` to `advisory` so it warns and never blocks. |
+| Commit conventions | `enforce-co-author.js`, `claude-attribution-note.js`, `post-commit-notify.js` | No switch. |
+| Model steering | `mainModel` | `/sdlc:main-model off`. |
+| Model steering | prompt-cache TTL write | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
+| Plugin upkeep | marketplace auto-update | `touch ~/.claude/sdlc-autoupdate.disabled`, or set `"autoUpdate": false` on the marketplace entry. See [Auto-update](#auto-update). |
+| Plugin upkeep | session instructions | No switch. |
+| Everything | the whole plugin | `/plugin disable sdlc@sdlc-claude-skills`. This switches off every hook, skill and command. |
+
+Steps marked "No switch" cannot be turned off short of disabling the plugin.
+The reporting commands (`/sdlc:model-spend`, `/sdlc:fit`,
+`/sdlc:review-timing`) only run when you invoke them.
 
 ---
 
