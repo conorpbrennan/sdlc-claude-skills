@@ -91,6 +91,30 @@ for (const [line, model, want] of [
     }
 }
 
+console.log('plan writing is for new plans only');
+// description (undefined = field absent), prompt, expected decision (undefined = allowed with no decision).
+for (const [description, prompt, want] of [
+    ['Add cache sizing experiment to phase 2 plan', 'TIER: opus: plan writing. You are editing the phase 2 plan...', 'deny'],
+    ['Revise 7l plan after review', 'TIER: opus: plan writing. Revise the plan... to answer the round 1 source review', 'deny'],
+    ['Fold C3a plan review findings', 'TIER: opus: plan writing. Fold the findings... You edit the plan only.', 'deny'],
+    ['Fold C3a round 2 findings', 'TIER: opus: plan writing. Fold the findings of the second C3a plan review...', 'deny'],
+    ['Write cube optimise plan', 'TIER: opus: plan writing. Write an implementation plan to agg_poc/tmp/PLAN_cube_optimise.md...', undefined],
+    ['Plan Step 7l empty-book skip', 'TIER: opus: plan writing. Write the plan for RD1 Step 7l...', undefined],
+    [undefined, 'TIER: opus: plan writing. Write the plan for RD1 Step 7l.', undefined],
+    ['Write the plan', 'TIER: opus: plan writing\nAmend the existing plan with the findings.', 'deny'],
+    ['Write the plan', 'TIER: opus: plan writing. Write the plan. You edit nothing else.', undefined],
+    ['Review folded C3a plan text', 'TIER: opus: plan source review. Review the folded C3a plan text...', undefined],
+    ['Triage failure', 'TIER: opus: fail triage. Revise your view of the failing test.', undefined],
+    ['Revise plan', 'TIER: opus: user asked. Revise the plan.', 'ask'],
+]) {
+    const r = call({ subagent_type: 'general-purpose', model: 'opus', description, prompt: prompt + '\n' + BUDGET_MARKER });
+    assert(`${want || 'allow'}: ${description} | ${prompt.slice(0, 50)}`, decision(r) || undefined, want);
+    if (want === 'deny') {
+        const reason = r.out.hookSpecificOutput.permissionDecisionReason;
+        assert(`deny says new plans only: ${description}`, [reason.includes('new plans'), reason.includes('sonnet')], [true, true]);
+    }
+}
+
 console.log('implementer, opus with a reason');
 assert('allow opus with reason, sdlc:implementer',
     call({ subagent_type: agent('implementer'), model: 'opus', prompt: 'TIER: opus: plan writing\n' + BUDGET_MARKER }).out, '');

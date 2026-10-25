@@ -148,7 +148,8 @@ Per step:
    finish reports PARTIAL and you split it). An Opus implementer needs the owner's OK recorded in
    §20.2 and a `TIER: opus: user asked` line in the prompt (it raises a confirm prompt); the
    `agent-tier-gate` hook denies an Opus dispatch whose reason is not plan writing,
-   plan source review, fail triage or user asked.
+   plan source review, fail triage or user asked. Plan writing is for new plans only: folding
+   findings into, revising or adding to an existing plan runs on Sonnet.
 2. **Read the report in full** (§19). The implementer wrote it to
    `run/reports/<step>-implementer-<round>.md` (a fix agent, to
    `<step>-fix-<round>.md`) and returned the path plus a five-line summary;
@@ -193,7 +194,7 @@ trackers, reports, plans, briefs, feature records and memory, and nudges
 after 8 inline commands since the last dispatch. Investigation that chases a
 failure is a dispatch, not an inline run. `/sdlc:orchestrate off` is the
 owner's switch. Run the orchestrator session on Sonnet (`/model sonnet`);
-Opus is for plan writing, plan source review and FAIL triage (the 19 Oct 2026
+Opus is for writing new plans, plan source review and FAIL triage (the 19 Oct 2026
 analysis found Opus orchestrator turns a large share of spend, commit reviews
 about 9%). The hook prints this once when the mode turns on; nothing enforces
 it.
