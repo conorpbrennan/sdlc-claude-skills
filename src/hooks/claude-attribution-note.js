@@ -1,6 +1,9 @@
 // PostToolUse hook: Add structured git note with Claude attribution metadata
 // Attaches machine-readable metadata to commits without modifying the commit itself
 const { execSync } = require('child_process');
+const steps = require('./lib/steps');
+
+const STEP_ID = 'claude-attribution-note';
 
 const input = process.env.CLAUDE_TOOL_INPUT || '';
 
@@ -8,6 +11,11 @@ const input = process.env.CLAUDE_TOOL_INPUT || '';
 if (!input.includes('git commit') || input.includes('--amend')) {
     process.exit(0);
 }
+
+// The step may be off (user file only: area commit-conventions is a guard).
+const step = steps.stepState(STEP_ID, { cwd: process.cwd() });
+for (const w of step.warnings) process.stderr.write('claude-attribution-note: ' + w + '\n');
+if (!step.on) process.exit(0);
 
 // Verify we're in a git repo
 try {

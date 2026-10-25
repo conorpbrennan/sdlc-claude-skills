@@ -25,6 +25,10 @@ trap 'rm -rf "$WORK"' EXIT
 # TIMING_LOG_PATH write here, not to ~/.claude/code-review-timing.jsonl.
 TIMING_LOG_PATH="$WORK/timing.jsonl"
 export TIMING_LOG_PATH
+# SDLC_REVIEW_CONFIG_USER point at a missing file, so a real ~/.claude/sdlc-review.json
+# cannot turn a suite red.
+SDLC_REVIEW_CONFIG_USER="$WORK/no-user-sdlc-review.json"
+export SDLC_REVIEW_CONFIG_USER
 : > "$TIMING_LOG_PATH"
 
 shopt -s nullglob

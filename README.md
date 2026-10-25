@@ -216,6 +216,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/feature <slug>` / `/feature list` | Recall prior context for a feature branch. |
 | `/feature-new <slug> "<requirement>" ["<criterion>" ...]` | Seed or update `features/<slug>.md`, including its 2–5 `## Acceptance` criteria. |
 | `/sdlc:orchestrate on\|off\|status` | Switch orchestrator mode: the main session dispatches sub-agents instead of editing source. See [Model steering](#model-steering). |
+| `/sdlc:steps [on\|off <area\|step> [repo]]` | List every workflow step with its state and the source of that state, or switch one area or step on or off. See [Turning steps off](#turning-steps-off). |
 | `/sdlc:handoff [slug]` | Write a fixed-form handoff file in `tmp/` and print the line that resumes it in a fresh session. |
 | `/sdlc:model-spend [--days N] [--json]` | Weekly model spend from local transcripts: Opus and Sonnet share, orchestration, untiered Opus dispatches, review round 3, and (section 8) main-session prompt cache cost by backend and TTL. |
 | `/sdlc:fit [--days N] [--json]` | Usage fit from local transcripts: context size, resets, model mix, cache backend, and what each lever would have saved on your own history. Counterfactuals at list prices, not forecasts. |
@@ -434,7 +435,7 @@ Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc
 ## Configuration
 
 ### `~/.claude/sdlc-review.json`
-Model steering: `round1`, `round2`, `maxRounds`, `planReview`, `orchestrator.bashNudge`, path `rules` and `mainModel`. A repo file `<repo>/.claude/sdlc-review.json` layers over it, except `mainModel`, which is read from the user file only. Template: `.claude/sdlc-review.json.example`. Details under [Model steering](#model-steering).
+Model steering: `round1`, `round2`, `maxRounds`, `planReview`, `orchestrator.bashNudge`, path `rules`, `mainModel` and `steps` (which workflow steps are on; see [Turning steps off](#turning-steps-off)). A repo file `<repo>/.claude/sdlc-review.json` layers over it, except `mainModel`, which is read from the user file only. Template: `.claude/sdlc-review.json.example`. Details under [Model steering](#model-steering).
 
 ### `~/.claude/hygiene-repos.json`
 Per-repo opt-in for the hygiene gate: `setup` shell lines plus a list of
@@ -551,30 +552,51 @@ Two caveats:
 
 ### Turning steps off
 
-Each area below says how to switch it off today. A step with no switch says
-so. Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`.
-Repo files live in `<repo>/.claude/`.
+Use the `steps` block in `sdlc-review.json`, or run `/sdlc:steps`. `/sdlc:steps` lists every step with its state and where that state came from. `/sdlc:steps off <area|step> [repo]` switches one area or step off. `/sdlc:steps on <area|step> [repo]` switches it back on. Each writes one `sdlc-review.json` and nothing else.
 
-| Area | Steps | How to turn it off |
-|---|---|---|
-| Orchestration | `orchestrator-mode.js` | `/sdlc:orchestrate off` for the current session. It turns on again when the session reads a handoff or tracker file or runs `plan-spec run`. No permanent switch. |
-| Orchestration | `agent-tier-gate.js`, `read-trim.js`, `enforce-review-implementer.js` | No switch. Model choices for the review rounds and plan review are set in `sdlc-review.json` (see [Model steering](#model-steering)). |
-| Features | `session-start-feature.js`, `pre-commit-feature.js`, `post-commit-feature.js` | Per repo: `touch .claude/feature-tracking.disabled`. One file switches off all three. |
-| TDD | the TDD mandate inside `pre-commit-review.js` | Per repo: `touch .claude/tdd-mandate.disabled`, or add the repo to `exempt_repos` in `~/.claude/tdd-mandate.json`. Per path: `exempt_paths` in the same file. See [The TDD mandate](#the-tdd-mandate). |
-| Code Review | the review gate in `pre-commit-review.js` | No switch. `pending-review-gate.js` is dormant and needs none. |
-| Hygiene | `pre-commit-hygiene.js` | It is opt-in. Remove the repo from `~/.claude/hygiene-repos.json`. For one commit, use the emergency override above. |
-| Verification | `pre-pr-verify.js` | It is opt-in. Remove the repo from `~/.claude/verify-repos.json`, or set its `mode` to `advisory` so it warns and never blocks. |
-| Commit conventions | `enforce-co-author.js`, `claude-attribution-note.js`, `post-commit-notify.js` | No switch. |
-| Status line | the installed `statusLine` key | `/sdlc:statusline remove`, or edit `statusLine` out of `settings.json`. |
-| Model steering | `mainModel` | `/sdlc:main-model off`. |
-| Model steering | prompt-cache TTL write | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
-| Plugin upkeep | marketplace auto-update | `touch ~/.claude/sdlc-autoupdate.disabled`, or set `"autoUpdate": false` on the marketplace entry. See [Auto-update](#auto-update). |
-| Plugin upkeep | session instructions | No switch. |
-| Everything | the whole plugin | `/plugin disable sdlc@sdlc-claude-skills`. This switches off every hook, skill and command. |
+```json
+{
+  "steps": {
+    "hygiene": true,
+    "orchestration": { "enabled": true, "read-trim": false },
+    "features": false
+  }
+}
+```
 
-Steps marked "No switch" cannot be turned off short of disabling the plugin.
+An area is a boolean, or an object with `enabled` and any of its step ids. In the example, `features` is off, and `orchestration` is on except `read-trim`. Put the block in `~/.claude/sdlc-review.json` (all repos) or `<repo>/.claude/sdlc-review.json` (one repo). Run `/sdlc:steps` with no arguments to see all area and step ids.
+
+The rules:
+
+- R1. In one file, a step key beats the area's `enabled`, which beats the area as a boolean.
+- R2. Guard areas read the user file only. A repo file cannot switch them off. `/sdlc:steps` warns when the repo value is `false`, and ignores the key.
+- R3. For other areas, the repo file beats the user file.
+- R4. A step with no setting is on.
+- R5. An alias that says off wins over the block. `/sdlc:steps` shows `block says on; the alias wins`.
+- R6. A bad value (a wrong type, an unknown area or step) is skipped with a warning naming the file and key.
+
+Hygiene and verify stay opt-in per repo. A repo must be listed in `~/.claude/hygiene-repos.json` or `~/.claude/verify-repos.json` for the step to run. `"hygiene": true` in the block does not add a repo to either list. Setting it to `false` switches the step off even for a listed repo.
+
+Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`. Repo files live in `<repo>/.claude/`.
+
+| Area | Guard | Steps | Alias (still works) |
+|---|---|---|---|
+| `orchestration` | no | `orchestrator-mode`, `enforce-review-implementer`, `agent-tier-gate`, `agent-default-model`, `context-budget`, `read-trim` | `orchestrator-mode`: `/sdlc:orchestrate off` for the current session. It turns on again when the session reads a handoff or tracker file or runs `plan-spec run`. The block is the permanent switch. Model choices for the review rounds and plan review are set in `sdlc-review.json` (see [Model steering](#model-steering)). |
+| `features` | no | `session-start-feature`, `pre-commit-feature`, `post-commit-feature` | Per repo: `touch .claude/feature-tracking.disabled`. One file switches off all three. |
+| `tdd` | yes | `tdd-mandate` | Per repo: `touch .claude/tdd-mandate.disabled`, or add the repo to `exempt_repos` in `~/.claude/tdd-mandate.json`. Per path: `exempt_paths` in the same file. See [The TDD mandate](#the-tdd-mandate). |
+| `review` | yes | `review-gate`, `pending-review-gate`, `plan-review` | None. `pending-review-gate.js` is dormant. |
+| `hygiene` | no | `pre-commit-hygiene` | It is opt-in. Remove the repo from `~/.claude/hygiene-repos.json`. For one commit, use the emergency override above. |
+| `verification` | no | `pre-pr-verify` | It is opt-in. Remove the repo from `~/.claude/verify-repos.json`, or set its `mode` to `advisory` so it warns and never blocks. |
+| `commit-conventions` | yes | `enforce-co-author`, `claude-attribution-note`, `post-commit-notify` | None. |
+| `standalone` | no | `main-model` | `/sdlc:main-model off`, which sets `"mainModel": "off"` in the user file. |
+| `standalone` | no | `cache-ttl` | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
+| `standalone` | no | `marketplace-autoupdate` | `touch ~/.claude/sdlc-autoupdate.disabled`, or set `"autoUpdate": false` on the marketplace entry. See [Auto-update](#auto-update). |
+| `standalone` | no | `session-instructions` | None. |
+| Status line | n/a | the installed `statusLine` key | `/sdlc:statusline remove`, or edit `statusLine` out of `settings.json`. Not a `steps` block entry. |
+| Everything | n/a | the whole plugin | `/plugin disable sdlc@sdlc-claude-skills`. This switches off every hook, skill and command. |
+
 The reporting commands (`/sdlc:model-spend`, `/sdlc:fit`,
-`/sdlc:review-timing`) only run when you invoke them.
+`/sdlc:review-timing`) only run when you invoke them. They have no switch.
 
 ---
 

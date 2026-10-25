@@ -15,6 +15,7 @@ const timingLog = require('./timing-log');
 const ff = require('./lib/feature-file');
 const commitCommand = require('./lib/commit-command');
 const { cmd } = require('./lib/plugin-names');
+const steps = require('./lib/steps');
 
 const BLOCKLIST_BRANCHES = ff.BLOCKLIST_BRANCHES;
 
@@ -143,7 +144,11 @@ function main() {
         return;
     }
 
-    if (fs.existsSync(path.join(repo, '.claude', 'feature-tracking.disabled'))) {
+    // The step resolver answers for the config switches and the
+    // .claude/feature-tracking.disabled alias alike.
+    const stepOn = steps.stepState('post-commit-feature', { repoRoot: repo });
+    for (const w of stepOn.warnings) process.stderr.write('post-commit-feature: ' + w + '\n');
+    if (!stepOn.on) {
         timingLog.logEvent('feature.post_commit', {
             hook: 'post-commit-feature', repo, mode: 'skip-disabled',
             duration_ms: stop(),

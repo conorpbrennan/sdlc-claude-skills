@@ -27,4 +27,14 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-25 `427daec` — agent-tier-gate: Opus plan writing for new plans only
+  - .claude-plugin/plugin.json
+  - README.md
+  - commands/handoff.md
+  - commands/model-spend.md
+  - skills/plan-spec/SKILL.md
+  - skills/plan-spec/reference.md
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/orchestrator-mode.js
+  - src/hooks/test-agent-tier-gate.js
+  - src/hooks/test-orchestrator-mode.js

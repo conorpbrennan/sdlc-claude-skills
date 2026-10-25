@@ -33,6 +33,13 @@ trap cleanup EXIT
 
 track() { echo "$1" >> "$TEMP_LIST"; }
 
+# Scratch config so no case reads the owner's real files.
+SCR="$(mktemp -d)"
+track "$SCR"
+export CLAUDE_CONFIG_DIR="$SCR/claude"
+export TDD_MANDATE_CONFIG="$SCR/missing-tdd.json"
+export SDLC_REVIEW_CONFIG_USER="$SCR/user.json"
+
 assert_contains() {
     local name="$1" output="$2" expected="$3"
     if echo "$output" | grep -q -- "$expected" 2>/dev/null; then
@@ -252,6 +259,39 @@ git -C "$REPO5" commit -q -m "add z"
 
 out=$(cd "$REPO5" && CLAUDE_TOOL_INPUT='git commit -m "add z"' node "$HOOK" 2>&1)
 assert_not_contains "opt-out -> no update" "$out" "updated"
+
+# --- Step switches (resolver) ---
+# step_case NAME USER_JSON REPO_JSON ALIAS(0/1) EXPECT(on/off)
+echo ""
+echo "Step switches"
+step_case() {
+    local name="$1" user="$2" repofile="$3" alias="$4" expect="$5" repo out
+    repo=$(seed_repo)
+    seed_feature_branch "$repo" "step-feature" "Switch test"
+    rm -f "$SDLC_REVIEW_CONFIG_USER"
+    [ -n "$user" ] && echo "$user" > "$SDLC_REVIEW_CONFIG_USER"
+    mkdir -p "$repo/.claude"
+    [ -n "$repofile" ] && echo "$repofile" > "$repo/.claude/sdlc-review.json"
+    [ "$alias" = 1 ] && touch "$repo/.claude/feature-tracking.disabled"
+    echo "print('s')" > "$repo/s.py"
+    git -C "$repo" add s.py
+    git -C "$repo" commit -q -m "add s"
+    out=$(cd "$repo" && CLAUDE_TOOL_INPUT='git commit -m "add s"' node "$HOOK" 2>&1)
+    STEP_OUT="$out"
+    if [ "$expect" = on ]; then
+        assert_contains "$name -> updates stub" "$out" "step-feature.md updated"
+    else
+        assert_not_contains "$name -> no update" "$out" "updated"
+    fi
+}
+step_case "default" "" "" 0 on
+step_case "user file: area off" '{"steps":{"features":false}}' "" 0 off
+step_case "user file: step off in on area" '{"steps":{"features":{"post-commit-feature":false}}}' "" 0 off
+step_case "user file: sibling step off" '{"steps":{"features":{"pre-commit-feature":false}}}' "" 0 on
+step_case "repo file: area off honoured" "" '{"steps":{"features":false}}' 0 off
+step_case "alias file still disables" "" "" 1 off
+step_case "bad step key warns, hook still acts" '{"steps":{"features":{"bogus-step":false}}}' "" 0 on
+assert_contains "warning on stderr prefixed" "$STEP_OUT" "post-commit-feature: "
 
 # --- On main branch with substantive commit -> uses subject slug ---
 echo ""

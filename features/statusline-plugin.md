@@ -29,6 +29,12 @@
 
 ## History
 
+- 2026-10-25 `9c9a6f6` — statusline: colour by used percentage, green below 20, amber 20 to 29, red from 30
+  - .claude-plugin/plugin.json
+  - README.md
+  - src/statusline.js
+  - src/test-statusline.js
+
 - 2026-10-25 `84ee7c6` — statusline: /sdlc:statusline command, README section and installer robustness
   - .claude-plugin/plugin.json
   - README.md

@@ -300,6 +300,35 @@ try {
         fs.symlinkSync(ancestor, link);
         assert('a symlinked key matches through its real path', denied(run(ancestor, PR_COMMAND, listed(link, 'enforce'))), true);
     }
+    console.log('(k) steps block: pre-pr-verify honours its step, enforce mode included');
+    {
+        const STEP_CASES = [
+            { name: 'default: denies', user: null, repo: null, deny: true },
+            { name: 'verification area off in the user file: approves', user: { steps: { verification: false } }, repo: null, deny: false },
+            { name: 'step off inside an on area: approves', user: { steps: { verification: { 'pre-pr-verify': false } } }, repo: null, deny: false },
+            { name: 'repo file off beats user on: approves', user: { steps: { verification: true } }, repo: { steps: { verification: { 'pre-pr-verify': false } } }, deny: false },
+        ];
+        let n = 0;
+        for (const c of STEP_CASES) {
+            const dir = newRepo('k' + (n++), RECORD_WITH_ACCEPTANCE);
+            const userCfg = path.join(SCRATCH, 'k-user-' + n + '.json');
+            if (c.user) fs.writeFileSync(userCfg, JSON.stringify(c.user));
+            if (c.repo) {
+                fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+                fs.writeFileSync(path.join(dir, '.claude', 'sdlc-review.json'), JSON.stringify(c.repo));
+            }
+            const r = run(dir, PR_COMMAND, listed(dir, 'enforce'), { env: {
+                SDLC_REVIEW_CONFIG_USER: userCfg,
+                CLAUDE_CONFIG_DIR: path.join(SCRATCH, 'k-claude-config'),
+                TDD_MANDATE_CONFIG: path.join(SCRATCH, 'no-such-mandate.json'),
+            } });
+            assert(c.name, c.deny ? denied(r) : r.json, c.deny ? true : APPROVE);
+        }
+        const other = run(newRepo('k-unlisted', RECORD_WITH_ACCEPTANCE), PR_COMMAND,
+            listed(path.join(SCRATCH, 'elsewhere'), 'enforce'),
+            { env: { SDLC_REVIEW_CONFIG_USER: path.join(SCRATCH, 'none.json') } });
+        assert('an unlisted repo still approves', other.json, APPROVE);
+    }
 } finally {
     fs.rmSync(SCRATCH, { recursive: true, force: true });
 }

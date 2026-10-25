@@ -16,6 +16,7 @@ const { execSync } = require('child_process');
 const timingLog = require('./timing-log');
 const ff = require('./lib/feature-file');
 const { cmd } = require('./lib/plugin-names');
+const steps = require('./lib/steps');
 
 function readStdinSync() {
     try {
@@ -102,8 +103,11 @@ function findGitReposUnder(cwd, maxDepth) {
 // Process a single git repo: detect branch, ensure feature stub exists,
 // return { state, branch, message }. State is logged by the caller.
 function processRepo(repo) {
-    const disabledMarker = path.join(repo, '.claude', 'feature-tracking.disabled');
-    if (fs.existsSync(disabledMarker)) {
+    // The step resolver answers for the config switches and the
+    // .claude/feature-tracking.disabled alias alike.
+    const stepOn = steps.stepState('session-start-feature', { repoRoot: repo });
+    for (const w of stepOn.warnings) process.stderr.write('session-start-feature: ' + w + '\n');
+    if (!stepOn.on) {
         return { state: 'disabled', branch: null, message: null };
     }
 

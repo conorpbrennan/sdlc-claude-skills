@@ -4,6 +4,7 @@
 const fs = require('fs');
 const reviewMarkers = require('./lib/review-markers');
 const hookOutput = require('./lib/hook-output');
+const steps = require('./lib/steps');
 
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const LOCK_MAX_AGE_MS = 5 * 60 * 1000;
@@ -47,6 +48,14 @@ if (!isFileFresh(PENDING_FILE, MARKER_MAX_AGE_MS)) {
 
 // Gate 2: Lock file fresh (< 5 min) -> approve (already requested review)
 if (isFileFresh(LOCK_FILE, LOCK_MAX_AGE_MS)) {
+    approve();
+}
+
+// Step switch: pending-review-gate off in the steps block -> approve, no lock.
+// Placed after the freshness and lock exits so an idle call never reads config.
+const stepRead = steps.stepState('pending-review-gate', { cwd: process.cwd() });
+for (const w of stepRead.warnings) process.stderr.write('pending-review-gate: ' + w + '\n');
+if (!stepRead.on) {
     approve();
 }
 

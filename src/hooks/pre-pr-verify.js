@@ -61,6 +61,7 @@ const { checkFresh } = require('./lib/verification');
 const { isFeatureBranch } = require(path.join(__dirname, 'lib', 'feature-file'));
 const { locateRepo, gitRead } = require('./lib/git-read');
 const hookOutput = require('./lib/hook-output');
+const steps = require('./lib/steps');
 const { cmd } = require('./lib/plugin-names');
 
 const ENV_CONFIG = 'VERIFY_REPOS_CONFIG';
@@ -170,6 +171,12 @@ const command = hookData && hookData.tool_input && hookData.tool_input.command;
 
 // 1. Every other Bash call ends here: no config read, no git.
 if (!isPrCreate(command)) approve();
+
+// 1b. Step switch: pre-pr-verify off in the steps block -> approve, any mode.
+// Before the verify-repos read.
+const stepRead = steps.stepState('pre-pr-verify', { cwd: process.cwd() });
+for (const w of stepRead.warnings) process.stderr.write('pre-pr-verify: ' + w + '\n');
+if (!stepRead.on) approve();
 
 // 2. Config.
 const configPath = process.env[ENV_CONFIG] || path.join(os.homedir(), '.claude', 'verify-repos.json');
