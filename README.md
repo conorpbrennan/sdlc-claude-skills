@@ -10,8 +10,9 @@ engineering workflow lives apart from the domain skills.
 Plugin components are namespaced, so commands and skills are invoked with
 the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
 `/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:orchestrate`, `/sdlc:handoff`,
-`/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:plan-spec`,
-`/sdlc:code-review-pre-commit` and `/sdlc:code-review-implementer`. The review
+`/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:statusline`,
+`/sdlc:plan-spec`, `/sdlc:code-review-pre-commit` and
+`/sdlc:code-review-implementer`. The review
 agents are `sdlc:code-reviewer` and `sdlc:code-reviewer-deep`; the plan-step
 agent is `sdlc:implementer`; the verification agent is `sdlc:verifier`.
 Both reviewers carry a `maxTurns` cap (75 and 60) that only cuts runaways; a report cut off without its `TDD_GATE` trailer counts as FAIL.
@@ -142,7 +143,9 @@ the feature record and writes its marker, and the commit and the PR stay yours.
 `/plugin install` copies the repository into Claude Code's plugin cache
 (`~/.claude/plugins/cache/`), and everything runs from there. Nothing is copied
 into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
-`CLAUDE.md` is edited: disabling the plugin turns all of it off.
+`CLAUDE.md` is edited: disabling the plugin turns all of it off. The one
+exception is the opt-in `/sdlc:statusline install`, which writes the
+`statusLine` key (see [Status line](#status-line)).
 
 | Source | At run time | Purpose |
 |---|---|---|
@@ -151,13 +154,14 @@ into `~/.claude/skills`, `hooks` or `tools`, and neither `settings.json` nor
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
 | `agents/implementer.md` | `sdlc:implementer` (Sonnet, 80 turns) | the plan-step implementer; at 60 turns it wraps up, past 80 it reports PARTIAL |
 | `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
-| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:orchestrate`, `/sdlc:handoff`, `/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model` | slash commands |
+| `commands/*.md` | `/sdlc:commit-prep`, `/sdlc:review-timing`, `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:orchestrate`, `/sdlc:handoff`, `/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:statusline` | slash commands |
 | `commands/verify.md` | `/sdlc:verify` | dispatches the verifier, then runs the recorder |
 | `hooks/hooks.json` | registered while the plugin is enabled | wires `src/hooks/*.js` to events through `${CLAUDE_PLUGIN_ROOT}` |
 | `src/hooks/*.js`, `src/hooks/lib/*.js` (not `test-*`) | run in place from the cache | the gates and their shared helpers |
 | `src/hooks/pre-pr-verify.js` | PreToolUse on `Bash` | the `gh pr create` gate, per repo |
 | `src/hooks/record-verification.js` | run by `/sdlc:verify` | turns a verifier report into the `## Verification` section and the marker |
 | `instructions/*-snippet.md` | injected each session by `session-start-instructions.js` | the instructions Claude follows on a block, including the TDD mandate; the same hook warns when a legacy install is still wired, turns on auto-update for this plugin's marketplace (see Auto-update below), sets `"promptCacheTtl": "1h"` in the user settings file when a per-token backend would use the 5-minute prompt cache (opt out with `~/.claude/sdlc-cache-ttl.disabled`), and copies `mainModel` from `~/.claude/sdlc-review.json` into settings `model`; both apply from the next session |
+| `src/statusline.js`, `src/lib/day-cost.js`, `src/statusline-install.js` | the installer copies the first two to the plugin data directory | the opt-in status line and its installer (see [Status line](#status-line)) |
 | `tools/*.py` | run in place, found by `/sdlc:review-timing` | timing analyser |
 | `.claude/*.json.example` | templates only | thresholds, repo opt-ins, TDD exemptions |
 | `legacy/hooks-config.json` | read only by `uninstall.sh` | the pre-plugin wiring it strips from `settings.json` |
@@ -217,6 +221,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/sdlc:model-spend [--days N] [--json]` | Weekly model spend from local transcripts: Opus and Sonnet share, orchestration, untiered Opus dispatches, review round 3, and (section 8) main-session prompt cache cost by backend and TTL. |
 | `/sdlc:fit [--days N] [--json]` | Usage fit from local transcripts: context size, resets, model mix, cache backend, and what each lever would have saved on your own history. Counterfactuals at list prices, not forecasts. |
 | `/sdlc:main-model [haiku\|sonnet\|opus\|off]` | Show or set the persistent main-session model (`mainModel` in `~/.claude/sdlc-review.json`; Sonnet by default). `off` opts out of the shipped default. |
+| `/sdlc:statusline [install\|remove\|preview] [force]` | Install or remove the sdlc status line. No argument previews and writes nothing. See [Status line](#status-line). |
 | `/verify` | Check the branch against its `## Acceptance` criteria: dispatches the `verifier` sub-agent, then records the result in the feature record and, on PASS, writes `.git/.claude-last-verify`. Needs a clean tree. Never commits or opens the PR. |
 
 ---
@@ -502,6 +507,49 @@ blocks and never touches a marker. The coverage thresholds stay at 95 and 90 on
 printf 'PASS\n%s' "$(git diff --cached | git hash-object --stdin)" > .git/.claude-last-hygiene
 ```
 
+### Status line
+
+The status line shows context used, model, cost and branch:
+
+```
+ctx 27% used (54k/200k) | Sonnet | $1.20 day $3.50 | branch
+```
+
+The context segment is green below 20 percent used, amber from 20 to 29,
+and red from 30.
+
+```
+/sdlc:statusline preview          # dry run, writes nothing (also the default)
+/sdlc:statusline install          # install
+/sdlc:statusline install force    # replace a statusLine that is already set
+/sdlc:statusline remove           # remove it
+```
+
+The installer merges only the `statusLine` key into `settings.json`. Every other
+key stays as it was. An existing `statusLine` of yours is kept unless you pass
+`force`. A backup `settings.json.backup.<UTC>-pre-sdlc-statusline` is written
+beside `settings.json` before any change. The scripts are copied to the plugin
+data directory (`CLAUDE_PLUGIN_DATA`; when that is unset,
+`<config dir>/plugins/data/sdlc-sdlc-claude-skills`, where the config dir is
+`CLAUDE_CONFIG_DIR` or `~/.claude`), so the path survives plugin updates.
+`remove` deletes the `statusLine` key and the `statusline` directory in the data
+directory. The status line appears from the next session or refresh. It needs
+Node. It uses `git` for the branch name when `git` is installed and shows
+`no git` otherwise.
+
+The installer exits 0 when done, 2 when it refused and wrote nothing (for
+example, a `settings.json` that is not valid JSON, or a data directory path with
+a quote, `$`, backtick or backslash), and 1 on an unexpected failure.
+
+Two caveats:
+
+- The `day $X` figure is an estimate. It uses rates probed from the gateway, not
+  published list prices. Edit the rate table in `src/lib/day-cost.js` if yours
+  differ.
+- A plugin cannot set `statusLine` on its own: Claude Code drops every plugin
+  settings key except `agent` and `subagentStatusLine`. That is why this is a
+  command you run.
+
 ### Turning steps off
 
 Use the `steps` block in `sdlc-review.json`, or run `/sdlc:steps`. `/sdlc:steps` lists every step with its state and where that state came from. `/sdlc:steps off <area|step> [repo]` switches one area or step off. `/sdlc:steps on <area|step> [repo]` switches it back on. Each writes one `sdlc-review.json` and nothing else.
@@ -544,6 +592,7 @@ Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`. Repo file
 | `standalone` | no | `cache-ttl` | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
 | `standalone` | no | `marketplace-autoupdate` | `touch ~/.claude/sdlc-autoupdate.disabled`, or set `"autoUpdate": false` on the marketplace entry. See [Auto-update](#auto-update). |
 | `standalone` | no | `session-instructions` | None. |
+| Status line | n/a | the installed `statusLine` key | `/sdlc:statusline remove`, or edit `statusLine` out of `settings.json`. Not a `steps` block entry. |
 | Everything | n/a | the whole plugin | `/plugin disable sdlc@sdlc-claude-skills`. This switches off every hook, skill and command. |
 
 The reporting commands (`/sdlc:model-spend`, `/sdlc:fit`,
