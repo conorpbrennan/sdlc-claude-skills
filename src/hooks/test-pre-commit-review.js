@@ -1473,7 +1473,7 @@ try {
         stageTrackedAppend('# just a note\n');
         tddOrderMod.classifyTddOrder = () => { throw new Error('simulated tdd-order crash'); };
         try {
-            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '');
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '', false, { on: true, source: 'default' });
             assert('throwing classifier: gate blocks', gate.action, 'block');
             assert('throwing classifier: status is classifier-error', gate.status, 'classifier-error');
             assertContains('throwing classifier: reason names the error', gate.reason || '', 'simulated tdd-order crash');
@@ -1488,7 +1488,7 @@ try {
         process.env.TDD_MANDATE_CONFIG = NO_MANDATE_CFG;
         stageTrackedAppend('# just a note\n');
         try {
-            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '');
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '', false, { on: true, source: 'default' });
             assert('messageless throw: gate blocks', gate.action, 'block');
             assertContains('messageless throw: reason still set', gate.reason || '', 'classifier-error');
         } finally {
@@ -2060,7 +2060,7 @@ try {
             const TDD_CFG = path.resolve(TMP_DIR, 'pre-commit-hook-test-tdd-repos.json');
             fs.writeFileSync(TDD_CFG, JSON.stringify({ repos: [REPO_ROOT] }), 'utf-8');
             process.env.TDD_ORDER_REPOS_CONFIG = TDD_CFG;
-            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '/nonexistent/transcript.jsonl');
+            const gate = mod.evaluateTddOrderGate(REPO_ROOT, '/nonexistent/transcript.jsonl', false, { on: true, source: 'default' });
             assert('tdd gate blocks on unreadable paths', gate.action, 'block');
             assert('tdd gate status is unreadable', gate.status, 'unreadable');
             delete process.env.TDD_ORDER_REPOS_CONFIG;
@@ -2597,6 +2597,73 @@ try {
     assert('block marker is ignored when its hash differs (decision)', r.decision, 'block');
     // The reason should NOT be the 30s re-emit reason — it should be the fresh default reason.
     assertFalse('stale block marker does not repeat its reason', (r.reason || '') === 'Same diff blocked < 30s ago');
+
+    // =====================================================================
+    // Steps: tdd-mandate and review-gate switch independently. Each case runs
+    // in a scratch repository with scratch user config, config dir and
+    // mandate file, so no case reads the owner's real files.
+    // =====================================================================
+    console.log('\n[INT] tdd-mandate and review-gate honour the steps block:');
+    const STEP_CODE = { 'app.py': 'def app():\n    return 1\n' };
+    const STEP_TEST = { 'tests/test_app.py': 'from app import app\n\ndef test_app():\n    assert app() == 1\n' };
+    const STEP_CASES = [
+        { name: 'default: review-required block', user: null, repo: null, staged: 'code+test', expect: 'block-review', marker: 'any' },
+        { name: 'review off, code without test: TDD block, no marker', user: { steps: { review: { 'review-gate': false } } }, repo: null, staged: 'code', expect: 'block-tdd', marker: 'none' },
+        { name: 'review off, code with test: approve, no marker, no lock', user: { steps: { review: { 'review-gate': false } } }, repo: null, staged: 'code+test', expect: 'approve', marker: 'none' },
+        { name: 'tdd off: review-required block, no TDD block', user: { steps: { tdd: false } }, repo: null, staged: 'code', expect: 'block-review', marker: 'any' },
+        { name: 'both off: approve', user: { steps: { tdd: false, review: false } }, repo: null, staged: 'code', expect: 'approve', marker: 'none' },
+        { name: 'repo review off: still blocks, stderr warning', user: null, repo: { steps: { review: { 'review-gate': false } } }, staged: 'code+test', expect: 'block-review', marker: 'any', stderr: 'pre-commit-review: ' },
+        { name: 'tdd-mandate.disabled alias: no TDD block', user: null, repo: null, alias: true, staged: 'code', expect: 'block-review', marker: 'any' },
+    ];
+    for (const c of STEP_CASES) {
+        const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pcr-step-')));
+        const g = args => execFileSync('git', args,
+            { cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+        const put = (rel, content) => {
+            fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            fs.writeFileSync(path.join(dir, rel), content, 'utf-8');
+        };
+        try {
+            g(['init', '-q']);
+            put('README.md', 'x\n');
+            g(['add', '--', 'README.md']);
+            g(['update-ref', 'HEAD', g(['-c', 'user.name=t', '-c', 'user.email=t@example.com',
+                'commit-tree', g(['write-tree']), '-m', 'c'])]);
+            const userCfg = path.join(dir, 'user-sdlc-review.json');
+            if (c.user) fs.writeFileSync(userCfg, JSON.stringify(c.user), 'utf-8');
+            if (c.repo) put('.claude/sdlc-review.json', JSON.stringify(c.repo));
+            if (c.alias) put('.claude/tdd-mandate.disabled', '');
+            const staged = { ...STEP_CODE, ...(c.staged === 'code+test' ? STEP_TEST : {}) };
+            for (const [rel, content] of Object.entries(staged)) { put(rel, content); g(['add', '--', rel]); }
+            const spawned = spawnSync('node', [HOOK_PATH], {
+                input: JSON.stringify({ tool_input: { command: 'git commit -m x' }, transcript_path: '' }),
+                encoding: 'utf-8',
+                cwd: dir,
+                env: {
+                    ...process.env,
+                    SDLC_REVIEW_CONFIG_USER: userCfg,
+                    CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
+                    TDD_MANDATE_CONFIG: path.join(dir, 'no-such-mandate.json'),
+                },
+            });
+            const out = spawned.stdout.trim() ? JSON.parse(spawned.stdout.trim()) : { decision: 'silent' };
+            const msg = (out.reason || '') + ' ' + (out.systemMessage || '');
+            const isTdd = /TDD gate/.test(msg);
+            const got = out.decision === 'approve' ? 'approve' : (isTdd ? 'block-tdd' : 'block-review');
+            assert('steps: ' + c.name + ' (decision)', got, c.expect);
+            const marker = path.join(dir, '.git', '.claude-last-review');
+            const lock = path.join(dir, '.git', '.claude-review-in-progress');
+            if (c.marker === 'none') {
+                assertFalse('steps: ' + c.name + ' (no marker)', fs.existsSync(marker));
+                assertFalse('steps: ' + c.name + ' (no lock)', fs.existsSync(lock));
+            }
+            if (c.stderr) assertContains('steps: ' + c.name + ' (stderr)', spawned.stderr, c.stderr);
+            else assertFalse('steps: ' + c.name + ' (stderr quiet)', /pre-commit-review: /.test(spawned.stderr));
+            assertFalse('steps: ' + c.name + ' (stdout is one JSON object)', /pre-commit-review: /.test(spawned.stdout));
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    }
 } finally {
     unstageDummy();
     unstageTracked();
