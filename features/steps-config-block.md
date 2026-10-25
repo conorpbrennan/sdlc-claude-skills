@@ -23,6 +23,7 @@
 - commands/steps.md
 - docs/plans/steps-config-block/reports/1-implementer-1.md
 - docs/plans/steps-config-block/reports/2-implementer-1.md
+- docs/plans/steps-config-block/reports/3-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - src/hooks/lib/review-config.js
 - src/hooks/lib/steps.js
@@ -32,6 +33,14 @@
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `c84818a` — steps: /sdlc:steps lists every step with its state and source
+  - .claude-plugin/plugin.json
+  - commands/steps.md
+  - docs/plans/steps-config-block/reports/2-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/steps-cli.js
+  - src/hooks/test-steps-cli.js
 
 - 2026-10-25 `6af81c5` — steps: resolver lib answering is-step-X-on for every sdlc step
   - .claude-plugin/plugin.json

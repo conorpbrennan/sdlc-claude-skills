@@ -116,6 +116,66 @@ console.log('\n== bad config still exits 0');
     assert('bad json: warning printed', r.lines.some(l => l.startsWith('warning: ')), true);
 }
 
+console.log('\n== set');
+// before: { user, repo } raw file text (string) or object or null; args after `set`
+//   (the --repo flag is added unless noRepo); after: { user, repo } expected parsed
+//   content or the string 'unchanged'; stdout: lines the output must contain.
+const SET_CASES = [
+    { name: 'step off in user file', before: { user: { mainModel: 'opus', rules: [1] } }, args: ['read-trim', 'off'],
+        after: { user: { mainModel: 'opus', rules: [1], steps: { orchestration: { 'read-trim': false } } } },
+        stdout: ['orchestration read-trim off user file (steps.orchestration.read-trim)'], exit: 0 },
+    { name: 'area off', before: {}, args: ['features', 'off'],
+        after: { user: { steps: { features: { enabled: false } } } },
+        stdout: ['features pre-commit-feature off user file (steps.features.enabled)', 'features session-start-feature off', 'features post-commit-feature off'], exit: 0 },
+    { name: 'area boolean to object', before: { user: { steps: { features: true, hygiene: false } } }, args: ['features', 'off'],
+        after: { user: { steps: { features: { enabled: false }, hygiene: false } } },
+        stdout: ['features pre-commit-feature off'], exit: 0 },
+    { name: 'repo file non-guard', before: {}, args: ['pre-commit-hygiene', 'off', '--file', 'repo'],
+        after: { repo: { steps: { hygiene: { 'pre-commit-hygiene': false } } } },
+        stdout: ['hygiene pre-commit-hygiene off repo file'], exit: 0 },
+    { name: 'repo file guard refused', before: { repo: { steps: { hygiene: true } } }, args: ['review-gate', 'off', '--file', 'repo'],
+        after: { user: 'unchanged', repo: 'unchanged' }, stdout: [], stderr: 'review-gate is a guard step; it switches in the user file only', exit: 2 },
+    { name: 'repo file guard area refused', before: {}, args: ['tdd', 'off', '--file', 'repo'],
+        after: { user: 'unchanged', repo: 'unchanged' }, stdout: [], stderr: 'tdd is a guard step; it switches in the user file only', exit: 2 },
+    { name: 'unknown id', before: { user: { a: 1 } }, args: ['nope', 'off'],
+        after: { user: 'unchanged' }, stdout: [], stderr: 'orchestration', exit: 2 },
+    { name: 'on/off missing', before: { user: { a: 1 } }, args: ['read-trim'],
+        after: { user: 'unchanged' }, stdout: [], stderr: 'on or off', exit: 2 },
+    { name: 'repo file with no repo', before: {}, noRepo: true, args: ['pre-commit-hygiene', 'off', '--file', 'repo'],
+        after: { user: 'unchanged' }, stdout: [], stderr: 'no repo', exit: 2 },
+    { name: 'malformed file refused', before: { user: '{ nope' }, args: ['read-trim', 'off'],
+        after: { user: 'unchanged' }, stdout: [], exit: 1 },
+    { name: 'alias still wins', before: { user: { mainModel: 'off' } }, args: ['main-model', 'on'],
+        after: { user: { mainModel: 'off', steps: { standalone: { 'main-model': true } } } },
+        stdout: ['standalone main-model off alias'], exit: 0 },
+];
+
+for (const c of SET_CASES) {
+    const s = scratch(null, null, []);
+    const files = { user: path.join(path.dirname(s.env.SDLC_REVIEW_CONFIG_USER), 'user.json'), repo: path.join(s.repoRoot, '.claude', 'sdlc-review.json') };
+    const raw = {};
+    for (const k of ['user', 'repo']) {
+        const v = c.before[k];
+        if (v === undefined) continue;
+        raw[k] = typeof v === 'string' ? v : JSON.stringify(v);
+        fs.writeFileSync(files[k], raw[k]);
+    }
+    const argv = [CLI, 'set', ...c.args];
+    if (!c.noRepo) argv.push('--repo', s.repoRoot);
+    const r = spawnSync(process.execPath, argv, { env: s.env, encoding: 'utf8', cwd: c.noRepo ? sb : undefined });
+    assert(`${c.name}: exit`, r.status, c.exit);
+    const lines = r.stdout.split('\n').map(l => l.replace(/ +/g, ' ').trim());
+    for (const want of c.stdout) assert(`${c.name}: has '${want}'`, lines.some(l => l.includes(want)), true);
+    if (c.stderr) assert(`${c.name}: stderr has '${c.stderr}'`, r.stderr.includes(c.stderr), true);
+    for (const k of ['user', 'repo']) {
+        const want = c.after[k];
+        const exists = fs.existsSync(files[k]);
+        if (want === 'unchanged') assert(`${c.name}: ${k} unchanged`, exists ? fs.readFileSync(files[k], 'utf8') : null, raw[k] === undefined ? null : raw[k]);
+        else if (want !== undefined) assert(`${c.name}: ${k} content`, exists ? JSON.parse(fs.readFileSync(files[k], 'utf8')) : null, want);
+        else if (c.exit === 0) assert(`${c.name}: ${k} untouched`, exists ? fs.readFileSync(files[k], 'utf8') : null, raw[k] === undefined ? null : raw[k]);
+    }
+}
+
 fs.rmSync(sb, { recursive: true, force: true });
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
