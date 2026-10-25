@@ -85,6 +85,16 @@
 
 ## History
 
+- 2026-10-25 `97955b0` — steps: test suites use here-strings, not echo piped into grep -q
+  - .claude-plugin/plugin.json
+  - docs/plans/steps-config-block/reports/14-fix-1.md
+  - docs/plans/steps-config-block/reports/14b-fix-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/test-enforce-co-author.sh
+  - src/hooks/test-post-commit-hook.sh
+  - src/hooks/test-pre-commit-hygiene.sh
+  - src/hooks/test-stop-hook.sh
+
 - 2026-10-25 `4f1c522` — steps: close-out applies the batched advisories
   - .claude-plugin/plugin.json
   - README.md
@@ -206,19 +216,16 @@
   - src/hooks/test-steps.js
   - tools/run-tests.sh
 
-## Verification — 2026-10-25 @ 4f1c522
+## Verification — 2026-10-25 @ 97955b0
 
 | # | Criterion | Result | Evidence |
 | --- | --- | --- | --- |
-| 1 | `bash tools/run-tests.sh` exits 0 with every file `rc=0`. | FAIL | `bash tools/run-tests.sh -j 8` printed `FAIL: steps block table` from test-enforce-co-author.sh (stderr lacks the repo file and key), then `Files: 46  failed: 1` and exit 1. The same file run alone printed `Results: 54 passed, 0 failed`. |
-| 2 | `claude plugin validate .` exits 0. | PASS | `claude plugin validate .` exited 0. |
-| 3 | `node src/hooks/steps-cli.js list` prints one line per step id in the plan's Section 1 table and the guard footer. | UNVERIFIED | `node src/hooks/steps-cli.js list` printed 23 lines: 22 step rows plus the footer `Guard areas (tdd, review, commit-conventions) switch from the user file only.` I did not compare the ids to the plan's Section 1 table. |
-| 4 | With `{"steps":{"features":false}}` in the user `sdlc-review.json`, `node src/hooks/steps-cli.js list` shows the three features steps off with source `user`. | PASS | With `{"steps":{"features":false}}` in the user file, `list` printed `features session-start-feature off user file (steps.features)`, and the same for `pre-commit-feature` and `post-commit-feature`. |
-| 5 | With `{"steps":{"tdd":false}}` only in a repo `sdlc-review.json`, the tdd step stays on and a one-line warning names the file and key. | PASS | In a `git init` scratch repo with `{"steps":{"tdd":false}}` only in `.claude/sdlc-review.json`, `list` printed `tdd tdd-mandate on default` and `warning: <repo>/.claude/sdlc-review.json: steps.tdd is read from the user file only; ignored`. |
-| 6 | With invalid JSON in the user `sdlc-review.json`, every step stays on and a warning is printed. | PASS | With `{bad` in the user file, `list 2>&1\|grep -iv " on  default"` printed only `warning: .../sdlc-review.json: invalid JSON (...); ignored` and the footer. `list` showed no step off (0 rows matching " off"). |
-| 7 | `grep -ln "feature-tracking.disabled')\\|mandateInForce(" src/hooks/*.js \| grep -v /test-` prints nothing: no hook reads an alias itself. | PASS | `grep -ln "feature-tracking.disabled')\|mandateInForce(" src/hooks/*.js\|grep -v /test-` printed nothing. |
+| 1 | `bash tools/run-tests.sh` exits 0 with every file `rc=0`. | PASS | `bash tools/run-tests.sh` printed `Files: 46  failed: 0`, and the exit code was 0 |
+| 2 | `claude plugin validate .` exits 0. | PASS | `claude plugin validate .` printed `Validation passed with warnings`, and the exit code was 0 |
+| 3 | `node src/hooks/steps-cli.js list` prints one line per step id in the plan's Section 1 table and the guard footer. | PASS | `steps-cli.js list` printed 22 step lines. They match the plan Section 1 table (6+3+1+3+1+1+3+4), followed by `Guard areas (tdd, review, commit-conventions) switch from the user file only.` |
+| 4 | With `{"steps":{"features":false}}` in the user `sdlc-review.json`, `node src/hooks/steps-cli.js list` shows the three features steps off with source `user`. | PASS | With the user file `{"steps":{"features":false}}`, the three features steps showed `off  user file (steps.features)`. `tdd-mandate` stayed `on default`. |
+| 5 | With `{"steps":{"tdd":false}}` only in a repo `sdlc-review.json`, the tdd step stays on and a one-line warning names the file and key. | PASS | With `{"steps":{"tdd":false}}` in the repo file, in a real `git init` repo, `tdd-mandate` showed `on  default`. The output also had `warning: .../.claude/sdlc-review.json: steps.tdd is read from the user file only; ignored`. |
+| 6 | With invalid JSON in the user `sdlc-review.json`, every step stays on and a warning is printed. | PASS | With the user file `{bad`, 0 lines showed ` off ` and 22 lines showed ` on `. The output also had `warning: .../sdlc-review.json: invalid JSON (...); ignored`. |
+| 7 | `grep -ln "feature-tracking.disabled')\\|mandateInForce(" src/hooks/*.js \| grep -v /test-` prints nothing: no hook reads an alias itself. | PASS | The grep printed nothing. |
 
-**Verdict**: FAIL
-- The verifier ended the report with VERIFY_GATE: FAIL.
-- Row 1 is FAIL.
-- Row 3 is UNVERIFIED.
+**Verdict**: PASS
