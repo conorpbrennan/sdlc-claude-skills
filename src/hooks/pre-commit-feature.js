@@ -41,6 +41,7 @@ const commitCommand = require('./lib/commit-command');
 const hookOutput = require('./lib/hook-output');
 const gitRead = require('./lib/git-read');
 const { cmd } = require('./lib/plugin-names');
+const steps = require('./lib/steps');
 
 const hookTimer = timingLog.timer();
 const hookMeta = { hook: 'pre-commit-feature' };
@@ -123,7 +124,11 @@ if (!located.toplevel) {
 const repo = located.toplevel;
 hookMeta.repo = repo;
 
-if (fs.existsSync(path.join(repo, '.claude', 'feature-tracking.disabled'))) {
+// The step resolver answers for the config switches and the
+// .claude/feature-tracking.disabled alias alike.
+const stepOn = steps.stepState('pre-commit-feature', { repoRoot: repo });
+for (const w of stepOn.warnings) process.stderr.write('pre-commit-feature: ' + w + '\n');
+if (!stepOn.on) {
     approve('skip-disabled');
 }
 

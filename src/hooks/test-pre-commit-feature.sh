@@ -32,6 +32,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Scratch config so no case reads the owner's real files.
+SCR="$(mktemp -d)"
+track "$SCR"
+export CLAUDE_CONFIG_DIR="$SCR/claude"
+export TDD_MANDATE_CONFIG="$SCR/missing-tdd.json"
+export SDLC_REVIEW_CONFIG_USER="$SCR/user.json"
+
 assert_contains() {
     local name="$1" output="$2" expected="$3"
     if echo "$output" | grep -q -- "$expected" 2>/dev/null; then
@@ -174,6 +181,34 @@ echo "print('x')" > "$REPO4/widget.py"
 git -C "$REPO4" add widget.py
 out=$(run_hook "$REPO4")
 assert_contains "disabled marker -> approve" "$out" '"approve"'
+
+# --- Step switches (resolver) ----------------------------------------------
+# step_case NAME USER_JSON REPO_JSON ALIAS(0/1) EXPECT(block/approve)
+echo ""
+echo "Step switches"
+step_case() {
+    local name="$1" user="$2" repofile="$3" alias="$4" expect="$5" repo out
+    repo=$(seed_repo)
+    git -C "$repo" checkout -q -b add-widget
+    rm -f "$SDLC_REVIEW_CONFIG_USER"
+    [ -n "$user" ] && echo "$user" > "$SDLC_REVIEW_CONFIG_USER"
+    mkdir -p "$repo/.claude"
+    [ -n "$repofile" ] && echo "$repofile" > "$repo/.claude/sdlc-review.json"
+    [ "$alias" = 1 ] && touch "$repo/.claude/feature-tracking.disabled"
+    echo "print('x')" > "$repo/widget.py"
+    git -C "$repo" add widget.py
+    out=$(run_hook "$repo")
+    STEP_OUT="$out"
+    assert_contains "$name -> $expect" "$out" "\"$expect\""
+}
+step_case "default" "" "" 0 block
+step_case "user file: area off" '{"steps":{"features":false}}' "" 0 approve
+step_case "user file: step off in on area" '{"steps":{"features":{"pre-commit-feature":false}}}' "" 0 approve
+step_case "user file: sibling step off" '{"steps":{"features":{"post-commit-feature":false}}}' "" 0 block
+step_case "repo file: area off honoured" "" '{"steps":{"features":false}}' 0 approve
+step_case "alias file still disables" "" "" 1 approve
+step_case "bad step key warns, gate still blocks" '{"steps":{"features":{"bogus-step":false}}}' "" 0 block
+assert_contains "warning on stderr prefixed" "$STEP_OUT" "pre-commit-feature: "
 
 # --- Feature branch, missing stub ------------------------------------------
 echo ""

@@ -33,6 +33,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Scratch config so no case reads the owner's real files.
+SCR="$(mktemp -d)"
+track "$SCR"
+export CLAUDE_CONFIG_DIR="$SCR/claude"
+export TDD_MANDATE_CONFIG="$SCR/missing-tdd.json"
+export SDLC_REVIEW_CONFIG_USER="$SCR/user.json"
+
 assert_contains() {
     local name="$1" output="$2" expected="$3"
     if echo "$output" | grep -q -- "$expected" 2>/dev/null; then
@@ -162,6 +169,38 @@ touch "$REPO3/.claude/feature-tracking.disabled"
 out=$(run_hook "$REPO3")
 assert_not_contains "disabled -> no additionalContext" "$out" "additionalContext"
 assert_file_missing "disabled -> no stub created" "$REPO3/features/some-feature.md"
+
+# --- Step switches (resolver) ---
+# step_case NAME USER_JSON REPO_JSON ALIAS(0/1) EXPECT(on/off)
+echo ""
+echo "Step switches"
+step_case() {
+    local name="$1" user="$2" repofile="$3" alias="$4" expect="$5" repo out err
+    repo=$(seed_repo)
+    git -C "$repo" checkout -q -b some-feature
+    rm -f "$SDLC_REVIEW_CONFIG_USER"
+    [ -n "$user" ] && echo "$user" > "$SDLC_REVIEW_CONFIG_USER"
+    mkdir -p "$repo/.claude"
+    [ -n "$repofile" ] && echo "$repofile" > "$repo/.claude/sdlc-review.json"
+    [ "$alias" = 1 ] && touch "$repo/.claude/feature-tracking.disabled"
+    err="$SCR/err.txt"
+    out=$(cd "$repo" && node "$HOOK" < /dev/null 2>"$err")
+    if [ "$expect" = on ]; then
+        assert_contains "$name -> hook acts" "$out" "additionalContext"
+        [ -f "$repo/features/some-feature.md" ] && assert_contains "$name -> stub created" "yes" "yes" || assert_contains "$name -> stub created" "no" "yes"
+    else
+        assert_not_contains "$name -> no additionalContext" "$out" "additionalContext"
+        assert_file_missing "$name -> no stub created" "$repo/features/some-feature.md"
+    fi
+}
+step_case "default" "" "" 0 on
+step_case "user file: area off" '{"steps":{"features":false}}' "" 0 off
+step_case "user file: step off in on area" '{"steps":{"features":{"session-start-feature":false}}}' "" 0 off
+step_case "user file: sibling step off" '{"steps":{"features":{"pre-commit-feature":false}}}' "" 0 on
+step_case "repo file: area off honoured" "" '{"steps":{"features":false}}' 0 off
+step_case "alias file still disables" "" "" 1 off
+step_case "bad step key warns, hook still acts" '{"steps":{"features":{"bogus-step":false}}}' "" 0 on
+assert_contains "warning on stderr prefixed" "$(cat "$SCR/err.txt")" "session-start-feature: "
 
 # --- Blocklist branches ---
 echo ""

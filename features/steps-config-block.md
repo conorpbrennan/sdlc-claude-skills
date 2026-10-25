@@ -24,15 +24,31 @@
 - docs/plans/steps-config-block/reports/1-implementer-1.md
 - docs/plans/steps-config-block/reports/2-implementer-1.md
 - docs/plans/steps-config-block/reports/3-implementer-1.md
+- docs/plans/steps-config-block/reports/4-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - src/hooks/lib/review-config.js
 - src/hooks/lib/steps.js
+- src/hooks/post-commit-feature.js
+- src/hooks/pre-commit-feature.js
+- src/hooks/session-start-feature.js
 - src/hooks/steps-cli.js
+- src/hooks/test-post-commit-feature.sh
+- src/hooks/test-pre-commit-feature.sh
+- src/hooks/test-session-start-feature.sh
 - src/hooks/test-steps-cli.js
 - src/hooks/test-steps.js
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `77d6cdb` — steps: /sdlc:steps on|off toggles one switch through a shared config writer
+  - .claude-plugin/plugin.json
+  - commands/steps.md
+  - docs/plans/steps-config-block/reports/3-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/steps-cli.js
+  - src/hooks/test-steps-cli.js
 
 - 2026-10-25 `c84818a` — steps: /sdlc:steps lists every step with its state and source
   - .claude-plugin/plugin.json
