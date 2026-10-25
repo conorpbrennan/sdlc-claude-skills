@@ -28,7 +28,7 @@ const STATE_DIR_ENV = 'SDLC_ORCHESTRATOR_STATE_DIR';
 const DEFAULT_NUDGE = 8;
 
 // Printed once each time the mode turns on. A prompt to the owner; nothing enforces it.
-const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for plan writing, plan source review and FAIL triage.';
+const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for writing new plans, plan source review and FAIL triage.';
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 

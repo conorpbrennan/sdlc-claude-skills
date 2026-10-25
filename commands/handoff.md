@@ -43,7 +43,7 @@ Every section is required. Write `none` where there is nothing to say.
 ```markdown
 # Handoff: <slug>, <date time>
 
-Run this session on Sonnet (`/model sonnet`). Opus is for plan writing, plan source review and FAIL triage.
+Run this session on Sonnet (`/model sonnet`). Opus is for writing new plans, plan source review and FAIL triage.
 Work picked up from this handoff runs in sub-agents. The main session reads this file, writes step briefs,
 dispatches implementers (model: "sonnet"), runs the review, and commits. It does not edit source or investigate inline.
 It trusts implementer reports and does not poll (see `/sdlc:orchestrate`).

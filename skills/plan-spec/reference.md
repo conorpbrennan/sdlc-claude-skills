@@ -777,7 +777,8 @@ dispatch says so: `subagent_type: "sdlc:implementer"`, `model: "sonnet"`
 (§21.1). An Opus implementer needs the owner's OK recorded in §20.2 and a
 `TIER: opus: user asked` line in the prompt (the hook raises a confirm prompt for it).
 The `agent-tier-gate` hook accepts only the categories plan writing, plan source
-review, fail triage and user asked, and denies any other Opus dispatch.
+review, fail triage and user asked, and denies any other Opus dispatch. Plan writing is for
+new plans only: folding findings into, revising or adding to an existing plan runs on Sonnet.
 
 Reviewers are handed: the repo, the staged diff, the step's intent in one
 paragraph, the single owners it must not duplicate, the specific things to

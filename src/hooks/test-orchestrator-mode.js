@@ -76,7 +76,7 @@ const decision = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificO
 const turnOn = (sid, extra) => writeState(sid, { on: true, since: '2026-01-01T00:00:00.000Z', trigger: 'test', inlineSinceDispatch: 0, off: false, ...extra });
 
 const COMMIT = 'com' + 'mit';
-const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for plan writing, plan source review and FAIL triage.';
+const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for writing new plans, plan source review and FAIL triage.';
 const DENY_REASON = 'Orchestrator mode: the main session does not edit source. Write a brief and dispatch a Sonnet sub-agent (Agent tool, model: "sonnet"). If the owner wants this edit made inline, ask them to run /sdlc:orchestrate off.';
 
 console.log('sub-agent input prints nothing and changes nothing');

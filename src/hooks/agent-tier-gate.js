@@ -4,7 +4,11 @@
 // dispatch must carry a "TIER: opus: <category>" line in its prompt or it is denied.
 // The category is one of: plan writing, plan source review, fail triage (all allowed),
 // or user asked (raises a confirm prompt for the owner). Text after the category is
-// free. Any other reason, such as "design judgement", is denied: re-dispatch on Sonnet.
+// free. Plan writing is for NEW plans only: when the description or the first sentence of
+// the prompt shows an edit of an existing plan (fold, revise, amend, edit, apply findings,
+// add to a plan), the dispatch is denied and runs on Sonnet. The check is a keyword
+// match on honest wording; a prompt that hides an edit under a neutral description
+// passes, and that is a known gap. Any other reason, such as "design judgement", is denied: re-dispatch on Sonnet.
 // It also appends the shared context-budget block to those prompts (lib/context-budget.js).
 // Threat model: honest habit, not adversarial input. This is a cost gate, so any
 // parse error or odd input prints nothing and exits 0 (fail open).
@@ -33,7 +37,18 @@ const TIER_CATEGORIES = [
     ['user asked', CATEGORY_ASK],
 ];
 
-const DENY_REASON = 'Opus and Fable dispatches run only for: plan writing, plan source review, fail triage, or user asked. Add a line "TIER: opus: <category>" to the prompt with one of those four categories, or dispatch with model: "sonnet".';
+const PLAN_WRITING = 'plan writing';
+
+// Wording that shows an edit of an existing plan: fold, revise, amend, edit, apply findings,
+// update the plan, or "add ... to ... plan" (all within one sentence).
+const PLAN_EDIT = /\b(?:fold(?:s|ed|ing)?|revis(?:e|es|ed|ing|ion)|amend(?:s|ed|ing)?|edit(?:s|ed|ing)?|appl(?:y|ies|ying) (?:\w+ )?findings|update (?:the|a) plan|add\b[^.!?\n]*\bto\b[^.!?\n]*\bplan)\b/i;
+
+// Matches the category words that open the text after the TIER prefix, with the separators after them.
+const PLAN_WRITING_OPENER = /^\s*plan[\s_-]+writing[\s.:;,\-–—]*/i;
+
+const DENY_REASON = 'Opus and Fable dispatches run only for: plan writing (new plans only), plan source review, fail triage, or user asked. Add a line "TIER: opus: <category>" to the prompt with one of those four categories, or dispatch with model: "sonnet".';
+
+const PLAN_EDIT_DENY_REASON = 'Plan writing is for new plans. Folding findings into, revising or adding to an existing plan runs on Sonnet: re-dispatch with model: "sonnet", or use "TIER: opus: user asked" if the owner wants Opus.';
 
 // Normalises a TIER reason for category matching.
 //
@@ -59,6 +74,23 @@ function categoryKind(reason) {
         if (!/[a-z0-9]/.test(text.charAt(name.length))) return kind;
     }
     return null;
+}
+
+// Tells whether an Agent call labelled plan writing is really an edit of an existing plan.
+// It reads the description and the first sentence of the prompt after the TIER line.
+//
+// Args:
+//   description: the dispatch description, or any non-string when absent.
+//   prompt: the full prompt text.
+//   match: the TIER_LINE match on the prompt.
+// Returns:
+//   true when either text shows an edit of an existing plan.
+function isPlanEdit(description, prompt, match) {
+    if (typeof description === 'string' && PLAN_EDIT.test(description)) return true;
+    const afterTier = prompt.slice(match.index + match[0].length - match[1].length);
+    const opening = afterTier.replace(PLAN_WRITING_OPENER, '').trimStart();
+    const sentence = opening.split(/[.!?](?:\s|$)|\n/)[0];
+    return PLAN_EDIT.test(sentence);
 }
 
 // Builds the ask output for an owner-requested model. The owner reads the reason in the prompt.
@@ -161,7 +193,12 @@ function decideTier(toolInput) {
         const prompt = typeof toolInput.prompt === 'string' ? toolInput.prompt : '';
         const match = TIER_LINE.exec(prompt);
         const kind = match ? categoryKind(match[1]) : null;
-        if (kind === CATEGORY_ALLOW) return null;
+        if (kind === CATEGORY_ALLOW) {
+            if (normaliseReason(match[1]).startsWith(PLAN_WRITING) && isPlanEdit(toolInput.description, prompt, match)) {
+                return deny(PLAN_EDIT_DENY_REASON, '');
+            }
+            return null;
+        }
         if (kind === CATEGORY_ASK) return askWith(model, toolInput.description, toolInput);
         return deny(DENY_REASON, '');
     }
