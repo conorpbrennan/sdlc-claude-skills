@@ -5,8 +5,9 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: dispatch the step 1 implementer (brief from plan Section 5 step 1 plus Section 2).
-Last committed step: none. Commit 0 (plan, feature record, tracker) is next to land.
+Next action: dispatch the step 1 reviewer on the staged diff (throwaway worktree); on PASS write the marker and retry the commit.
+Last committed: commit 0 `81d7c19` (plan, feature record, tracker). Step 1 built, GATE green (test-steps 56/0, run-tests 41 files 0 failed), staged, commit attempt pending review.
+Reviewer to check specifically: `mandateInForce(repoRoot)` is called with no `configPath`, so it reads the real `~/.claude/tdd-mandate.json`; do the tests depend on that file?
 
 ## Step state
 
@@ -28,11 +29,11 @@ Last committed step: none. Commit 0 (plan, feature record, tracker) is next to l
 
 ## DISAGREEMENTS
 
-None yet.
+- Step 1: the brief put `marketplace-autoupdate` before `session-instructions`; the implementer built the plan's order (`session-instructions` first). Plan is authoritative. No action.
 
 ## DECISIONS
 
-None yet.
+- Step 1 brief: the area and step table was written into the brief from the Section 1 table; one difference to check on return: the plan lists `session-instructions` before `marketplace-autoupdate` in `standalone`, the brief had them the other way round. `listSteps` order follows `AREAS`, so if the implementer followed the brief, the reviewer checks the order against the plan.
 
 ## Advisories outside a step's file set (batched into step 13)
 

@@ -307,4 +307,4 @@ function setMainModel(model) {
     }
 }
 
-module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV };
+module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };
