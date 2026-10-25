@@ -29,6 +29,7 @@ const timingLog = require('./timing-log');
 const commitCommand = require('./lib/commit-command');
 const hookOutput = require('./lib/hook-output');
 const gitRead = require('./lib/git-read');
+const steps = require('./lib/steps');
 
 const hookTimer = timingLog.timer();
 const hookMeta = { hook: 'pre-commit-hygiene' };
@@ -68,6 +69,15 @@ const shape = commitCommand.classifyCommitCommand(input);
 // other commit.
 if (shape.kind === 'not-a-commit') {
     approve();  // Non-commit bash invocation — stay silent (don't spam the log).
+}
+
+// Step switch: pre-commit-hygiene off in the steps block -> approve. Before any
+// git call or config read; the opt-in file is only read when the step is on.
+const stepRead = steps.stepState('pre-commit-hygiene', { cwd: process.cwd() });
+for (const w of stepRead.warnings) process.stderr.write('pre-commit-hygiene: ' + w + '\n');
+if (!stepRead.on) {
+    endHook('approve', { via: 'step-off' });
+    approve();
 }
 
 timingLog.logEvent('hook.start', { ...hookMeta });

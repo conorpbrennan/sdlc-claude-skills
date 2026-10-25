@@ -30,6 +30,8 @@ function assert(name, actual, expected) {
 const sb = fs.mkdtempSync(path.join(os.tmpdir(), 'review-config-'));
 const userFile = path.join(sb, 'user-sdlc-review.json');
 process.env.SDLC_REVIEW_CONFIG_USER = userFile;
+process.env.CLAUDE_CONFIG_DIR = path.join(sb, 'claude-config');
+process.env.TDD_MANDATE_CONFIG = path.join(sb, 'no-tdd-mandate.json');
 
 function newRepo(name) {
     const r = path.join(sb, name);
@@ -238,6 +240,20 @@ j = JSON.parse(runCli(['review', '--round', '1', '--repo', gitRepo], sb));
 assert('--repo works from another cwd', [j.round, j.agent, j.model], [1, 'code-reviewer', 'sonnet']);
 j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
 assert('plan-review prints the plan result', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 2]);
+assert('plan-review enabled by default', [j.enabled, j.enabledSource], [true, 'default']);
+writeUserCfg({ steps: { review: { 'plan-review': false } } });
+j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
+assert('plan-review enabled false from the user file', [j.enabled, j.enabledSource], [false, 'user']);
+assert('plan-review keeps its other keys when off', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 2]);
+clearUserCfg();
+{
+    const savedRepoCfg = fs.readFileSync(path.join(gitRepo, '.claude', 'sdlc-review.json'), 'utf-8');
+    writeRepoCfg(gitRepo, { steps: { review: { 'plan-review': false } } });
+    j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
+    assert('plan-review stays enabled when only the repo file says false', j.enabled, true);
+    assert('plan-review warns about the ignored repo file', j.warnings.length > 0, true);
+    writeRepoCfg(gitRepo, savedRepoCfg);
+}
 
 // A flag with no value, or a bad round, is a usage error.
 const runCliRaw = (args, cwd) => spawnSync('node', [cli, ...args], { cwd, encoding: 'utf-8', env: process.env });
@@ -255,6 +271,18 @@ assert('outside a repo still exits 0', nr.status, 0);
 j = JSON.parse(nr.stdout);
 assert('outside a repo falls back to defaults', [j.model, j.agent], ['sonnet', 'code-reviewer']);
 assert('outside a repo warns', j.warnings.length > 0, true);
+
+// setMainModel keeps the mode of an existing user file.
+{
+    const modeFile = path.join(sb, 'mode-sdlc-review.json');
+    fs.writeFileSync(modeFile, '{}');
+    fs.chmodSync(modeFile, 0o640);
+    const saved = process.env.SDLC_REVIEW_CONFIG_USER;
+    process.env.SDLC_REVIEW_CONFIG_USER = modeFile;
+    const res = cfg.setMainModel('opus');
+    process.env.SDLC_REVIEW_CONFIG_USER = saved;
+    assert('setMainModel keeps file mode 0640', [res.ok, (fs.statSync(modeFile).mode & 0o777).toString(8)], [true, '640']);
+}
 
 // main-model: show, set and off, against the user file only.
 {

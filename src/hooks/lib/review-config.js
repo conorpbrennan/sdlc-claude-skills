@@ -269,20 +269,19 @@ function shippedMainModel() {
     }
 }
 
-// Sets mainModel in the user file, keeping every other key. Creates the file
-// when missing. "off" is stored as the owner's opt-out from the plugin's shipped
-// default, so removing the key would bring the default back. Refuses a
-// symlink, unreadable or malformed file, or a non-object top level, writing
-// nothing. The write is a temp file plus rename.
+// Reads the JSON object at `target`, lets `mutate` change it, and writes it back,
+// keeping every key `mutate` leaves alone and the file's mode. Creates the file
+// (mode 0600) and its directory when missing. Refuses a symlink, an unreadable
+// or malformed file, or a non-object top level, writing nothing. The write is a
+// temp file plus rename. This is the one JSON writer for sdlc-review.json files.
 //
 // Args:
-//   model: A model name, or MAIN_MODEL_OFF.
+//   target: absolute path of the config file.
+//   mutate: function(data) that edits the parsed object in place.
 // Returns:
 //   { ok, path, error }: error is set only when ok is false.
-function setMainModel(model) {
-    const target = userConfigPath();
+function updateConfigFile(target, mutate) {
     const tmp = `${target}.tmp.${process.pid}`;
-    if (model !== MAIN_MODEL_OFF && !isModel(model)) return { ok: false, path: target, error: `${JSON.stringify(model)} is not one of ${MODELS.join(', ')}` };
     try {
         let data = {};
         let mode = 0o600;
@@ -295,7 +294,7 @@ function setMainModel(model) {
             if (!(e && e.code === 'ENOENT')) return { ok: false, path: target, error: `cannot be read as JSON (${e.code || e.message})` };
             fs.mkdirSync(path.dirname(target), { recursive: true });
         }
-        data[MAIN_MODEL_KEY] = model;
+        mutate(data);
         fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode });
         fs.renameSync(tmp, target);
         return { ok: true, path: target };
@@ -307,4 +306,19 @@ function setMainModel(model) {
     }
 }
 
-module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV };
+// Sets mainModel in the user file, keeping every other key. Creates the file
+// when missing. "off" is stored as the owner's opt-out from the plugin's shipped
+// default, so removing the key would bring the default back. Writes through
+// updateConfigFile, so it refuses what that refuses.
+//
+// Args:
+//   model: A model name, or MAIN_MODEL_OFF.
+// Returns:
+//   { ok, path, error }: error is set only when ok is false.
+function setMainModel(model) {
+    const target = userConfigPath();
+    if (model !== MAIN_MODEL_OFF && !isModel(model)) return { ok: false, path: target, error: `${JSON.stringify(model)} is not one of ${MODELS.join(', ')}` };
+    return updateConfigFile(target, data => { data[MAIN_MODEL_KEY] = model; });
+}
+
+module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };

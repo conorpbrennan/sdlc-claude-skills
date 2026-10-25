@@ -10,7 +10,8 @@
 // Everything applies to the main session only: stdin has no agent_id there and has
 // one inside a sub-agent, where this hook prints nothing.
 // State is one JSON file per session. Threat model: honest habit, not adversarial
-// input, so any error prints nothing and exits 0. Unreadable state means off.
+// input, so any error in the hook's own logic prints nothing and exits 0. Unreadable state means
+// off. A missing lib file (a broken install) is not caught: it exits 1, as in the other hooks.
 //
 // Also (debugging): `orchestrator-mode.js --status <session_id>` prints the recorded state.
 'use strict';
@@ -21,14 +22,19 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { deny } = require('./lib/hook-output');
 const { resolveOrchestrator } = require('./lib/review-config');
+const { stepState } = require('./lib/steps');
 const { PLUGIN, cmd } = require('./lib/plugin-names');
 const { SOURCE_EXTENSIONS } = require('./lib/source-files');
 
 const STATE_DIR_ENV = 'SDLC_ORCHESTRATOR_STATE_DIR';
 const DEFAULT_NUDGE = 8;
+const STEP_ID = 'orchestrator-mode';
 
 // Printed once each time the mode turns on. A prompt to the owner; nothing enforces it.
 const MODEL_LINE = 'Run this session on Sonnet (/model sonnet). Opus is for writing new plans, plan source review and FAIL triage.';
+
+// Reported on a switch prompt while the step is off in sdlc-review.json.
+const OFF_LINE = 'Orchestrator mode: off (switched off in sdlc-review.json steps; ' + cmd('steps') + ' on orchestrator-mode turns it back on).';
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
@@ -156,6 +162,17 @@ function isAllowedPath(filePath, cwd) {
     return p.startsWith(tmp + '/') || p.startsWith('/tmp/');
 }
 
+// One process handles one event, so a config warning reached by two resolvers prints once.
+const warned = new Set();
+
+// Args:
+//   w: a config warning from either resolver.
+function warnOnce(w) {
+    if (warned.has(w)) return;
+    warned.add(w);
+    process.stderr.write(`orchestrator-mode: ${w}\n`);
+}
+
 // Args:
 //   cwd: the session's working directory, or undefined.
 // Returns: the inline-command count that triggers a nudge.
@@ -169,10 +186,26 @@ function nudgeThreshold(cwd) {
     }
     try {
         const r = resolveOrchestrator({ repoRoot });
-        for (const w of r.warnings) process.stderr.write(`orchestrator-mode: ${w}\n`);
+        for (const w of r.warnings) warnOnce(w);
         return r.bashNudge;
     } catch (e) {
         return DEFAULT_NUDGE;
+    }
+}
+
+// Asks the steps resolver whether this hook's step is off. Called only where the
+// hook would act, so an ordinary event never reads config. Warnings go to stderr.
+//
+// Args:
+//   cwd: the session's working directory, or undefined.
+// Returns: true when the step is off. A resolver failure counts as on (unchanged behaviour).
+function stepIsOff(cwd) {
+    try {
+        const step = stepState(STEP_ID, { cwd: cwd || process.cwd() });
+        for (const w of step.warnings) warnOnce(w);
+        return !step.on;
+    } catch (e) {
+        return false;
     }
 }
 
@@ -186,17 +219,20 @@ function onPostToolUse(input) {
     const trigger = triggerOf(tool, toolInput);
     if (trigger) {
         if (state && state.on) return null;
+        if (stepIsOff(input.cwd)) return null;
         writeState(sid, newState(true, false, trigger));
         return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: MODEL_LINE } };
     }
     if (!state || !state.on) return null;
 
     if (tool === 'Agent') {
+        if (state.inlineSinceDispatch && stepIsOff(input.cwd)) return null;
         if (state.inlineSinceDispatch) writeState(sid, { ...state, inlineSinceDispatch: 0 });
         return null;
     }
     if (tool !== 'Bash' || isOrchestration(String(toolInput.command || ''))) return null;
 
+    if (stepIsOff(input.cwd)) return null;
     const count = (Number.isInteger(state.inlineSinceDispatch) ? state.inlineSinceDispatch : 0) + 1;
     writeState(sid, { ...state, inlineSinceDispatch: count });
     if (count % nudgeThreshold(input.cwd) !== 0) return null;
@@ -215,12 +251,16 @@ function onPreToolUse(input) {
     const ti = input.tool_input && typeof input.tool_input === 'object' ? input.tool_input : {};
     const target = ti.file_path || ti.notebook_path || ti.path;
     if (typeof target !== 'string' || !target) return null;
-    return isAllowedPath(target, input.cwd) ? null : deny(DENY_REASON, '');
+    if (isAllowedPath(target, input.cwd)) return null;
+    return stepIsOff(input.cwd) ? null : deny(DENY_REASON, '');
 }
 
 function onUserPromptSubmit(input) {
     const m = SWITCH_PROMPT.exec(String(input.prompt || ''));
     if (!m) return null;
+    if (stepIsOff(input.cwd)) {
+        return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: OFF_LINE } };
+    }
     if (m[1] !== 'status') {
         writeState(input.session_id, m[1] === 'on'
             ? newState(true, false, 'owner: ' + cmd('orchestrate') + ' on')

@@ -30,6 +30,9 @@ const os = require('os');
 const path = require('path');
 const { tokenize, parseGitSegment, inspectCommitArgs, findDirectoryChange } = require('./lib/commit-command');
 const hookOutput = require('./lib/hook-output');
+const steps = require('./lib/steps');
+
+const STEP_ID = 'enforce-co-author';
 
 // A trailer is a line of its own, starting at the margin: a mention inside a
 // sentence is not one, and git reads an indented line as a continuation.
@@ -150,6 +153,12 @@ const segments = tokenize(command);
 const changesDirectory = segments.some(seg => findDirectoryChange(seg.words) !== null);
 for (const seg of segments) {
     const reason = checkCommit(seg, changesDirectory);
-    if (reason) block(reason);
+    if (!reason) continue;
+    // Config is read only here, on a commit this hook would block, and once
+    // per run: the first reason ends the hook either way.
+    const step = steps.stepState(STEP_ID, { cwd: hookData.cwd || process.cwd() });
+    for (const w of step.warnings) process.stderr.write('enforce-co-author: ' + w + '\n');
+    if (!step.on) approve();
+    block(reason);
 }
 approve();

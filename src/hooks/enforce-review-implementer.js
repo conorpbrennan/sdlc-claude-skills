@@ -3,6 +3,7 @@
 // systemMessage directing Claude to use the skill with a Sonnet subagent.
 const fs = require('fs');
 const { skill } = require('./lib/plugin-names');
+const steps = require('./lib/steps');
 
 // Read hook input from stdin (Claude Code pipes JSON to hooks via stdin)
 let hookData = {};
@@ -31,7 +32,14 @@ if (!hasReview || !hasImpl) {
     approve();
 }
 
-// Both conditions met -- inject enforcement message
+// Both conditions met: the step decides whether to speak.
+const step = steps.stepState('enforce-review-implementer', { cwd: hookData.cwd || process.cwd() });
+for (const w of step.warnings) process.stderr.write('enforce-review-implementer: ' + w + '\n');
+if (!step.on) {
+    approve();
+}
+
+// Enforce -- inject enforcement message
 approve(
     'ENFORCE_REVIEW_IMPLEMENTER: The user is requesting implementation of code review findings. ' +
     'You MUST use the ' + skill('code-review-implementer') + ' skill (invoke via Skill tool with skill: "' +

@@ -8,6 +8,12 @@ HOOK="$(cd "$(dirname "$0")" && pwd)/enforce-co-author.js"
 PASS=0
 FAIL=0
 
+# No case, old or new, may read the owner's real config files.
+SCRATCH_ROOT="$(mktemp -d)"
+export SDLC_REVIEW_CONFIG_USER="$SCRATCH_ROOT/no-user.json"
+export CLAUDE_CONFIG_DIR="$SCRATCH_ROOT/claude-config"
+export TDD_MANDATE_CONFIG="$SCRATCH_ROOT/no-mandate.json"
+
 # `input` is the tool_input object as JSON. The hook reads the PreToolUse
 # payload from stdin and takes `tool_input.command`, so the harness wraps it
 # as Claude Code does and pipes it in. A payload that is not valid JSON fails
@@ -27,13 +33,13 @@ run_test() {
 
     # A block must also be a PreToolUse deny: Claude sees permissionDecisionReason,
     # not the legacy reason (lib/hook-output.js).
-    if [ "$expected" = "block" ] && ! echo "$output" | grep -q '"permissionDecision":"deny"'; then
+    if [ "$expected" = "block" ] && ! grep -q '"permissionDecision":"deny"' <<< "$output"; then
         echo "FAIL: $desc"
         echo "  Expected: a PreToolUse deny"
         echo "  Got: $output"
         FAIL=$((FAIL + 1))
-    elif echo "$output" | grep -q "\"decision\":\"$expected\"" || \
-       echo "$output" | grep -q "\"decision\": \"$expected\""; then
+    elif grep -q "\"decision\":\"$expected\"" <<< "$output" || \
+       grep -q "\"decision\": \"$expected\"" <<< "$output"; then
         echo "PASS: $desc"
         PASS=$((PASS + 1))
     elif [ -z "$output" ] && [ "$expected" = "approve" ]; then
@@ -235,13 +241,63 @@ run_test "an indented Co-Authored-By line blocks" \
    Co-Authored-By: Claude <noreply@anthropic.com>'")" "block"
 run_test "a commit text inside an echo approves" "$(cmd_json "echo 'git commit -m x'")" "approve"
 
+# --- Steps block: enforce-co-author honours its step, from the user file only ---
+# Area commit-conventions is a guard: a repo file cannot switch the step off.
+# Rows: name|user file JSON ("-" none)|repo file JSON ("-" none)|command|expected|stderr needle ("-" none)
+STEP_FAIL=0
+STEP_N=0
+while IFS='|' read -r sname suser srepo scmd sexpect sneedle; do
+    STEP_N=$((STEP_N + 1))
+    SDIR="$SCRATCH_ROOT/step-$STEP_N"
+    mkdir -p "$SDIR/repo"
+    git init -q "$SDIR/repo"
+    SUSER="$SDIR/user.json"
+    [ "$suser" = "-" ] || printf '%s' "$suser" > "$SUSER"
+    if [ "$srepo" != "-" ]; then
+        mkdir -p "$SDIR/repo/.claude"
+        printf '%s' "$srepo" > "$SDIR/repo/.claude/sdlc-review.json"
+    fi
+    SPAYLOAD="{\"tool_input\":{\"command\":\"$scmd\"}}"
+    SOUT=$(cd "$SDIR/repo" && printf '%s' "$SPAYLOAD" | SDLC_REVIEW_CONFIG_USER="$SUSER" node "$HOOK" 2>&1) || true
+    if ! grep -q "\"decision\":\"$sexpect\"" <<< "$SOUT"; then
+        STEP_FAIL=1
+        echo "  step row '$sname': expected $sexpect, got: $SOUT"
+    fi
+    if [ "$sneedle" = "-" ]; then
+        if grep -q "read from the user file only" <<< "$SOUT"; then
+            STEP_FAIL=1
+            echo "  step row '$sname': unexpected warning: $SOUT"
+        fi
+    else
+        if ! grep -q "enforce-co-author: .*sdlc-review.json: $sneedle is read from the user file only; ignored" <<< "$SOUT"; then
+            STEP_FAIL=1
+            echo "  step row '$sname': stderr lacks the repo file and key: $SOUT"
+        fi
+    fi
+done <<'TABLE'
+default: blocks|-|-|git commit -m x|block|-
+commit-conventions area off in the user file: approves|{"steps":{"commit-conventions":false}}|-|git commit -m x|approve|-
+step off inside an on area: approves|{"steps":{"commit-conventions":{"enforce-co-author":false}}}|-|git commit -m x|approve|-
+repo file off is ignored: still blocks and warns|-|{"steps":{"commit-conventions":{"enforce-co-author":false}}}|git commit -m x|block|steps.commit-conventions.enforce-co-author
+a commit with the trailer reads no config|-|{"steps":{"commit-conventions":{"enforce-co-author":false}}}|git commit -m 'x\n\nCo-Authored-By: C <c@x>'|approve|-
+a non-commit reads no config|-|{"steps":{"commit-conventions":{"enforce-co-author":false}}}|git status|approve|-
+TABLE
+if [ "$STEP_FAIL" -eq 0 ]; then
+    echo "PASS: steps block table (default, area off, step off, repo file ignored, no read off a commit)"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: steps block table"
+    FAIL=$((FAIL + 1))
+fi
+
 # --- A crash blocks ----------------------------------------------------------
 # The hook now loads the commit-command parser. A broken copy of it (a partial
 # install) must block: a hook that dies silently reads as "proceed".
 HOOK_COPY="$(mktemp -d)"
-trap 'rm -rf "$MSG_DIR" "$HOOK_COPY"' EXIT
+trap 'rm -rf "$MSG_DIR" "$HOOK_COPY" "$SCRATCH_ROOT"' EXIT
 mkdir -p "$HOOK_COPY/lib"
 cp "$HOOK" "$HOOK_COPY/"
+cp "$(dirname "$HOOK")"/lib/*.js "$HOOK_COPY/lib/"
 printf 'this is not javascript (' > "$HOOK_COPY/lib/commit-command.js"
 REAL_HOOK="$HOOK"
 HOOK="$HOOK_COPY/enforce-co-author.js"

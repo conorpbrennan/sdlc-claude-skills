@@ -25,7 +25,7 @@ restore_state() { return 0; }
 assert_approve() {
     local test_name="$1"
     local output="$2"
-    if echo "$output" | grep -q '"decision":\s*"approve"' 2>/dev/null || echo "$output" | grep -q '"decision": "approve"' 2>/dev/null; then
+    if grep -q '"decision":\s*"approve"' <<<"$output" 2>/dev/null || grep -q '"decision": "approve"' <<<"$output" 2>/dev/null; then
         echo "  PASS: $test_name"
         PASS=$((PASS + 1))
     else
@@ -39,7 +39,7 @@ assert_approve() {
 assert_block() {
     local test_name="$1"
     local output="$2"
-    if echo "$output" | grep -q '"decision":\s*"block"' 2>/dev/null || echo "$output" | grep -q '"decision": "block"' 2>/dev/null; then
+    if grep -q '"decision":\s*"block"' <<<"$output" 2>/dev/null || grep -q '"decision": "block"' <<<"$output" 2>/dev/null; then
         echo "  PASS: $test_name"
         PASS=$((PASS + 1))
     else
@@ -54,7 +54,7 @@ assert_contains() {
     local test_name="$1"
     local output="$2"
     local expected="$3"
-    if echo "$output" | grep -q "$expected" 2>/dev/null; then
+    if grep -q "$expected" <<<"$output" 2>/dev/null; then
         echo "  PASS: $test_name"
         PASS=$((PASS + 1))
     else
@@ -69,7 +69,7 @@ assert_not_contains() {
     local test_name="$1"
     local output="$2"
     local unexpected="$3"
-    if echo "$output" | grep -q "$unexpected" 2>/dev/null; then
+    if grep -q "$unexpected" <<<"$output" 2>/dev/null; then
         echo "  FAIL: $test_name"
         echo "    Did not expect: $unexpected"
         echo "    Got: $output"

@@ -1,11 +1,12 @@
 {
-  "_comment": "Model steering. Copy to <repo>/.claude/sdlc-review.json (this repo) or ~/.claude/sdlc-review.json (all repos). Every key is optional; the values shown are the defaults. Models: haiku, sonnet, opus. `mainModel` (haiku, sonnet or opus) is read from the user file only, never a repo file: the session-start hook copies it into settings.json `model`, applied from the next session; set it with /sdlc:main-model. The plugin ships defaults/sdlc-review.json with mainModel sonnet, used when this key is absent; \"off\" opts out. Rules apply to the round they name; among matching rules the strongest model wins.",
+  "_comment": "Model steering. Copy to <repo>/.claude/sdlc-review.json (this repo) or ~/.claude/sdlc-review.json (all repos). Every key is optional; the values shown are the defaults. Models: haiku, sonnet, opus. `mainModel` (haiku, sonnet or opus) is read from the user file only, never a repo file: the session-start hook copies it into settings.json `model`, applied from the next session; set it with /sdlc:main-model. The plugin ships defaults/sdlc-review.json with mainModel sonnet, used when this key is absent; \"off\" opts out. Rules apply to the round they name; among matching rules the strongest model wins. `steps` switches workflow steps off (see /sdlc:steps); guard areas tdd, review and commit-conventions are read from the user file only.",
   "round1": "sonnet",
   "round2": "opus",
   "maxRounds": 2,
   "mainModel": "sonnet",
   "planReview": { "source": "opus", "consistency": "sonnet", "cap": 2 },
   "orchestrator": { "bashNudge": 8 },
+  "steps": { "hygiene": true, "orchestration": { "enabled": true, "read-trim": true } },
   "rules": [
     { "paths": ["src/hooks/**"], "round2": "opus" },
     { "paths": ["*.md", "**/*.md", "docs/**"], "round1": "sonnet", "round2": "sonnet" }

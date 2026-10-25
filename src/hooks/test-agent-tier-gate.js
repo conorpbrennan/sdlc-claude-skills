@@ -3,8 +3,17 @@
 // Drop git's repository-locating variables (src/test-suite-isolation.js).
 require('./lib/isolate-git-env.js').isolateGitEnv();
 
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawnSync, execFileSync } = require('child_process');
+
+// Scratch config so no case reads the owner's real files.
+const sb = fs.mkdtempSync(path.join(os.tmpdir(), 'tier-gate-'));
+const userCfg = path.join(sb, 'user-sdlc-review.json');
+process.env.SDLC_REVIEW_CONFIG_USER = userCfg;
+process.env.CLAUDE_CONFIG_DIR = path.join(sb, 'claude');
+process.env.TDD_MANDATE_CONFIG = path.join(sb, 'tdd.json');
 
 const HOOK = path.join(__dirname, 'agent-tier-gate.js');
 const { BUDGET_BLOCK, BUDGET_MARKER } = require('./lib/context-budget.js');
@@ -192,6 +201,55 @@ assert('bad JSON', run('not json'), { status: 0, out: '' });
 assert('empty stdin', run(''), { status: 0, out: '' });
 assert('no tool_input', run(JSON.stringify({ tool_name: 'Agent' })), { status: 0, out: '' });
 assert('exit code on deny', call({ subagent_type: 'Plan', model: 'opus', prompt: 'x' }).status, 0);
+
+console.log('steps: each switch changes only its own behaviour');
+{
+    const repo = path.join(sb, 'repo');
+    fs.mkdirSync(path.join(repo, '.claude'), { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    const repoCfg = path.join(repo, '.claude', 'sdlc-review.json');
+    const off = (...ids) => ({ steps: { orchestration: Object.fromEntries(ids.map((i) => [i, false])) } });
+    const NOMODEL = { subagent_type: 'Plan', prompt: 'x' };
+    const OPUS_BAD = { subagent_type: 'Plan', model: 'opus', prompt: 'x' };
+    const OPUS_OK = { subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: fail triage' };
+    const summarise = (r) => (r.out === '' ? '' : [decision(r) || null, updated(r) && updated(r).model, !!(updated(r) && updated(r).prompt.includes(BUDGET_MARKER))]);
+    const NOTHING = '';
+    const STEP_CASES = [
+        { name: 'default: no model is rewritten and budgeted', steps: {}, input: NOMODEL, expect: ['allow', 'sonnet', true] },
+        { name: 'default: opus without a reason is denied', steps: {}, input: OPUS_BAD, expect: ['deny', undefined, false] },
+        { name: 'default: opus with a reason gets the budget', steps: {}, input: OPUS_OK, expect: [null, 'opus', true] },
+        { name: 'agent-default-model off: no rewrite, budget stays', steps: { user: off('agent-default-model') }, input: NOMODEL, expect: [null, undefined, true] },
+        { name: 'agent-default-model off: the tier deny still acts', steps: { user: off('agent-default-model') }, input: OPUS_BAD, expect: ['deny', undefined, false] },
+        { name: 'agent-tier-gate off: opus without a reason passes with budget', steps: { user: off('agent-tier-gate') }, input: OPUS_BAD, expect: [null, 'opus', true] },
+        // Both below live in the Opus branch of the gate, so switching it off drops them by design.
+        { name: 'agent-tier-gate off: the plan-edit deny is dropped', steps: { user: off('agent-tier-gate') }, input: { subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: plan writing\nRevise the existing plan' }, expect: [null, 'opus', true] },
+        { name: 'agent-tier-gate off: the user-asked ask is dropped', steps: { user: off('agent-tier-gate') }, input: { subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: user asked' }, expect: [null, 'opus', true] },
+        { name: 'agent-tier-gate off: the rewrite still acts', steps: { user: off('agent-tier-gate') }, input: NOMODEL, expect: ['allow', 'sonnet', true] },
+        { name: 'context-budget off: rewrite without budget', steps: { user: off('context-budget') }, input: NOMODEL, expect: ['allow', 'sonnet', false] },
+        { name: 'context-budget off: allowed opus prints nothing', steps: { user: off('context-budget') }, input: OPUS_OK, expect: NOTHING },
+        { name: 'context-budget off: the tier deny still acts', steps: { user: off('context-budget') }, input: OPUS_BAD, expect: ['deny', undefined, false] },
+        { name: 'all three off: no model prints nothing', steps: { user: off('agent-tier-gate', 'agent-default-model', 'context-budget') }, input: NOMODEL, expect: NOTHING },
+        { name: 'all three off: opus without a reason prints nothing', steps: { user: off('agent-tier-gate', 'agent-default-model', 'context-budget') }, input: OPUS_BAD, expect: NOTHING },
+        { name: 'area off in the user file: nothing', steps: { user: { steps: { orchestration: false } } }, input: NOMODEL, expect: NOTHING },
+        { name: 'area off in the user file: opus without a reason, nothing', steps: { user: { steps: { orchestration: false } } }, input: OPUS_BAD, expect: NOTHING },
+        { name: 'repo file off beats user on', steps: { user: { steps: { orchestration: true } }, repo: off('agent-tier-gate') }, input: OPUS_BAD, expect: [null, 'opus', true] },
+        { name: 'repo file area off: nothing', steps: { repo: { steps: { orchestration: false } } }, input: NOMODEL, expect: NOTHING },
+    ];
+    for (const c of STEP_CASES) {
+        fs.rmSync(userCfg, { force: true });
+        fs.rmSync(repoCfg, { force: true });
+        if (c.steps.user) fs.writeFileSync(userCfg, JSON.stringify(c.steps.user));
+        if (c.steps.repo) fs.writeFileSync(repoCfg, JSON.stringify(c.steps.repo));
+        const r = run(JSON.stringify({ tool_name: 'Agent', cwd: repo, tool_input: c.input }));
+        assert(c.name, summarise(r), c.expect);
+    }
+    // A type this gate does not steer prints nothing whatever the config says.
+    fs.rmSync(repoCfg, { force: true });
+    fs.writeFileSync(userCfg, JSON.stringify(off('context-budget')));
+    assert('non-gated type: nothing', summarise(call({ subagent_type: 'Other', model: 'opus', prompt: 'x' })), NOTHING);
+    fs.rmSync(userCfg, { force: true });
+}
+fs.rmSync(sb, { recursive: true, force: true });
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

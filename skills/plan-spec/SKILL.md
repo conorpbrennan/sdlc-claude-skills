@@ -86,6 +86,8 @@ dispatch step one.
   `node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap is not
   an owner question and does not rise mid-run. One extra round is allowed only
   with its reason recorded in §20.3.
+  When that command prints `enabled: false`, skip the review loop and record
+  the skip in §20.3.
 - **A NOT YET with material findings at round 2** means the plan is too large
   or a design point is open. Split it by phase (`check_size.py`, §17) or
   return to the owner decisions. Do not run a third round to chase it.

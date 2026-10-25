@@ -28,7 +28,7 @@ assert_empty() {
 assert_has_system_message() {
     local test_name="$1"
     local output="$2"
-    if echo "$output" | grep -q '"systemMessage"' 2>/dev/null; then
+    if grep -q '"systemMessage"' <<<"$output" 2>/dev/null; then
         echo "  PASS: $test_name"
         PASS=$((PASS + 1))
     else
@@ -43,7 +43,7 @@ assert_contains() {
     local test_name="$1"
     local output="$2"
     local expected="$3"
-    if echo "$output" | grep -q "$expected" 2>/dev/null; then
+    if grep -q "$expected" <<<"$output" 2>/dev/null; then
         echo "  PASS: $test_name"
         PASS=$((PASS + 1))
     else
@@ -57,7 +57,7 @@ assert_contains() {
 assert_no_decision() {
     local test_name="$1"
     local output="$2"
-    if echo "$output" | grep -q '"decision"' 2>/dev/null; then
+    if grep -q '"decision"' <<<"$output" 2>/dev/null; then
         echo "  FAIL: $test_name"
         echo "    Did not expect: decision field (PostToolUse is non-blocking)"
         echo "    Got: $output"

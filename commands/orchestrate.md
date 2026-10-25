@@ -23,7 +23,9 @@ prompt is submitted. This command only reports. Do not edit any state file.
 1. Report the `Orchestrator mode:` line the hook added to this prompt's
    context, and for `on` the Sonnet line under it, and nothing else. Do not run a command to look the state up and
    do not guess it.
-2. For `off`, add that triggers will not turn the mode back on in this
+2. If the hook's line says the mode is switched off in `sdlc-review.json` steps,
+   report it and say `on` has no effect until that step is turned back on.
+3. For `off`, add that triggers will not turn the mode back on in this
    session until the owner runs `/sdlc:orchestrate on`.
 
 ## Duties while the mode is on

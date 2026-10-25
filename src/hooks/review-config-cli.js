@@ -12,6 +12,7 @@
 
 const path = require('path');
 const { gitRead, locateRepo, splitNul } = require('./lib/git-read.js');
+const { stepState } = require('./lib/steps.js');
 const { resolveReview, resolvePlanReview, resolveMainModel, setMainModel, MAIN_MODEL_OFF } = require('./lib/review-config.js');
 
 // A flag with no value (last on the line, or followed by another flag) is a
@@ -73,7 +74,10 @@ function main(argv) {
     if (cmd === 'main-model') return mainModelCmd(argv, repoRoot);
     if (cmd === 'plan-review') {
         const res = resolvePlanReview({ repoRoot });
-        res.warnings = warnings.concat(res.warnings);
+        const step = stepState('plan-review', { repoRoot });
+        res.enabled = step.on;
+        res.enabledSource = step.source;
+        res.warnings = warnings.concat(res.warnings, step.warnings);
         console.log(JSON.stringify(res));
         return 0;
     }

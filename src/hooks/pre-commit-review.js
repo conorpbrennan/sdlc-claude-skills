@@ -75,6 +75,7 @@ const hookOutput = require('./lib/hook-output');
 const gitRead = require('./lib/git-read');
 const { cmd, agent, skill } = require('./lib/plugin-names');
 const reviewConfig = require('./lib/review-config');
+const steps = require('./lib/steps');
 
 const MARKER_MAX_AGE_MS = 10 * 60 * 1000;
 const BLOCK_MARKER_MAX_AGE_MS = 30 * 1000;
@@ -614,7 +615,7 @@ function pollForFreshCoverage(covPath, newerThanMs, timeoutMs) {
 
 // ---------------------------------------------------------------------------
 // Gate 3e: the TDD mandate. On by default in every repository; see
-// lib/tdd-order.js `mandateInForce` for the two ways out.
+// lib/steps.js and the `steps.tdd` switch (/sdlc:steps) for the ways out.
 // ---------------------------------------------------------------------------
 
 function loadTddOrderRepos() {
@@ -752,15 +753,23 @@ function priorCommitIsTestOnly(isAmend, toplevel) {
     return tddOrder.isTestOnlyCommit(paths, readTestDiff([parent, commit], testPaths, cwd).text);
 }
 
-function evaluateTddOrderGate(toplevel, transcriptPath, isAmend) {
+/**
+ * The TDD-order verdict for the staged commit.
+ *
+ * @param {string} toplevel Repository root.
+ * @param {string} transcriptPath Transcript path from the hook input.
+ * @param {boolean} isAmend True when the command is an amend.
+ * @param {{on: boolean, source: string}} tddState The `tdd-mandate` state from lib/steps.js.
+ * @returns {{action: string, status?: string, reason?: string}} `continue` or `block`.
+ */
+function evaluateTddOrderGate(toplevel, transcriptPath, isAmend, tddState) {
     // On by default, everywhere. This used to require an allowlist at
     // ~/.claude/tdd-order-repos.json, and since that file was never created -- and
     // a read failure yielded an empty list -- the gate never ran anywhere at all.
     // `loadTddOrderRepos` is kept exported for callers, but no longer governs:
     // under default-on an opt-IN list has nothing left to say.
-    const mandate = tddOrder.mandateInForce(toplevel);
-    if (!mandate.inForce) {
-        return { action: 'continue', reason: mandate.reason };
+    if (!tddState.on) {
+        return { action: 'continue', reason: 'step-off:' + tddState.source };
     }
     const stagedPaths = pathsInResultingCommit(isAmend);
     if (stagedPaths === null) {
@@ -846,6 +855,13 @@ function main() {
         process.exit(0);
     }
 
+    // The steps resolver is the next decision after the not-a-commit exit,
+    // before any effect: one read for both steps this hook hosts.
+    const stepRead = steps.stepStates(['tdd-mandate', 'review-gate'], { cwd: process.cwd() });
+    for (const w of stepRead.warnings) process.stderr.write('pre-commit-review: ' + w + '\n');
+    const tddState = stepRead.states['tdd-mandate'];
+    const reviewOn = stepRead.states['review-gate'].on;
+
     const hookTimer = timingLog.timer();
     const hookMeta = { hook: 'pre-commit-review' };
     function endHook(decision, extra) {
@@ -860,6 +876,9 @@ function main() {
         process.exit(0);
     }
     timingLog.logEvent('hook.start', { ...hookMeta });
+
+    // Both steps off: nothing here has a say. The only exit that skips the shape check.
+    if (!tddState.on && !reviewOn) { endHook('approve', { via: 'step-off' }); approve(); }
 
     // Command shape: the index must be what will be committed. Deliberately no lock
     // and no marker: a retry with the same command shape must block again.
@@ -921,7 +940,7 @@ function main() {
     const markerBody = readMarkerBody(MARKER_FILE);
     const markerFresh = isFileFresh(MARKER_FILE, MARKER_MAX_AGE_MS);
     const markerFreshShort = isFileFresh(MARKER_FILE, BLOCK_MARKER_MAX_AGE_MS);
-    if (markerFresh && markerBody) {
+    if (reviewOn && markerFresh && markerBody) {
         const parts = markerBody.split('\n');
         if (parts[0] === 'PASS' && parts.length >= 3 && diffHash) {
             // Checked before the in-flight lock below: the block that asked for
@@ -989,7 +1008,8 @@ function main() {
     // Block until the marker matches (the check above) or the requester removes the
     // lock. A lock written for a different diff is stale: the diff changed
     // after the block, so every gate below gets its normal chance.
-    const lock = readLock(LOCK_FILE);
+    // Review off: no lock is read, removed or written; a later on-state finds none of ours.
+    const lock = reviewOn ? readLock(LOCK_FILE) : null;
     if (lock && lock.fresh) {
         if (lock.diffHash && diffHash && lock.diffHash === diffHash) {
             const ago = lock.at !== null ? Math.round((Date.now() - lock.at) / 1000) : null;
@@ -1005,14 +1025,14 @@ function main() {
     }
 
     // The TDD mandate, on by default in every repository. See
-    // evaluateTddOrderGate and lib/tdd-order.js `mandateInForce` for the rule and
+    // evaluateTddOrderGate and the `steps.tdd` switch (lib/steps.js) for the rule and
     // the two ways out.
     //
     // It runs BEFORE every fast path. It used to run after the classifier, so a
     // diff the classifier called trivial was approved -- and given a PASS marker --
     // without the mandate ever being asked. No approval below this point may skip
     // it: every fast path also checks that the verdict is `continue`.
-    const tddGate = evaluateTddOrderGate(toplevel, hookData.transcript_path, !!shape.amend);
+    const tddGate = evaluateTddOrderGate(toplevel, hookData.transcript_path, !!shape.amend, tddState);
     timingLog.logEvent('tdd_order_gate', {
         ...hookMeta,
         action: tddGate.action,
@@ -1053,15 +1073,18 @@ function main() {
             remedy = ' Split the commit: stage and commit the test on its own first, then ' +
                 'the implementation as the next commit.';
         }
-        if (!noVerdict) {
+        if (!noVerdict && reviewOn) {
             writeBlockMarker(MARKER_FILE, diffHash, coveragePath, 'tdd-order: ' + tddGate.status);
         }
         timingLog.logEvent('review.requested', { ...hookMeta, via: 'tdd-order' });
         block('tdd-order', reason,
             'PRE_COMMIT_REVIEW: ' + reason + remedy +
                 ' To exempt this repository: touch .claude/tdd-mandate.disabled, or add it' +
-                ' to exempt_repos in ~/.claude/tdd-mandate.json.');
+                ' to exempt_repos in ~/.claude/tdd-mandate.json. To switch the TDD gate off' +
+                ' everywhere, set steps.tdd off (' + cmd('steps') + ').');
     }
+    // Review off, TDD passed: approve with no marker and no lock written.
+    if (!reviewOn && tddGate.action === 'continue') { endHook('approve', { via: 'step-off' }); approve(); }
     const tddAllowsFastPath = tddGate.action === 'continue';
 
     // Classifier: trivial-diff fast path over the staged CODE files only.
