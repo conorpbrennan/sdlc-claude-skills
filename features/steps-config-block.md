@@ -27,6 +27,7 @@
 - docs/plans/steps-config-block/reports/4-implementer-1.md
 - docs/plans/steps-config-block/reports/5-implementer-1.md
 - docs/plans/steps-config-block/reports/6-implementer-1.md
+- docs/plans/steps-config-block/reports/7-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - skills/plan-spec/SKILL.md
 - src/hooks/lib/review-config.js
@@ -34,14 +35,18 @@
 - src/hooks/pending-review-gate.js
 - src/hooks/post-commit-feature.js
 - src/hooks/pre-commit-feature.js
+- src/hooks/pre-commit-hygiene.js
 - src/hooks/pre-commit-review.js
+- src/hooks/pre-pr-verify.js
 - src/hooks/review-config-cli.js
 - src/hooks/session-start-feature.js
 - src/hooks/steps-cli.js
 - src/hooks/test-pending-review-gate.js
 - src/hooks/test-post-commit-feature.sh
 - src/hooks/test-pre-commit-feature.sh
+- src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-pre-commit-review.js
+- src/hooks/test-pre-pr-verify.js
 - src/hooks/test-review-config.js
 - src/hooks/test-session-start-feature.sh
 - src/hooks/test-steps-cli.js
@@ -49,6 +54,16 @@
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `d58a18d` — steps: pending-review-gate and plan-review honour their steps
+  - .claude-plugin/plugin.json
+  - docs/plans/steps-config-block/reports/6-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - skills/plan-spec/SKILL.md
+  - src/hooks/pending-review-gate.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/test-pending-review-gate.js
+  - src/hooks/test-review-config.js
 
 - 2026-10-25 `c7a1049` — steps: pre-commit-review honours tdd-mandate and review-gate independently
   - .claude-plugin/plugin.json

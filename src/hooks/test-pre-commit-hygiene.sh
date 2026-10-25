@@ -594,6 +594,51 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Steps block: pre-commit-hygiene honours its step. The repo is opted in with
+# a failing check, so the default blocks and an off step approves.
+# Rows: name|user file JSON ("-" for none)|repo file JSON ("-" for none)|expected
+# ---------------------------------------------------------------------------
+STEP_FAIL=0
+STEP_N=0
+while IFS='|' read -r sname suser srepo sexpect; do
+    STEP_N=$((STEP_N + 1))
+    SDIR="$TMPROOT/step-$STEP_N"
+    mkdir -p "$SDIR"
+    SREPO="$SDIR/repo"
+    git init -q "$SREPO"
+    printf 'file\n' > "$SREPO/a.txt"
+    git -C "$SREPO" add a.txt
+    STOP="$(git -C "$SREPO" rev-parse --show-toplevel)"
+    SCFG="$SDIR/hygiene.json"
+    printf '{"version":1,"repos":{"%s":{"shell":"bash","setup":[],"checks":[{"name":"always-fail","command":"false"}],"timeoutMs":10000}}}' "$STOP" > "$SCFG"
+    SUSER="$SDIR/user.json"
+    [ "$suser" = "-" ] || printf '%s' "$suser" > "$SUSER"
+    if [ "$srepo" != "-" ]; then
+        mkdir -p "$SREPO/.claude"
+        printf '%s' "$srepo" > "$SREPO/.claude/sdlc-review.json"
+    fi
+    SOUT=$(cd "$SREPO" && export HYGIENE_REPOS_CONFIG="$SCFG" SDLC_REVIEW_CONFIG_USER="$SUSER" \
+        CLAUDE_CONFIG_DIR="$SDIR/claude-config" TDD_MANDATE_CONFIG="$SDIR/no-mandate.json" \
+        && printf '%s' '{"tool_input":{"command":"git commit -m test"}}' | node "$HOOK" 2>&1) || true
+    if ! echo "$SOUT" | grep -q "\"decision\":\"$sexpect\""; then
+        STEP_FAIL=1
+        echo "  step row '$sname': expected $sexpect, got: $SOUT"
+    fi
+done <<'TABLE'
+default: blocks|-|-|block
+hygiene area off in the user file: approves|{"steps":{"hygiene":false}}|-|approve
+step off inside an on area: approves|{"steps":{"hygiene":{"pre-commit-hygiene":false}}}|-|approve
+repo file off beats user on: approves|{"steps":{"hygiene":true}}|{"steps":{"hygiene":{"pre-commit-hygiene":false}}}|approve
+TABLE
+if [ "$STEP_FAIL" -eq 0 ]; then
+    echo "PASS: steps block table (default, area off, step off, repo off beats user on)"
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: steps block table"
+    FAIL=$((FAIL + 1))
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

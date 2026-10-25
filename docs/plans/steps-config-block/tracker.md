@@ -5,7 +5,8 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: dispatch the step 7 implementer (`pre-commit-hygiene.js` and `pre-pr-verify.js`; plan Section 5 step 7 plus Section 2; ASSUMES LANDED 1). Step 6 built (test-pending-review-gate 21/0, test-review-config 112/0, run-tests 43 files 0 failed), commit with this tracker pending review.
+Next action: dispatch the step 8 implementer (the three commit-convention hooks; plan Section 5 step 8 plus Section 2; ASSUMES LANDED 1). Step 7 built (hygiene suite 31/0, verify suite 63/0, run-tests 43 files 0 failed), commit with this tracker pending review.
+Last committed: step 6 `d58a18d`, step 5 `c7a1049`.
 Last committed: step 5 `c7a1049`, step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6af81c5`, commit 0 `81d7c19` (the plan).
 Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rewrites the README "Turning steps off" section; at step 13 verify it covers every step and every alias, and that `/sdlc:steps` is documented.
 
@@ -18,8 +19,8 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 | 3 | committed | 77d6cdb | 1 (PASS) | test-steps-cli 91/0; test-review-config 107/0; run-tests 42 files 0 failed |
 | 4 | committed | adf1d40 | 1 (PASS) | three shell suites 43/65/34 passed; uses `stepState` not `isStepOn` (needs warnings) |
 | 5 | committed | c7a1049 | 1 (PASS) | pre-commit-review 534/0; 8 red rows before the change; reviewer: no critical or important; advisory: `evaluateTddOrderGate` has no default for `tddState` (missing throws TypeError, fails closed) |
-| 6 | built | (this commit) | | test-pending-review-gate 21/0; test-review-config 112/0; both steps are guard steps so no honoured repo-off row |
-| 7 | not started | | | |
+| 6 | committed | d58a18d | 1 (PASS) | test-pending-review-gate 21/0; test-review-config 112/0; both steps are guard steps so no honoured repo-off row; reviewer advisory: test-review-config.js does not set CLAUDE_CONFIG_DIR or TDD_MANDATE_CONFIG (harmless for plan-review; set them in step 13) |
+| 7 | built | (this commit) | | hygiene suite 31/0; verify suite 63/0 (enforce mode, off approves) |
 | 8 | not started | | | |
 | 9 | not started | | | |
 | 10 | not started | | | |
