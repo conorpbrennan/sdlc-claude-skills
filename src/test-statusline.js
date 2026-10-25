@@ -63,6 +63,21 @@ test('context percentage and token segment', () => {
     }
 });
 
+test('non-finite window size or used count prints no NaN or Infinity', () => {
+    const cases = [
+        [{ size: Infinity }, 'ctx 27% used | '],
+        [{ size: NaN }, 'ctx 27% used | '],
+        [{ size: 'big' }, 'ctx 27% used | '],
+        [{ used: Infinity }, 'ctx 27% used (54k/200k) | '],
+        [{ used: Infinity, remaining: null }, 'ctx 0% used (0k/200k) | '],
+    ];
+    for (const [args, expected] of cases) {
+        const line = strip(render(makeInput(args), NO_DAY));
+        assert.ok(!/NaN|Infinity/.test(line), line);
+        assert.ok(line.startsWith(expected), `${JSON.stringify(args)} -> ${line}`);
+    }
+});
+
 test('remaining 100 without a window prints no token segment', () => {
     const line = strip(render({ context_window: { remaining_percentage: 100 } }, NO_DAY));
     assert.ok(line.startsWith('ctx 0% used | '), line);
@@ -95,6 +110,12 @@ test('branch segment: no git outside a repo, branch name inside one', () => {
         execFileSync('git', ['-C', repo, 'init', '-q', '-b', 'feature-x']);
         // Unborn branch: symbolic-ref still names it.
         assert.ok(strip(render(makeInput({ dir: repo }), NO_DAY)).endsWith(' | feature-x'));
+        // Detached HEAD: the short commit.
+        const g = ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t'];
+        execFileSync('git', [...g, 'commit', '-q', '--allow-empty', '-m', 'c']);
+        const sha = execFileSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim();
+        execFileSync('git', ['-C', repo, 'checkout', '-q', '--detach']);
+        assert.ok(strip(render(makeInput({ dir: repo }), NO_DAY)).endsWith(` | ${sha}`));
     } finally {
         fs.rmSync(plain, { recursive: true, force: true });
         fs.rmSync(repo, { recursive: true, force: true });

@@ -19,11 +19,18 @@
 
 - .claude-plugin/plugin.json
 - src/lib/day-cost.js
+- src/statusline-install.js
 - src/statusline.js
 - src/test-day-cost.js
+- src/test-statusline-install.js
 - src/test-statusline.js
 
 ## History
+
+- 2026-10-25 `c8ba09e` — statusline: ship the status line as a Node script with a day-cost segment
+  - .claude-plugin/plugin.json
+  - src/lib/day-cost.js
+  - src/statusline.js
 
 - 2026-10-25 `e07c102` — statusline: tests for the status line and its day-cost estimate
   - .claude-plugin/plugin.json

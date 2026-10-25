@@ -131,4 +131,14 @@ test('a cache from an earlier day is ignored', () => {
     } finally { s.cleanup(); }
 });
 
+test('an expired deadline over several transcript files returns null', () => {
+    const s = setup();
+    try {
+        for (const n of ['a', 'b', 'c', 'd']) {
+            write(path.join(s.root, PROJECT_DIR, `${n}.jsonl`), [msg(n, TODAY, 1e6, 0)]);
+        }
+        assert.strictEqual(run(s, { deadlineMs: -1 }), null);
+    } finally { s.cleanup(); }
+});
+
 if (failed) process.exit(1);
