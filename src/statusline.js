@@ -1,5 +1,5 @@
 // Claude Code status line: context used % (used/size) | model | session cost [day cost] | git branch.
-// Reads the status line JSON on stdin. Ported from the owner's statusline.sh.
+// Status line renderer: reads the status line JSON on stdin and prints one line.
 // As a script it never throws and always exits 0.
 'use strict';
 
@@ -92,10 +92,11 @@ function render(input, options = {}) {
     if (u && typeof u === 'object') {
         used = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
     }
-    const size = Number(c.context_window_size) > 0 ? Math.floor(Number(c.context_window_size)) : 0;
+    const rawSize = Number(c.context_window_size);
+    const size = Number.isFinite(rawSize) && rawSize >= 1 ? Math.floor(rawSize) : 0;
     let remaining = 100;
     if (typeof c.remaining_percentage === 'number') remaining = Math.floor(c.remaining_percentage);
-    else if (used !== null && size > 0) remaining = Math.floor(100 - (used * 100) / size);
+    else if (used !== null && Number.isFinite(used) && size > 0) remaining = Math.floor(100 - (used * 100) / size);
 
     let colour = GREEN;
     if (remaining <= CRITICAL_REMAINING) colour = RED;

@@ -1,5 +1,5 @@
 // Today's (UTC) estimated Claude Code cost across all sessions of a project.
-// Ported from the owner's day_cost.py. Sums the cost of every transcript message
+// Estimates today's cost from the transcripts. Sums the cost of every transcript message
 // dated today under the project's transcript dir and its worktree dirs
 // (`<project>--claude-worktrees-*`), sub-agent files included. Results are cached
 // for a short ttl, and parsed per file by (size, mtime). Returns null on any failure.

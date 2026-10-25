@@ -27,6 +27,12 @@
 
 ## History
 
+- 2026-10-25 `a89ac32` — statusline: tests for the installer and three regression rows
+  - .claude-plugin/plugin.json
+  - src/test-day-cost.js
+  - src/test-statusline-install.js
+  - src/test-statusline.js
+
 - 2026-10-25 `c8ba09e` — statusline: ship the status line as a Node script with a day-cost segment
   - .claude-plugin/plugin.json
   - src/lib/day-cost.js
