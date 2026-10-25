@@ -10,8 +10,9 @@ engineering workflow lives apart from the domain skills.
 Plugin components are namespaced, so commands and skills are invoked with
 the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
 `/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:orchestrate`, `/sdlc:handoff`,
-`/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:plan-spec`,
-`/sdlc:code-review-pre-commit` and `/sdlc:code-review-implementer`. The review
+`/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:statusline`,
+`/sdlc:plan-spec`, `/sdlc:code-review-pre-commit` and
+`/sdlc:code-review-implementer`. The review
 agents are `sdlc:code-reviewer` and `sdlc:code-reviewer-deep`; the plan-step
 agent is `sdlc:implementer`; the verification agent is `sdlc:verifier`.
 Both reviewers carry a `maxTurns` cap (75 and 60) that only cuts runaways; a report cut off without its `TDD_GATE` trailer counts as FAIL.
@@ -527,10 +528,13 @@ The installer merges only the `statusLine` key into `settings.json`. Every other
 key stays as it was. An existing `statusLine` of yours is kept unless you pass
 `force`. A backup `settings.json.backup.<UTC>-pre-sdlc-statusline` is written
 beside `settings.json` before any change. The scripts are copied to the plugin
-data directory (`CLAUDE_PLUGIN_DATA`), so the path survives plugin updates.
+data directory (`CLAUDE_PLUGIN_DATA`; when that is unset,
+`<config dir>/plugins/data/sdlc-sdlc-claude-skills`, where the config dir is
+`CLAUDE_CONFIG_DIR` or `~/.claude`), so the path survives plugin updates.
 `remove` deletes the `statusLine` key and the `statusline` directory in the data
-directory. The status line appears from the next session or refresh. Node is the
-only requirement.
+directory. The status line appears from the next session or refresh. It needs
+Node. It uses `git` for the branch name when `git` is installed and shows
+`no git` otherwise.
 
 The installer exits 0 when done, 2 when it refused and wrote nothing (for
 example, a `settings.json` that is not valid JSON, or a data directory path with

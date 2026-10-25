@@ -29,6 +29,13 @@
 
 ## History
 
+- 2026-10-25 `84ee7c6` — statusline: /sdlc:statusline command, README section and installer robustness
+  - .claude-plugin/plugin.json
+  - README.md
+  - commands/statusline.md
+  - src/statusline-install.js
+  - src/test-statusline-install.js
+
 - 2026-10-25 `3530ca2` — statusline: opt-in installer that merges only the statusLine key
   - .claude-plugin/plugin.json
   - src/lib/day-cost.js
