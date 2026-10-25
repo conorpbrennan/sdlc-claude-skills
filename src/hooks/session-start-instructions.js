@@ -39,14 +39,23 @@
 //     installed copies. A plugin cannot set this itself. An autoUpdate the owner
 //     already set (true or false) is kept; <config dir>/sdlc-autoupdate.disabled
 //     opts out; a fork or local-path marketplace of the same name is left alone.
-//   - Self-contained (no requires beyond node built-ins), so the test can run
-//     a copy of it against a scratch instructions/ directory. For that reason
-//     mainModel is read here directly with minimal validation instead of
-//     requiring lib/review-config.js, which a copy would not find.
+//   - Requires lib/steps.js (the step lookup, the config dir and the two opt-out
+//     file names), so the test copies lib/ beside the hook it runs against a
+//     scratch instructions/ directory. mainModel is still read here directly with
+//     minimal validation.
+//   - Four steps (lib/steps.js) gate the parts, resolved once in build() before any
+//     effect: session-instructions (the four sections), main-model (the model
+//     line and the settings "model" write), cache-ttl (the promptCacheTtl write;
+//     off by the opt-out file alias it still warns, off by the config block it is
+//     silent) and marketplace-autoupdate (the autoUpdate write). An off step
+//     writes nothing and makes no backup. The legacy-install warning is not a
+//     step. With every part off and no legacy install, nothing is printed.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+
+const { stepStates, configDir, CACHE_TTL_OPT_OUT, AUTO_UPDATE_OPT_OUT, SOURCE_ALIAS } = require('./lib/steps');
 
 const INSTRUCTIONS_DIR = path.join(__dirname, '..', '..', 'instructions');
 
@@ -96,8 +105,6 @@ const ENABLE_1H_ENV = 'ENABLE_PROMPT_CACHING_1H';
 const TTL_1H = '1h';
 const TTL_5M = '5m';
 const SETTINGS_FILE = 'settings.json';
-const CONFIG_DIR_ENV = 'CLAUDE_CONFIG_DIR';
-const OPT_OUT_FILE = 'sdlc-cache-ttl.disabled';
 const BACKUP_SUFFIX_TTL = '-pre-sdlc-cache-ttl';
 const BACKUP_SUFFIX_MODEL = '-pre-sdlc-model';
 const MODEL_SETTING = 'model';
@@ -114,9 +121,11 @@ const AUTO_UPDATE_KEY = 'autoUpdate';
 const MARKETPLACE_NAME = 'sdlc-claude-skills';   // name in .claude-plugin/marketplace.json
 const MARKETPLACE_REPO = 'conorpbrennan/sdlc-claude-skills';
 const KNOWN_MARKETPLACES_FILE = path.join('plugins', 'known_marketplaces.json');
-const AUTO_UPDATE_OPT_OUT_FILE = 'sdlc-autoupdate.disabled';
 const BACKUP_SUFFIX_AUTO_UPDATE = '-pre-sdlc-autoupdate';
 const DEFAULTS_FILE = path.join(__dirname, '..', '..', 'defaults', REVIEW_CONFIG_NAME);
+
+const STEP_IDS = ['session-instructions', 'main-model', 'cache-ttl', 'marketplace-autoupdate'];
+const STDERR_PREFIX = 'session-start-instructions: ';
 
 const FIX = 'Fix: run `./uninstall.sh` from a checkout of the pre-plugin toolchain or of ' +
     'this repo, then restart Claude Code.';
@@ -186,17 +195,6 @@ function legacyWarning() {
 // A flag env value: set, and not an explicit off.
 function truthy(value) {
     return typeof value === 'string' && value.trim() !== '' && !/^(0|false|no|off)$/i.test(value.trim());
-}
-
-// The user's Claude Code config directory.
-//
-// Args:
-//     None.
-// Returns:
-//     CLAUDE_CONFIG_DIR when non-empty, else ~/.claude.
-function configDir() {
-    const fromEnv = process.env[CONFIG_DIR_ENV];
-    return typeof fromEnv === 'string' && fromEnv !== '' ? fromEnv : path.join(os.homedir(), '.claude');
 }
 
 // Parsed settings objects from the user, project and local settings files,
@@ -280,9 +278,11 @@ function writeSetting(dir, key, value, backupSuffix) {
 //
 // Args:
 //     cwd: The session's working directory.
+//     optedOut: True when the opt-out file alias turned the step off: the TTL is
+//         then never written, and the warning is still given.
 // Returns:
 //     The line, or ''. No environment value is ever included.
-function cacheTtlWarning(cwd) {
+function cacheTtlWarning(cwd, optedOut) {
     const files = settingsFiles(cwd);
     const blocks = files.map(f => (f.env && typeof f.env === 'object' ? f.env : {}));
     const lookup = name => {
@@ -297,13 +297,13 @@ function cacheTtlWarning(cwd) {
     if (explicit.length > 0) return '';
     if (truthy(lookup(ENABLE_1H_ENV))) return '';
     const dir = configDir();
-    const written = fs.existsSync(path.join(dir, OPT_OUT_FILE))
+    const written = optedOut
         ? '' : writeSetting(dir, TTL_SETTING, TTL_1H, BACKUP_SUFFIX_TTL);
     if (written) {
         return warning(`sdlc set \`"${TTL_SETTING}": "${TTL_1H}"\` in ${written} so the main conversation
             uses the 1-hour prompt cache on this per-token backend. It takes effect from the next
             session; this one stays on 5 minutes. Sub-agents stay on 5 minutes by design. Opt out
-            with \`touch ${path.join(dir, OPT_OUT_FILE)}\`. Tell the owner this at the start of the session.`);
+            with \`touch ${path.join(dir, CACHE_TTL_OPT_OUT)}\`. Tell the owner this at the start of the session.`);
     }
     return warning(`the main conversation will use the 5-minute prompt cache on this per-token
         backend, so every wait over 5 minutes re-caches the whole context. Fix: add
@@ -389,7 +389,6 @@ function mainModelLines(cwd) {
 //     An array of lines, empty when nothing was done or nothing was needed.
 function autoUpdateLines() {
     const dir = configDir();
-    if (fs.existsSync(path.join(dir, AUTO_UPDATE_OPT_OUT_FILE))) return [];
     const known = readObject(path.join(dir, KNOWN_MARKETPLACES_FILE));
     const registered = known && known[MARKETPLACE_NAME] && known[MARKETPLACE_NAME].source;
     if (!registered || registered.source !== 'github' || registered.repo !== MARKETPLACE_REPO) return [];
@@ -409,7 +408,7 @@ function autoUpdateLines() {
             [AUTO_UPDATE_KEY]: true,
         },
     };
-    const optOut = path.join(dir, AUTO_UPDATE_OPT_OUT_FILE);
+    const optOut = path.join(dir, AUTO_UPDATE_OPT_OUT);
     if (writeSetting(dir, MARKETPLACES_SETTING, merged, BACKUP_SUFFIX_AUTO_UPDATE)) {
         return [warning(`sdlc turned on auto-update for its marketplace (\`${MARKETPLACE_NAME}\`) in ${settingsPath}, so new
             versions pushed to git reach this install on their own. Claude Code checks after the first message of a
@@ -441,6 +440,26 @@ function readSection(name) {
     }
 }
 
+// The four step states, in one resolver call. Warnings go to stderr, one line
+// each (stdout is the hook's JSON).
+//
+// Args:
+//     cwd: The session's working directory.
+// Returns:
+//     An object keyed by step id, each value a state from lib/steps.js.
+function resolveSteps(cwd) {
+    try {
+        const { states, warnings } = stepStates(STEP_IDS, { cwd });
+        for (const w of warnings) process.stderr.write(`${STDERR_PREFIX}${String(w).replace(/\s*\n\s*/g, ' ')}\n`);
+        return states;
+    } catch (e) {
+        process.stderr.write(`${STDERR_PREFIX}step lookup failed (${e && e.message}); every step stays on\n`);
+        const on = {};
+        for (const id of STEP_IDS) on[id] = { id, on: true, source: 'default' };
+        return on;
+    }
+}
+
 function build() {
     let head = '';
     try {
@@ -449,27 +468,37 @@ function build() {
         head = warning(`the check for a pre-plugin install failed (${e && e.message}). ${FIX}`);
     }
     const cwd = sessionCwd();
+    // The one resolver read, before any effect. A failed lookup leaves every
+    // step on, as before the steps existed.
+    const states = resolveSteps(cwd);
     let ttl = '';
-    try {
-        ttl = cacheTtlWarning(cwd);
-    } catch (e) { /* a failed check yields no warning */ }
+    if (states['cache-ttl'].on || states['cache-ttl'].source === SOURCE_ALIAS) {
+        try {
+            ttl = cacheTtlWarning(cwd, !states['cache-ttl'].on);
+        } catch (e) { /* a failed check yields no warning */ }
+    }
     let model = [];
-    try {
-        model = mainModelLines(cwd);
-    } catch (e) { /* a failed check yields no lines */ }
+    if (states['main-model'].on) {
+        try {
+            model = mainModelLines(cwd);
+        } catch (e) { /* a failed check yields no lines */ }
+    }
     let autoUpdate = [];
-    try {
-        autoUpdate = autoUpdateLines();
-    } catch (e) { /* a failed check yields no lines */ }
-    const parts = SECTIONS.map(readSection);
+    if (states['marketplace-autoupdate'].on) {
+        try {
+            autoUpdate = autoUpdateLines();
+        } catch (e) { /* a failed check yields no lines */ }
+    }
+    const parts = states['session-instructions'].on ? SECTIONS.map(readSection) : [];
     parts.unshift(...autoUpdate);
     parts.unshift(...model);
     if (ttl) parts.unshift(ttl);
     if (head) parts.unshift(head);
-    return parts.join('\n\n---\n\n') + '\n';
+    return parts.length > 0 ? parts.join('\n\n---\n\n') + '\n' : '';
 }
 
 function emit(context) {
+    if (context === '') return;   // nothing to say: print nothing
     process.stdout.write(JSON.stringify({
         hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context },
     }));

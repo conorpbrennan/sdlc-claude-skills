@@ -5,8 +5,8 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: dispatch the step 11 implementer (`session-start-instructions.js` four standalone steps; plan Section 5 step 11 plus Section 2; ASSUMES LANDED 1). Step 10 built (agent-tier-gate 145/0, read-trim 29/0, run-tests 45 files 0 failed), commit with this tracker pending review. Reviewer notes for step 10: `agent-tier-gate` off also drops the plan-edit deny and the ask (they live in the Opus branch); read-trim reads the resolver for any sub-agent whole-file Read, small ones included.
-Last committed: step 9 `11e637f`, step 8 `46ef586`, step 7 `8eae77e`, step 6 `d58a18d`, step 5 `c7a1049`.
+Next action: step 11 implementer dispatched (`session-start-instructions.js` four standalone steps; plan Section 5 step 11 plus Section 2; ASSUMES LANDED 1). On return: read the report, bump, stage, attempt the commit, review. Then step 12 (README, example config, CLAUDE.md) and step 13 (close-out).
+Last committed: step 10 `f4d9d3f`, step 9 `11e637f`, step 8 `46ef586`, step 7 `8eae77e`, step 6 `d58a18d`.
 Last committed: step 5 `c7a1049`, step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6af81c5`, commit 0 `81d7c19` (the plan).
 Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rewrites the README "Turning steps off" section; at step 13 verify it covers every step and every alias, and that `/sdlc:steps` is documented.
 
@@ -23,7 +23,7 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 | 7 | committed | 8eae77e | 1 (PASS) | hygiene suite 31/0; verify suite 63/0 (enforce mode, off approves); reviewer IMPORTANT, committed with the gap named: older cases in test-pre-commit-hygiene.sh do not isolate the user's sdlc-review.json |
 | 8 | committed | 46ef586 | 1 (PASS) | co-author 54/0; attribution-note 7/0; notify 10/0; all three are guard steps so no honoured repo-off row; reviewer advisories: no test for a steps.js-missing variant of the co-author crash (covered by the commit-command.js case); the co-author table merges stderr into stdout so it cannot prove H4 by itself |
 | 9 | committed | 11e637f | 1 (PASS) | orchestrator-mode 176/0; enforce-review-implementer 6/0; non-guard area so repo off honoured; reviewer advisories committed with the gaps named |
-| 10 | built | (this commit) | | agent-tier-gate 145/0 (16 STEP_CASES rows); read-trim 29/0; non-guard area so repo off honoured |
+| 10 | committed | f4d9d3f | 1 (PASS) | agent-tier-gate 145/0 (16 STEP_CASES rows); read-trim 29/0; non-guard area so repo off honoured; default path byte-identical to HEAD on 4 inputs |
 | 11 | not started | | | |
 | 12 | not started | | | |
 | 13 | not started | | | |
@@ -49,4 +49,8 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 - From step 7 review (ADVISORY, unverified): the hygiene red-by-mutation was not reproduced by the reviewer (scratch layout lacked `hygiene-repos.json.example`); the implementer's red run is the only evidence. On hygiene's off path `hook.start` is not logged, only `hook.end` with `via: 'step-off'`; the reviewer did not check whether `tools/analyze-review-timing.py` pairs start and end events. Check in step 13.
 - From step 9 review (ADVISORY): with the orchestrator mode on and a malformed config, each inline Bash call prints the config warning twice (once from `stepIsOff`, once from the existing `nudgeThreshold`). Resolve once per event. Stderr only.
 - From step 9 review (ADVISORY): a missing `lib/steps.js` makes `orchestrator-mode.js` and `enforce-review-implementer.js` exit 1 with a stack trace and no stdout (non-blocking in Claude Code), not the silent exit 0 the orchestrator-mode header comment promises. Matches other hooks with a missing lib. Fix the header comment or catch the require, decide in step 13.
+- From step 10 review (ADVISORY): `src/hooks/read-trim.js` reads the resolver for any sub-agent whole-file Read, including a 2-byte one (about 3 ms a call, and a config warning on reads the hook would ignore). `trimRead` is pure: call it first, then `stepIsOff` only when it returns non-null. Same behaviour, cheaper. Do it in step 13.
+- From step 10 review (ADVISORY): `STEP_CASES` in `src/hooks/test-agent-tier-gate.js` has no row for the plan-edit deny or the `TIER: opus: user asked` ask with `agent-tier-gate` off (both live in the Opus branch and are dropped by design). Add two rows in step 13.
+- From step 10 review (ADVISORY): a missing `lib/steps.js` makes both hooks exit 1 with a stack trace and no stdout (no deny). Same as every other missing lib.
+- From the step 11 gate (DIAGNOSED, pre-existing, not caused by steps 1 to 11): `test-pre-commit-hygiene` fails about 1 run in 15 under `tools/run-tests.sh` load. Cause: `src/hooks/test-pre-commit-hygiene.sh:539` pipes `printf` into `grep -q` under `set -euo pipefail`; `grep -q` exits at its first match, `printf` can get SIGPIPE (141), the pipeline fails and the `if` takes the FAIL branch with the text correct. Fix: use here-strings (`grep -q 'no tests match' <<<"$SMOKE_OUT" && grep -q WARNING <<<"$SMOKE_OUT"`), and the same for the other `printf ... | grep -q` checks in that suite (for example around line 468). Do it in step 13 or as a separate small fix; it is not step 11's change. Rerun `tools/run-tests.sh` once more if it fails on that file alone.
 - From step 1 report (UNRELATED): `bash tools/run-tests.sh` takes about 111 s at -j 16, close to the 120 s default tool timeout. Run it with a long timeout or in the background.

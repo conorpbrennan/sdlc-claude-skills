@@ -9,6 +9,14 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+// No case, old or new, may read or write the owner's real files: point the
+// config dir, the user review file and the TDD mandate file at scratch paths.
+// run() strips these from the child's env, so each case sets what it needs.
+const SUITE_SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-suite-'));
+process.env.CLAUDE_CONFIG_DIR = path.join(SUITE_SCRATCH, 'config');
+process.env.SDLC_REVIEW_CONFIG_USER = path.join(SUITE_SCRATCH, 'sdlc-review.json');
+process.env.TDD_MANDATE_CONFIG = path.join(SUITE_SCRATCH, 'tdd-mandate.json');
+
 const HOOK = path.join(__dirname, 'session-start-instructions.js');
 const INSTRUCTIONS = path.join(__dirname, '..', '..', 'instructions');
 const CAP = 10000;  // Claude Code's limit on a hook's additionalContext
@@ -59,7 +67,7 @@ const CLEAN_HOME = scratchHome();
 
 // Run a hook script with stdin `{}`; parse stdout as exactly one JSON object.
 // Env vars the cache-TTL check reads; stripped so the machine's own do not leak in.
-const INHERITED = /^(ANTHROPIC_|CLAUDE_CODE_|FORCE_|ENABLE_|SDLC_)/;
+const INHERITED = /^(ANTHROPIC_|CLAUDE_CODE_|CLAUDE_CONFIG_DIR$|TDD_MANDATE_CONFIG$|FORCE_|ENABLE_|SDLC_)/;
 
 function run(script, home, extraEnv, cwd) {
     const h = home || CLEAN_HOME;
@@ -86,6 +94,7 @@ function scratch(files) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-test-'));
     fs.mkdirSync(path.join(root, 'src', 'hooks'), { recursive: true });
     fs.copyFileSync(HOOK, path.join(root, 'src', 'hooks', 'session-start-instructions.js'));
+    fs.cpSync(path.join(__dirname, 'lib'), path.join(root, 'src', 'hooks', 'lib'), { recursive: true });
     if (files) {
         fs.mkdirSync(path.join(root, 'instructions'));
         for (const [name, text] of Object.entries(files)) {
@@ -660,7 +669,69 @@ console.log('\nAuto-update for the marketplace (extraKnownMarketplaces in the us
     assert('hook marketplace repo is conorpbrennan/sdlc-claude-skills', (/const MARKETPLACE_REPO = '([^']*)'/.exec(hookSrc) || [])[1], REPO);
 }
 
+console.log('\nSTEP_CASES: the four standalone steps (session-instructions, main-model, cache-ttl, marketplace-autoupdate):');
+{
+    const GATEWAY = { ANTHROPIC_BASE_URL: 'https://gw.example.test' };
+    const SECTION_HEAD = '## Auto Code Review Triggers';
+    const TTL_WROTE = 'sdlc set `"promptCacheTtl": "1h"` in ';
+    const TTL_WARN = 'the main conversation will use the 5-minute prompt cache';
+    const MODEL_SET = 'main-session model set to';
+    const AUTO_ON = 'sdlc turned on auto-update';
+    const KNOWN = { 'sdlc-claude-skills': { source: { source: 'github', repo: 'conorpbrennan/sdlc-claude-skills' } } };
+    const START = { theme: 'dark', model: 'opus' };
+    // Each row: name, user file (object), repo file (object or null), opt-out
+    // file in the config dir (or null), then the expected parts of the output:
+    // sections, ttl written, ttl warned, model line, auto-update line.
+    const STEP_CASES = [
+        ['all on', {}, null, null, true, true, false, true, true],
+        ['session-instructions off', { steps: { standalone: { 'session-instructions': false } } }, null, null, false, true, false, true, true],
+        ['main-model off', { steps: { standalone: { 'main-model': false } } }, null, null, true, true, false, false, true],
+        ['cache-ttl off by the block', { steps: { standalone: { 'cache-ttl': false } } }, null, null, true, false, false, true, true],
+        ['cache-ttl off by the alias', {}, null, 'sdlc-cache-ttl.disabled', true, false, true, true, true],
+        ['marketplace-autoupdate off', { steps: { standalone: { 'marketplace-autoupdate': false } } }, null, null, true, true, false, true, false],
+        ['autoupdate off by the alias', {}, null, 'sdlc-autoupdate.disabled', true, true, false, true, false],
+        ['all four off', { steps: { standalone: false } }, null, null, false, false, false, false, false],
+        ['repo off for session-instructions', {}, { steps: { standalone: { 'session-instructions': false } } }, null, false, true, false, true, true],
+    ];
+    for (const [name, userFile, repoFile, optOut, sections, wrote, warned, model, auto] of STEP_CASES) {
+        const home = scratchHome();
+        const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-cfg-'));
+        const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ssi-cwd-'));
+        const user = path.join(cfg, 'user-review.json');
+        fs.mkdirSync(path.join(cfg, 'plugins'));
+        fs.writeFileSync(path.join(cfg, 'plugins', 'known_marketplaces.json'), JSON.stringify(KNOWN));
+        fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify(START, null, 2));
+        fs.writeFileSync(user, JSON.stringify({ mainModel: 'sonnet', ...userFile }));
+        if (optOut) fs.writeFileSync(path.join(cfg, optOut), '');
+        if (repoFile) {
+            fs.mkdirSync(path.join(cwd, '.git'));   // marks the repo root
+            fs.mkdirSync(path.join(cwd, '.claude'));
+            fs.writeFileSync(path.join(cwd, '.claude', 'sdlc-review.json'), JSON.stringify(repoFile));
+        }
+        const r = run(HOOK, home, { ...GATEWAY, CLAUDE_CONFIG_DIR: cfg, SDLC_REVIEW_CONFIG_USER: user }, cwd);
+        const ctx = context(r);
+        const after = JSON.parse(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf-8'));
+        const backups = fs.readdirSync(cfg).filter(f => f.includes('.backup.'));
+        const allOff = !sections && !wrote && !warned && !model && !auto;
+        assert(`${name}: sections`, ctx.includes(SECTION_HEAD), sections);
+        assert(`${name}: ttl written`, ctx.includes(TTL_WROTE), wrote);
+        assert(`${name}: ttl warned`, ctx.includes(TTL_WARN), warned);
+        assert(`${name}: model line`, ctx.includes(MODEL_SET), model);
+        assert(`${name}: auto-update line`, ctx.includes(AUTO_ON), auto);
+        assert(`${name}: promptCacheTtl in settings`, after.promptCacheTtl, wrote ? '1h' : undefined);
+        assert(`${name}: model in settings`, after.model, model ? 'sonnet' : 'opus');
+        assert(`${name}: autoUpdate in settings`, after.extraKnownMarketplaces !== undefined, auto);
+        assert(`${name}: one backup per write`, backups.length, (wrote ? 1 : 0) + (model ? 1 : 0) + (auto ? 1 : 0));
+        assert(`${name}: nothing on stderr`, r.stderr, '');
+        if (allOff) assert(`${name}: nothing printed`, r.stdout, '');
+        fs.rmSync(home, { recursive: true, force: true });
+        fs.rmSync(cfg, { recursive: true, force: true });
+        fs.rmSync(cwd, { recursive: true, force: true });
+    }
+}
+
 fs.rmSync(CLEAN_HOME, { recursive: true, force: true });
+fs.rmSync(SUITE_SCRATCH, { recursive: true, force: true });
 
 console.log(`\n================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
