@@ -5,8 +5,9 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: dispatch the step 6 implementer (`pending-review-gate.js` and the plan-review loop; plan Section 5 step 6 plus Section 2; ASSUMES LANDED 1).
-Last committed: step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6af81c5`, commit 0 `81d7c19` (the plan). Step 5 built (pre-commit-review suite 534/0, tdd-mandate exit 0, run-tests 42 files 0 failed), commit with this tracker pending review.
+Next action: dispatch the step 7 implementer (`pre-commit-hygiene.js` and `pre-pr-verify.js`; plan Section 5 step 7 plus Section 2; ASSUMES LANDED 1). Step 6 built (test-pending-review-gate 21/0, test-review-config 112/0, run-tests 43 files 0 failed), commit with this tracker pending review.
+Last committed: step 5 `c7a1049`, step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6af81c5`, commit 0 `81d7c19` (the plan).
+Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rewrites the README "Turning steps off" section; at step 13 verify it covers every step and every alias, and that `/sdlc:steps` is documented.
 
 ## Step state
 
@@ -16,8 +17,8 @@ Last committed: step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6a
 | 2 | committed | c84818a | 1 (PASS) | test-steps-cli 50/0; run-tests 42 files 0 failed; named reader: owner at the end (D2) |
 | 3 | committed | 77d6cdb | 1 (PASS) | test-steps-cli 91/0; test-review-config 107/0; run-tests 42 files 0 failed |
 | 4 | committed | adf1d40 | 1 (PASS) | three shell suites 43/65/34 passed; uses `stepState` not `isStepOn` (needs warnings) |
-| 5 | built | (this commit) | | pre-commit-review 534/0; 8 red rows before the change |
-| 6 | not started | | | |
+| 5 | committed | c7a1049 | 1 (PASS) | pre-commit-review 534/0; 8 red rows before the change; reviewer: no critical or important; advisory: `evaluateTddOrderGate` has no default for `tddState` (missing throws TypeError, fails closed) |
+| 6 | built | (this commit) | | test-pending-review-gate 21/0; test-review-config 112/0; both steps are guard steps so no honoured repo-off row |
 | 7 | not started | | | |
 | 8 | not started | | | |
 | 9 | not started | | | |

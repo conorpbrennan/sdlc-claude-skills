@@ -238,6 +238,20 @@ j = JSON.parse(runCli(['review', '--round', '1', '--repo', gitRepo], sb));
 assert('--repo works from another cwd', [j.round, j.agent, j.model], [1, 'code-reviewer', 'sonnet']);
 j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
 assert('plan-review prints the plan result', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 2]);
+assert('plan-review enabled by default', [j.enabled, j.enabledSource], [true, 'default']);
+writeUserCfg({ steps: { review: { 'plan-review': false } } });
+j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
+assert('plan-review enabled false from the user file', [j.enabled, j.enabledSource], [false, 'user']);
+assert('plan-review keeps its other keys when off', [j.source, j.consistency, j.cap], ['opus', 'sonnet', 2]);
+clearUserCfg();
+{
+    const savedRepoCfg = fs.readFileSync(path.join(gitRepo, '.claude', 'sdlc-review.json'), 'utf-8');
+    writeRepoCfg(gitRepo, { steps: { review: { 'plan-review': false } } });
+    j = JSON.parse(runCli(['plan-review', '--repo', gitRepo], sb));
+    assert('plan-review stays enabled when only the repo file says false', j.enabled, true);
+    assert('plan-review warns about the ignored repo file', j.warnings.length > 0, true);
+    writeRepoCfg(gitRepo, savedRepoCfg);
+}
 
 // A flag with no value, or a bad round, is a usage error.
 const runCliRaw = (args, cwd) => spawnSync('node', [cli, ...args], { cwd, encoding: 'utf-8', env: process.env });
