@@ -29,6 +29,8 @@ const JSON_INDENT = 2;
 const DEFAULT_MODE = 0o644;
 const NEXT_SESSION_NOTE = 'The status line appears from the next session or refresh.';
 
+const UNSAFE_PATH_CHARS = ['"', '$', '`', '\\'];
+
 const FLAG_DRY_RUN = '--dry-run';
 const FLAG_FORCE = '--force';
 const FLAG_REMOVE = '--remove';
@@ -71,12 +73,19 @@ function parseArgs(argv) {
 // Returns:
 //   { settings, dataDir, scriptDir, scriptPath, command } (absolute paths; command is
 //   the statusLine command string).
+// Raises:
+//   Refusal: when the data dir has a double quote, $, backtick or backslash.
 function resolvePaths(opts, env) {
     const configDir = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), CLAUDE_DIR);
     const settings = opts.settings || path.join(configDir, SETTINGS_FILE);
     const dataDir = opts.dataDir || env.CLAUDE_PLUGIN_DATA || path.join(configDir, DEFAULT_DATA_SUBPATH);
     const scriptDir = path.join(dataDir, SCRIPT_DIR);
     const scriptPath = path.join(scriptDir, SCRIPT_NAME);
+    for (const ch of UNSAFE_PATH_CHARS) {
+        if (dataDir.includes(ch)) {
+            throw new Refusal(`The data dir ${dataDir} contains ${ch} which would break or expand in the shell command. Pick another --data-dir.`);
+        }
+    }
     return { settings, dataDir, scriptDir, scriptPath, command: `node "${scriptPath}"` };
 }
 
@@ -100,6 +109,10 @@ function readSettings(file) {
     if (st.isSymbolicLink()) throw new Refusal(`${file} is a symlink. Not touching it.`);
     if (!st.isFile()) throw new Refusal(`${file} is not a regular file.`);
     const raw = fs.readFileSync(file);
+    if (raw.length === 0) throw new Refusal(`${SETTINGS_FILE} is empty. Put {} in it, or delete it, then re-run.`);
+    if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) {
+        throw new Refusal(`${SETTINGS_FILE} starts with a byte order mark (BOM). Save it as UTF-8 without BOM, then re-run.`);
+    }
     let doc;
     try {
         doc = JSON.parse(raw.toString('utf8'));
@@ -212,7 +225,8 @@ function writeSettings(file, current, doc, log) {
 function doInstall(opts, p, log) {
     const current = readSettings(p.settings);
     const existing = current.doc[STATUSLINE_KEY];
-    const has = Object.prototype.hasOwnProperty.call(current.doc, STATUSLINE_KEY);
+    // A null statusLine is the same as none.
+    const has = Object.prototype.hasOwnProperty.call(current.doc, STATUSLINE_KEY) && existing !== null;
     const ours = has && isOurs(existing, p.command);
     if (has && !ours && !opts.force) {
         log.push(`${p.settings} already has a statusLine: ${JSON.stringify(existing)}`);
@@ -280,7 +294,7 @@ function doRemove(opts, p, log) {
     }
     log.push(`${verb}remove statusLine from ${p.settings}`);
     if (!opts.dryRun) fs.rmSync(p.scriptDir, { recursive: true, force: true });
-    log.push(`${verb}delete ${p.scriptDir}`);
+    log.push(`${opts.dryRun ? 'would remove' : 'removed'} ${p.scriptDir}`);
     return EXIT_OK;
 }
 

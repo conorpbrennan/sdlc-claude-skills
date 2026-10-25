@@ -191,6 +191,7 @@ test('--remove drops our key and data dir, leaves a foreign key, copes with none
         assert.strictEqual(r.status, 0, r.out);
         assert.deepStrictEqual(JSON.parse(fs.readFileSync(s.settings, 'utf8')), OTHER);
         assert.ok(!fs.existsSync(path.join(s.data, 'statusline')));
+        assert.ok(r.out.split('\n').includes(`removed ${path.join(s.data, 'statusline')}`), r.out);
         assert.strictEqual(backupsOf(s).length, 2, 'install and remove each back up');
 
         const none = install(s, ['--remove']);
@@ -246,6 +247,57 @@ test('the written command is exactly node "<data dir>/statusline/statusline.js" 
         });
         assert.strictEqual(r.status, 0, r.stderr);
         assert.ok(r.stdout.replace(ANSI, '').startsWith('ctx 27% used (54k/200k)'), r.stdout);
+    } finally { s.cleanup(); }
+});
+
+test('refusals name the cause and write nothing: shell-unsafe data dir, empty file, BOM', () => {
+    const s = sandbox();
+    try {
+        const cases = [];
+        for (const ch of ['"', '$', '`', '\\']) {
+            cases.push({
+                name: `data dir with ${ch}`,
+                setup: () => fs.writeFileSync(s.settings, '{}\n'),
+                args: ['--data-dir', path.join(s.root, `d${ch}x`)],
+                expect: [ch, '--data-dir'],
+            });
+        }
+        cases.push({
+            name: 'empty file',
+            setup: () => fs.writeFileSync(s.settings, ''),
+            args: [],
+            expect: ['settings.json is empty. Put {} in it, or delete it, then re-run.'],
+        });
+        cases.push({
+            name: 'BOM',
+            setup: () => fs.writeFileSync(s.settings, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{}\n')])),
+            args: [],
+            expect: ['settings.json starts with a byte order mark (BOM). Save it as UTF-8 without BOM, then re-run.'],
+        });
+        for (const c of cases) {
+            fs.rmSync(s.settings, { force: true });
+            c.setup();
+            const before = listing(s.root);
+            const r = install(s, c.args);
+            assert.strictEqual(r.status, 2, `${c.name}: ${r.out}`);
+            for (const frag of c.expect) assert.ok(r.out.includes(frag), `${c.name}: ${r.out}`);
+            assert.deepStrictEqual(listing(s.root), before, c.name);
+        }
+    } finally { s.cleanup(); }
+});
+
+test('a null statusLine counts as absent; any other value still needs --force', () => {
+    const s = sandbox();
+    try {
+        fs.writeFileSync(s.settings, JSON.stringify({ model: 'm', statusLine: null }));
+        const r = install(s);
+        assert.strictEqual(r.status, 0, r.out);
+        assert.strictEqual(JSON.parse(fs.readFileSync(s.settings, 'utf8')).statusLine.command, OWN_COMMAND(s));
+        for (const other of [0, '', false, 'x', []]) {
+            fs.writeFileSync(s.settings, JSON.stringify({ statusLine: other }));
+            const kept = install(s);
+            assert.strictEqual(kept.status, 2, `${JSON.stringify(other)}: ${kept.out}`);
+        }
     } finally { s.cleanup(); }
 });
 

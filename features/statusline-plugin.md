@@ -18,6 +18,8 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- README.md
+- commands/statusline.md
 - src/lib/day-cost.js
 - src/statusline-install.js
 - src/statusline.js
@@ -26,6 +28,12 @@
 - src/test-statusline.js
 
 ## History
+
+- 2026-10-25 `3530ca2` — statusline: opt-in installer that merges only the statusLine key
+  - .claude-plugin/plugin.json
+  - src/lib/day-cost.js
+  - src/statusline-install.js
+  - src/statusline.js
 
 - 2026-10-25 `a89ac32` — statusline: tests for the installer and three regression rows
   - .claude-plugin/plugin.json
