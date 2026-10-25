@@ -20,6 +20,7 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- commands/orchestrate.md
 - commands/steps.md
 - docs/plans/steps-config-block/reports/1-implementer-1.md
 - docs/plans/steps-config-block/reports/2-implementer-1.md
@@ -29,12 +30,15 @@
 - docs/plans/steps-config-block/reports/6-implementer-1.md
 - docs/plans/steps-config-block/reports/7-implementer-1.md
 - docs/plans/steps-config-block/reports/8-implementer-1.md
+- docs/plans/steps-config-block/reports/9-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - skills/plan-spec/SKILL.md
 - src/hooks/claude-attribution-note.js
 - src/hooks/enforce-co-author.js
+- src/hooks/enforce-review-implementer.js
 - src/hooks/lib/review-config.js
 - src/hooks/lib/steps.js
+- src/hooks/orchestrator-mode.js
 - src/hooks/pending-review-gate.js
 - src/hooks/post-commit-feature.js
 - src/hooks/post-commit-notify.js
@@ -47,6 +51,8 @@
 - src/hooks/steps-cli.js
 - src/hooks/test-claude-attribution-note.sh
 - src/hooks/test-enforce-co-author.sh
+- src/hooks/test-enforce-review-implementer.js
+- src/hooks/test-orchestrator-mode.js
 - src/hooks/test-pending-review-gate.js
 - src/hooks/test-post-commit-feature.sh
 - src/hooks/test-post-commit-notify.js
@@ -61,6 +67,17 @@
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `46ef586` — steps: the commit-convention hooks honour their steps, user file only
+  - .claude-plugin/plugin.json
+  - docs/plans/steps-config-block/reports/8-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/claude-attribution-note.js
+  - src/hooks/enforce-co-author.js
+  - src/hooks/post-commit-notify.js
+  - src/hooks/test-claude-attribution-note.sh
+  - src/hooks/test-enforce-co-author.sh
+  - src/hooks/test-post-commit-notify.js
 
 - 2026-10-25 `8eae77e` — steps: hygiene and verify hooks honour their steps
   - .claude-plugin/plugin.json

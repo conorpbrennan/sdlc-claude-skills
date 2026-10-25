@@ -8,6 +8,8 @@ const os = require('os');
 const path = require('path');
 const { spawnSync, execFileSync } = require('child_process');
 
+const { cmd } = require('./lib/plugin-names.js');
+
 const HOOK = path.join(__dirname, 'orchestrator-mode.js');
 
 let passed = 0;
@@ -30,7 +32,8 @@ function assert(name, actual, expected) {
 const sb = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestrator-mode-'));
 const stateDir = path.join(sb, 'state');
 const userCfg = path.join(sb, 'user-sdlc-review.json');
-const ENV = { ...process.env, SDLC_ORCHESTRATOR_STATE_DIR: stateDir, SDLC_REVIEW_CONFIG_USER: userCfg };
+const ENV = { ...process.env, SDLC_ORCHESTRATOR_STATE_DIR: stateDir, SDLC_REVIEW_CONFIG_USER: userCfg,
+    CLAUDE_CONFIG_DIR: path.join(sb, 'claude-config'), TDD_MANDATE_CONFIG: path.join(sb, 'no-such-mandate.json') };
 
 let n = 0;
 const newSession = () => `sess-${++n}`;
@@ -412,6 +415,46 @@ console.log('the Sonnet line prints once per switch-on');
     const o = newSession();
     prompt(o, '/orchestrate off');
     assert('trigger while off prints nothing', post(o, 'Read', { file_path: '/p/HANDOFF-1.md' }).out, '');
+}
+
+console.log('steps block: orchestrator-mode honours its step');
+{
+    const OFF_LINE = 'Orchestrator mode: off (switched off in sdlc-review.json steps; ' + cmd('steps') + ' on orchestrator-mode turns it back on).';
+    const ctxOf = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificOutput.additionalContext;
+    const repoCfg = path.join(repo, '.claude', 'sdlc-review.json');
+    const STEP_CASES = [
+        { name: 'default', user: null, repo: null, off: false },
+        { name: 'area off in the user file', user: { steps: { orchestration: false } }, repo: null, off: true },
+        { name: 'step off inside an on area', user: { steps: { orchestration: { 'orchestrator-mode': false } } }, repo: null, off: true },
+        { name: 'repo file off beats user on', user: { steps: { orchestration: true } }, repo: { steps: { orchestration: { 'orchestrator-mode': false } } }, off: true },
+    ];
+    for (const c of STEP_CASES) {
+        fs.rmSync(userCfg, { force: true });
+        fs.rmSync(repoCfg, { force: true });
+        if (c.user) fs.writeFileSync(userCfg, JSON.stringify(c.user));
+        if (c.repo) fs.writeFileSync(repoCfg, JSON.stringify(c.repo));
+        const t = newSession();
+        post(t, 'Read', { file_path: '/p/HANDOFF-1.md' }, { cwd: repo });
+        assert(`${c.name}: a trigger read ${c.off ? 'writes no state' : 'turns the mode on'}`, readState(t) !== null, !c.off);
+
+        const p = newSession();
+        const r = run({ session_id: p, hook_event_name: 'UserPromptSubmit', cwd: repo, prompt: '/orchestrate on' });
+        assert(`${c.name}: the on prompt ${c.off ? 'gives the off line and writes no state' : 'turns the mode on'}`,
+            c.off ? [ctxOf(r), readState(p)] : [isOn(p), true], c.off ? [OFF_LINE, null] : [true, true]);
+
+        const e = newSession();
+        writeState(e, { on: true, since: 'x', trigger: 't', inlineSinceDispatch: 0, off: false });
+        const d = pre(e, 'Edit', { file_path: '/p/src/code.js' }, { cwd: repo });
+        assert(`${c.name}: an Edit on code ${c.off ? 'is not denied' : 'is denied'}`, decision(d) || null, c.off ? null : 'deny');
+
+        const b = newSession();
+        writeState(b, { on: true, since: 'x', trigger: 't', inlineSinceDispatch: 7, off: false });
+        const n = post(b, 'Bash', { command: 'ls /p' }, { cwd: repo });
+        assert(`${c.name}: the eighth inline command ${c.off ? 'gives no nudge and no count' : 'nudges'}`,
+            c.off ? [n.out, readState(b).inlineSinceDispatch] : [!!ctxOf(n), true], c.off ? ['', 7] : [true, true]);
+    }
+    fs.rmSync(userCfg, { force: true });
+    fs.rmSync(repoCfg, { force: true });
 }
 
 fs.rmSync(sb, { recursive: true, force: true });
