@@ -9,10 +9,24 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const steps = require('./lib/steps');
 
 const input = process.env.CLAUDE_TOOL_INPUT || '';
 
-if (input.includes('git commit') && !input.includes('--amend')) {
+const STEP_ID = 'post-commit-notify';
+
+/**
+ * Whether the step is on. Config is read only for a commit, and warnings go
+ * to stderr, one line each.
+ * @returns {boolean} true when the notifier may run.
+ */
+function stepOn() {
+    const step = steps.stepState(STEP_ID, { cwd: process.cwd() });
+    for (const w of step.warnings) process.stderr.write('post-commit-notify: ' + w + '\n');
+    return step.on;
+}
+
+if (input.includes('git commit') && !input.includes('--amend') && stepOn()) {
     const configured = process.env.CLAUDE_COMMIT_NOTIFY;
     const candidates = configured
         ? [configured]

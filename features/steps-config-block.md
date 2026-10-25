@@ -28,12 +28,16 @@
 - docs/plans/steps-config-block/reports/5-implementer-1.md
 - docs/plans/steps-config-block/reports/6-implementer-1.md
 - docs/plans/steps-config-block/reports/7-implementer-1.md
+- docs/plans/steps-config-block/reports/8-implementer-1.md
 - docs/plans/steps-config-block/tracker.md
 - skills/plan-spec/SKILL.md
+- src/hooks/claude-attribution-note.js
+- src/hooks/enforce-co-author.js
 - src/hooks/lib/review-config.js
 - src/hooks/lib/steps.js
 - src/hooks/pending-review-gate.js
 - src/hooks/post-commit-feature.js
+- src/hooks/post-commit-notify.js
 - src/hooks/pre-commit-feature.js
 - src/hooks/pre-commit-hygiene.js
 - src/hooks/pre-commit-review.js
@@ -41,8 +45,11 @@
 - src/hooks/review-config-cli.js
 - src/hooks/session-start-feature.js
 - src/hooks/steps-cli.js
+- src/hooks/test-claude-attribution-note.sh
+- src/hooks/test-enforce-co-author.sh
 - src/hooks/test-pending-review-gate.js
 - src/hooks/test-post-commit-feature.sh
+- src/hooks/test-post-commit-notify.js
 - src/hooks/test-pre-commit-feature.sh
 - src/hooks/test-pre-commit-hygiene.sh
 - src/hooks/test-pre-commit-review.js
@@ -54,6 +61,15 @@
 - tools/run-tests.sh
 
 ## History
+
+- 2026-10-25 `8eae77e` — steps: hygiene and verify hooks honour their steps
+  - .claude-plugin/plugin.json
+  - docs/plans/steps-config-block/reports/7-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/pre-commit-hygiene.js
+  - src/hooks/pre-pr-verify.js
+  - src/hooks/test-pre-commit-hygiene.sh
+  - src/hooks/test-pre-pr-verify.js
 
 - 2026-10-25 `d58a18d` — steps: pending-review-gate and plan-review honour their steps
   - .claude-plugin/plugin.json
