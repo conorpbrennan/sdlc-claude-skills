@@ -514,8 +514,8 @@ The status line shows context used, model, cost and branch:
 ctx 27% used (54k/200k) | Sonnet | $1.20 day $3.50 | branch
 ```
 
-The context segment is green above 50 percent remaining, yellow at 50 or less,
-and red at 20 or less.
+The context segment is green below 20 percent used, amber from 20 to 29,
+and red from 30.
 
 ```
 /sdlc:statusline preview          # dry run, writes nothing (also the default)

@@ -10,12 +10,12 @@ const { dayCost } = require('./lib/day-cost.js');
 const GIT_TIMEOUT_MS = 1000;
 const NO_GIT = 'no git';
 const UNKNOWN_MODEL = '?';
-const WARN_REMAINING = 50;
-const CRITICAL_REMAINING = 20;
+const AMBER_USED = 20;
+const RED_USED = 30;
 const MILLION = 1000000;
 
 const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
+const AMBER = '\x1b[33m';
 const RED = '\x1b[31m';
 const CYAN = '\x1b[36m';
 const MAGENTA = '\x1b[35m';
@@ -79,6 +79,21 @@ function branchOf(dir) {
 //   options: { dayCost } to inject the day cost (number or null) instead of looking it up.
 // Returns:
 //   the line, with ANSI colours and no trailing newline.
+/**
+ * Picks the colour escape for the context segment from the used percentage.
+ * Green below AMBER_USED (20), amber from 20 to 29, red from RED_USED (30).
+ * A non-finite value takes green.
+ *
+ * @param {number} usedPct The used percentage printed in the segment.
+ * @returns {string} The ANSI colour escape.
+ */
+function usedColour(usedPct) {
+    if (!Number.isFinite(usedPct)) return GREEN;
+    if (usedPct >= RED_USED) return RED;
+    if (usedPct >= AMBER_USED) return AMBER;
+    return GREEN;
+}
+
 function render(input, options = {}) {
     const data = input && typeof input === 'object' ? input : {};
     const c = data.context_window && typeof data.context_window === 'object' ? data.context_window : {};
@@ -98,10 +113,8 @@ function render(input, options = {}) {
     if (typeof c.remaining_percentage === 'number') remaining = Math.floor(c.remaining_percentage);
     else if (used !== null && Number.isFinite(used) && size > 0) remaining = Math.floor(100 - (used * 100) / size);
 
-    let colour = GREEN;
-    if (remaining <= CRITICAL_REMAINING) colour = RED;
-    else if (remaining <= WARN_REMAINING) colour = YELLOW;
-    let ctxStr = `${colour}ctx ${100 - remaining}% used${RESET}`;
+    const usedPct = 100 - remaining;
+    let ctxStr = `${usedColour(usedPct)}ctx ${usedPct}% used${RESET}`;
     if (size > 0) {
         // Prefer actual usage; fall back to deriving it from the remaining %.
         const shown = used !== null && Number.isFinite(used) ? Math.floor(used) : Math.floor((size * (100 - remaining)) / 100);

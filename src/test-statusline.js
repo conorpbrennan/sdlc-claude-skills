@@ -26,7 +26,7 @@ const { render } = require('./statusline.js');
 
 const SCRIPT = path.join(__dirname, 'statusline.js');
 const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
+const AMBER = '\x1b[33m';
 const RED = '\x1b[31m';
 const ANSI = /\x1b\[[0-9;]*m/g;
 
@@ -83,11 +83,23 @@ test('remaining 100 without a window prints no token segment', () => {
     assert.ok(line.startsWith('ctx 0% used | '), line);
 });
 
-test('colour follows the remaining percentage', () => {
-    const cases = [[73, GREEN], [51, GREEN], [50, YELLOW], [21, YELLOW], [20, RED], [5, RED]];
-    for (const [remaining, colour] of cases) {
-        const line = render(makeInput({ remaining }), NO_DAY);
-        assert.ok(line.startsWith(`${colour}ctx ${100 - remaining}% used`), `${remaining} -> ${JSON.stringify(line)}`);
+test('colour follows the used percentage', () => {
+    const cases = [
+        [0, GREEN], [1, GREEN], [19, GREEN],
+        [20, AMBER], [21, AMBER], [29, AMBER],
+        [30, RED], [31, RED], [60, RED], [100, RED],
+    ];
+    for (const [usedPct, colour] of cases) {
+        const line = render(makeInput({ remaining: 100 - usedPct }), NO_DAY);
+        assert.ok(line.startsWith(`${colour}ctx ${usedPct}% used`), `${usedPct} -> ${JSON.stringify(line)}`);
+    }
+});
+
+test('colour follows the used percentage derived from tokens and window size', () => {
+    const cases = [[38000, GREEN, 19], [40000, AMBER, 20], [60000, RED, 30]];
+    for (const [used, colour, usedPct] of cases) {
+        const line = render(makeInput({ remaining: null, used }), NO_DAY);
+        assert.ok(line.startsWith(`${colour}ctx ${usedPct}% used`), `${used} -> ${JSON.stringify(line)}`);
     }
 });
 
