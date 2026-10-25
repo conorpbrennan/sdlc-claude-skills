@@ -126,10 +126,16 @@ function runSet(args) {
     const on = value === STATE_ON;
     const isArea = Boolean(AREAS[id]);
     const res = updateConfigFile(target, data => {
-        if (!data[STEPS_KEY] || typeof data[STEPS_KEY] !== 'object' || Array.isArray(data[STEPS_KEY])) data[STEPS_KEY] = {};
+        if (!data[STEPS_KEY] || typeof data[STEPS_KEY] !== 'object' || Array.isArray(data[STEPS_KEY])) {
+            if (data[STEPS_KEY] !== undefined) console.error(`note: the old '${STEPS_KEY}' value was not an object; replaced.`);
+            data[STEPS_KEY] = {};
+        }
         const block = data[STEPS_KEY];
         if (typeof block[area] === 'boolean') block[area] = { [ENABLED_KEY]: block[area] };
-        else if (!block[area] || typeof block[area] !== 'object' || Array.isArray(block[area])) block[area] = {};
+        else if (!block[area] || typeof block[area] !== 'object' || Array.isArray(block[area])) {
+            if (block[area] !== undefined) console.error(`note: the old '${STEPS_KEY}.${area}' value was not an object or boolean; replaced.`);
+            block[area] = {};
+        }
         block[area][isArea ? ENABLED_KEY : id] = on;
     });
     if (!res.ok) {

@@ -521,7 +521,7 @@ An area is a boolean, or an object with `enabled` and any of its step ids. In th
 The rules:
 
 - R1. In one file, a step key beats the area's `enabled`, which beats the area as a boolean.
-- R2. Guard areas read the user file only. A repo file cannot switch them off. `/sdlc:steps` warns and ignores the key.
+- R2. Guard areas read the user file only. A repo file cannot switch them off. `/sdlc:steps` warns when the repo value is `false`, and ignores the key.
 - R3. For other areas, the repo file beats the user file.
 - R4. A step with no setting is on.
 - R5. An alias that says off wins over the block. `/sdlc:steps` shows `block says on; the alias wins`.

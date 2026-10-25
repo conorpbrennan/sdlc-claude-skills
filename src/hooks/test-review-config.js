@@ -30,6 +30,8 @@ function assert(name, actual, expected) {
 const sb = fs.mkdtempSync(path.join(os.tmpdir(), 'review-config-'));
 const userFile = path.join(sb, 'user-sdlc-review.json');
 process.env.SDLC_REVIEW_CONFIG_USER = userFile;
+process.env.CLAUDE_CONFIG_DIR = path.join(sb, 'claude-config');
+process.env.TDD_MANDATE_CONFIG = path.join(sb, 'no-tdd-mandate.json');
 
 function newRepo(name) {
     const r = path.join(sb, name);
@@ -269,6 +271,18 @@ assert('outside a repo still exits 0', nr.status, 0);
 j = JSON.parse(nr.stdout);
 assert('outside a repo falls back to defaults', [j.model, j.agent], ['sonnet', 'code-reviewer']);
 assert('outside a repo warns', j.warnings.length > 0, true);
+
+// setMainModel keeps the mode of an existing user file.
+{
+    const modeFile = path.join(sb, 'mode-sdlc-review.json');
+    fs.writeFileSync(modeFile, '{}');
+    fs.chmodSync(modeFile, 0o640);
+    const saved = process.env.SDLC_REVIEW_CONFIG_USER;
+    process.env.SDLC_REVIEW_CONFIG_USER = modeFile;
+    const res = cfg.setMainModel('opus');
+    process.env.SDLC_REVIEW_CONFIG_USER = saved;
+    assert('setMainModel keeps file mode 0640', [res.ok, (fs.statSync(modeFile).mode & 0o777).toString(8)], [true, '640']);
+}
 
 // main-model: show, set and off, against the user file only.
 {

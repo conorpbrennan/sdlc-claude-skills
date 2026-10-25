@@ -2651,6 +2651,7 @@ try {
             const isTdd = /TDD gate/.test(msg);
             const got = out.decision === 'approve' ? 'approve' : (isTdd ? 'block-tdd' : 'block-review');
             assert('steps: ' + c.name + ' (decision)', got, c.expect);
+            if (isTdd) assertContains('steps: ' + c.name + ' (remedy names the switch)', msg, 'steps.tdd');
             const marker = path.join(dir, '.git', '.claude-last-review');
             const lock = path.join(dir, '.git', '.claude-review-in-progress');
             if (c.marker === 'none') {

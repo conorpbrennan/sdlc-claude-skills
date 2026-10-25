@@ -20,11 +20,15 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- README.md
 - commands/orchestrate.md
 - commands/steps.md
 - docs/plans/steps-config-block/reports/1-implementer-1.md
 - docs/plans/steps-config-block/reports/10-implementer-1.md
 - docs/plans/steps-config-block/reports/11-implementer-1.md
+- docs/plans/steps-config-block/reports/13a-implementer-1.md
+- docs/plans/steps-config-block/reports/13b-implementer-1.md
+- docs/plans/steps-config-block/reports/13c-fix-1.md
 - docs/plans/steps-config-block/reports/2-implementer-1.md
 - docs/plans/steps-config-block/reports/3-implementer-1.md
 - docs/plans/steps-config-block/reports/4-implementer-1.md
@@ -70,6 +74,7 @@
 - src/hooks/test-review-config.js
 - src/hooks/test-session-start-feature.sh
 - src/hooks/test-session-start-instructions.js
+- src/hooks/test-steps-cli-replace.js
 - src/hooks/test-steps-cli.js
 - src/hooks/test-steps.js
 - tools/run-tests.sh

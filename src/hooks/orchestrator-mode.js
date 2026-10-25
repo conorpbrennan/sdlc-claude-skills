@@ -10,7 +10,8 @@
 // Everything applies to the main session only: stdin has no agent_id there and has
 // one inside a sub-agent, where this hook prints nothing.
 // State is one JSON file per session. Threat model: honest habit, not adversarial
-// input, so any error prints nothing and exits 0. Unreadable state means off.
+// input, so any error in the hook's own logic prints nothing and exits 0. Unreadable state means
+// off. A missing lib file (a broken install) is not caught: it exits 1, as in the other hooks.
 //
 // Also (debugging): `orchestrator-mode.js --status <session_id>` prints the recorded state.
 'use strict';
@@ -161,6 +162,17 @@ function isAllowedPath(filePath, cwd) {
     return p.startsWith(tmp + '/') || p.startsWith('/tmp/');
 }
 
+// One process handles one event, so a config warning reached by two resolvers prints once.
+const warned = new Set();
+
+// Args:
+//   w: a config warning from either resolver.
+function warnOnce(w) {
+    if (warned.has(w)) return;
+    warned.add(w);
+    process.stderr.write(`orchestrator-mode: ${w}\n`);
+}
+
 // Args:
 //   cwd: the session's working directory, or undefined.
 // Returns: the inline-command count that triggers a nudge.
@@ -174,7 +186,7 @@ function nudgeThreshold(cwd) {
     }
     try {
         const r = resolveOrchestrator({ repoRoot });
-        for (const w of r.warnings) process.stderr.write(`orchestrator-mode: ${w}\n`);
+        for (const w of r.warnings) warnOnce(w);
         return r.bashNudge;
     } catch (e) {
         return DEFAULT_NUDGE;
@@ -190,7 +202,7 @@ function nudgeThreshold(cwd) {
 function stepIsOff(cwd) {
     try {
         const step = stepState(STEP_ID, { cwd: cwd || process.cwd() });
-        for (const w of step.warnings) process.stderr.write(`orchestrator-mode: ${w}\n`);
+        for (const w of step.warnings) warnOnce(w);
         return !step.on;
     } catch (e) {
         return false;

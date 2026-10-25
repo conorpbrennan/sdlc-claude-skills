@@ -615,7 +615,7 @@ function pollForFreshCoverage(covPath, newerThanMs, timeoutMs) {
 
 // ---------------------------------------------------------------------------
 // Gate 3e: the TDD mandate. On by default in every repository; see
-// lib/tdd-order.js `mandateInForce` for the two ways out.
+// lib/steps.js and the `steps.tdd` switch (/sdlc:steps) for the ways out.
 // ---------------------------------------------------------------------------
 
 function loadTddOrderRepos() {
@@ -1025,7 +1025,7 @@ function main() {
     }
 
     // The TDD mandate, on by default in every repository. See
-    // evaluateTddOrderGate and lib/tdd-order.js `mandateInForce` for the rule and
+    // evaluateTddOrderGate and the `steps.tdd` switch (lib/steps.js) for the rule and
     // the two ways out.
     //
     // It runs BEFORE every fast path. It used to run after the classifier, so a
@@ -1080,7 +1080,8 @@ function main() {
         block('tdd-order', reason,
             'PRE_COMMIT_REVIEW: ' + reason + remedy +
                 ' To exempt this repository: touch .claude/tdd-mandate.disabled, or add it' +
-                ' to exempt_repos in ~/.claude/tdd-mandate.json.');
+                ' to exempt_repos in ~/.claude/tdd-mandate.json. To switch the TDD gate off' +
+                ' everywhere, set steps.tdd off (' + cmd('steps') + ').');
     }
     // Review off, TDD passed: approve with no marker and no lock written.
     if (!reviewOn && tddGate.action === 'continue') { endHook('approve', { via: 'step-off' }); approve(); }

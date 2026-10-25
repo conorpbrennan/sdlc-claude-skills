@@ -221,6 +221,9 @@ console.log('steps: each switch changes only its own behaviour');
         { name: 'agent-default-model off: no rewrite, budget stays', steps: { user: off('agent-default-model') }, input: NOMODEL, expect: [null, undefined, true] },
         { name: 'agent-default-model off: the tier deny still acts', steps: { user: off('agent-default-model') }, input: OPUS_BAD, expect: ['deny', undefined, false] },
         { name: 'agent-tier-gate off: opus without a reason passes with budget', steps: { user: off('agent-tier-gate') }, input: OPUS_BAD, expect: [null, 'opus', true] },
+        // Both below live in the Opus branch of the gate, so switching it off drops them by design.
+        { name: 'agent-tier-gate off: the plan-edit deny is dropped', steps: { user: off('agent-tier-gate') }, input: { subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: plan writing\nRevise the existing plan' }, expect: [null, 'opus', true] },
+        { name: 'agent-tier-gate off: the user-asked ask is dropped', steps: { user: off('agent-tier-gate') }, input: { subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: user asked' }, expect: [null, 'opus', true] },
         { name: 'agent-tier-gate off: the rewrite still acts', steps: { user: off('agent-tier-gate') }, input: NOMODEL, expect: ['allow', 'sonnet', true] },
         { name: 'context-budget off: rewrite without budget', steps: { user: off('context-budget') }, input: NOMODEL, expect: ['allow', 'sonnet', false] },
         { name: 'context-budget off: allowed opus prints nothing', steps: { user: off('context-budget') }, input: OPUS_OK, expect: NOTHING },

@@ -387,6 +387,18 @@ console.log('--status');
     assert('status off by owner', /switched off/.test(off.stdout), true);
 }
 
+console.log('a malformed config warns once per inline Bash call');
+{
+    fs.writeFileSync(userCfg, '{not json');
+    const sid = newSession();
+    turnOn(sid);
+    const r = spawnSync('node', [HOOK], { encoding: 'utf-8', env: ENV, input: JSON.stringify({
+        session_id: sid, hook_event_name: 'PostToolUse', cwd: plain, tool_name: 'Bash', tool_input: { command: 'ls /tmp' } }) });
+    const lines = (r.stderr || '').split('\n').filter((l) => l.startsWith('orchestrator-mode: '));
+    assert('exactly one warning line', [r.status, lines.length], [0, 1]);
+    fs.rmSync(userCfg, { force: true });
+}
+
 console.log('the Sonnet line prints once per switch-on');
 {
     const count = (text) => String(text || '').split(MODEL_LINE).length - 1;

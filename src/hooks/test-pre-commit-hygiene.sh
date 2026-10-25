@@ -10,6 +10,10 @@ FAIL=0
 
 TMPROOT="$(mktemp -d)"
 trap 'rm -rf "$TMPROOT"' EXIT
+# Isolate the user-level config from the real ~/.claude for every case.
+export SDLC_REVIEW_CONFIG_USER="$TMPROOT/no-user-sdlc-review.json"
+export CLAUDE_CONFIG_DIR="$TMPROOT/claude-config"
+export TDD_MANDATE_CONFIG="$TMPROOT/no-tdd-mandate.json"
 
 # ---------------------------------------------------------------------------
 # Helper: run the hook with a given config file path, cwd, and command.
@@ -488,11 +492,11 @@ targeted_case() {
 targeted_case match pkg/mod.py yes
 check "targeted recipe, matching test -> approve" "$TOUT" "approve"
 if [ "$(printf '%s\n' "$TPYLOG" | wc -l)" -eq 1 ] \
-   && printf '%s' "$TPYLOG" | grep -q 'tests/test_mod.py' \
-   && printf '%s' "$TPYLOG" | grep -q -- '--cov=pkg' \
-   && printf '%s' "$TPYLOG" | grep -q -- '--cov-report=xml' \
+   && grep -q 'tests/test_mod.py' <<<"$TPYLOG" \
+   && grep -q -- '--cov=pkg' <<<"$TPYLOG" \
+   && grep -q -- '--cov-report=xml' <<<"$TPYLOG" \
    && [ -f "$TREPO/coverage.xml" ] \
-   && printf '%s' "$TDCLOG" | grep -q -- '--fail-under=95'; then
+   && grep -q -- '--fail-under=95' <<<"$TDCLOG"; then
     echo "PASS: matching test runs alone with --cov, then diff-cover"
     PASS=$((PASS + 1))
 else
@@ -504,8 +508,8 @@ fi
 
 targeted_case nomatch pkg/other.py yes
 check "targeted recipe, no matching test -> approve" "$TOUT" "approve"
-if printf '%s' "$TPYLOG" | grep -q -- '-m smoke' \
-   && ! printf '%s' "$TPYLOG" | grep -q 'test_mod' \
+if grep -q -- '-m smoke' <<<"$TPYLOG" \
+   && ! grep -q 'test_mod' <<<"$TPYLOG" \
    && [ ! -f "$TREPO/coverage.xml" ] \
    && [ -z "$TDCLOG" ]; then
     echo "PASS: no matching test runs the smoke marker, no coverage.xml, no diff-cover"
@@ -518,8 +522,8 @@ else
 fi
 
 targeted_case testfile tests/test_mod.py yes
-if printf '%s' "$TPYLOG" | grep -q 'tests/test_mod.py' \
-   && ! printf '%s' "$TPYLOG" | grep -q -- '-m smoke'; then
+if grep -q 'tests/test_mod.py' <<<"$TPYLOG" \
+   && ! grep -q -- '-m smoke' <<<"$TPYLOG"; then
     echo "PASS: a staged test file runs itself"
     PASS=$((PASS + 1))
 else
@@ -536,7 +540,7 @@ SMOKE_CMD=$(EXAMPLE_CFG="$EXAMPLE_CFG" node -e '
     console.log(Object.values(ex.repos)[0].checks.find(c => /cov/.test(c.name)).command);
 ')
 SMOKE_OUT=$(cd "$TREPO" && PATH="$FAKEBIN:$PATH" STAGED_PY="$TREPO/pkg/other.py" STAGED_PY_PKGS=pkg bash -c "$SMOKE_CMD" 2>&1 || true)
-if printf '%s' "$SMOKE_OUT" | grep -q 'no tests match' && printf '%s' "$SMOKE_OUT" | grep -q 'WARNING'; then
+if grep -q 'no tests match' <<<"$SMOKE_OUT" && grep -q 'WARNING' <<<"$SMOKE_OUT"; then
     echo "PASS: no test and no smoke marker says so and warns"
     PASS=$((PASS + 1))
 else
@@ -569,8 +573,8 @@ for XD_RUN in present absent smoke; do
     XD_LOG="$(cat "$FAKE_LOG_DIR/pytest.log" 2>/dev/null || true)"
     while IFS='|' read -r run in_log in_err needle; do
         [ "$run" = "$XD_RUN" ] || continue
-        if printf '%s' "$XD_LOG" | grep -qF -- "$needle"; then got_log=yes; else got_log=no; fi
-        if printf '%s' "$XD_ERR" | grep -qF -- "$needle"; then got_err=yes; else got_err=no; fi
+        if grep -qF -- "$needle" <<<"$XD_LOG"; then got_log=yes; else got_log=no; fi
+        if grep -qF -- "$needle" <<<"$XD_ERR"; then got_err=yes; else got_err=no; fi
         if [ "$got_log" != "$in_log" ] || [ "$got_err" != "$in_err" ]; then
             XD_FAIL=1
             echo "  $run: '$needle' log=$got_log (want $in_log) stderr=$got_err (want $in_err)"

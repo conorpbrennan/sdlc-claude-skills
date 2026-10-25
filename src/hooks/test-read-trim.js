@@ -159,6 +159,16 @@ console.log('steps: read-trim switch');
     fs.rmSync(userCfg, { force: true });
     fs.rmSync(repoCfg, { force: true });
 }
+console.log('steps: a short read never reaches the resolver');
+{
+    // A malformed user config makes the resolver warn on stderr; a short read must not read it.
+    fs.writeFileSync(userCfg, '{not json');
+    const small = spawnSync('node', [HOOK], { input: JSON.stringify(event({ cwd: sb }, 'hi')), encoding: 'utf-8' });
+    assert('short read: no resolver warning', [small.status, small.stderr], [0, '']);
+    const big = spawnSync('node', [HOOK], { input: JSON.stringify(event({ cwd: sb }, bigText)), encoding: 'utf-8' });
+    assert('big read: resolver is read (warns)', big.stderr.length > 0, true);
+    fs.rmSync(userCfg, { force: true });
+}
 fs.rmSync(sb, { recursive: true, force: true });
 
 console.log('hooks.json wiring');

@@ -25,8 +25,8 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 | 9 | committed | 11e637f | 1 (PASS) | orchestrator-mode 176/0; enforce-review-implementer 6/0; non-guard area so repo off honoured; reviewer advisories committed with the gaps named |
 | 10 | committed | f4d9d3f | 1 (PASS) | agent-tier-gate 145/0 (16 STEP_CASES rows); read-trim 29/0; non-guard area so repo off honoured; default path byte-identical to HEAD on 4 inputs |
 | 11 | committed | 1d46a5a | 1 (PASS) | session-start-instructions 556/0; 0 critical, 0 important; cache-ttl alias warns, no write |
-| 12 | built, in review | | | docs only; implementer could not verify the repo-file guard warning text (scratch repo had no .git) or that `hygiene: false` stops the hook in a listed repo; reviewer to check |
-| 13 | not started | | | |
+| 12 | committed | 6df66dd | 1 (PASS, run after the commit: docs-only commits are not gated) | reviewer ran the CLI in a real git scratch repo: guard warning text, alias-wins and all 13 old alias rows confirmed; advisory (R2 "warns on false") applied in step 13 |
+| 13 | built, in review | | | 13a tests/docs, 13b hook source, 13c fix (`/sdlc:steps` literal in pre-commit-review.js broke test-plugin-layout; now `cmd('steps')`). run-tests 46 files 0 failed. Gaps named: four `echo ... \| grep -q` checks remain in test-pre-commit-hygiene.sh (lines 36, 37, 146, 627); `enforce-review-implementer.js` missing-lib behaviour left as is, header comment corrected; analyser does not pair hook.start/hook.end so hygiene's unpaired step-off end is harmless |
 
 ## DISAGREEMENTS
 

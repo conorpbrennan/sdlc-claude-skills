@@ -52,6 +52,7 @@ function scratch(user, repo, files) {
     }
     process.env.SDLC_REVIEW_CONFIG_USER = path.join(dir, 'user.json');
     process.env.CLAUDE_CONFIG_DIR = cfgDir;
+    process.env.TDD_MANDATE_CONFIG = path.join(dir, 'no-tdd-mandate.json');
     return { repoRoot, cfgDir, dir };
 }
 
@@ -64,6 +65,8 @@ const CASES = [
     { name: 'repo off non-guard beats user on', user: { steps: { hygiene: true } }, repo: { steps: { hygiene: false } }, files: [], step: 'pre-commit-hygiene', on: false, source: 'repo', warn: '' },
     { name: 'repo on beats user off', user: { steps: { hygiene: false } }, repo: { steps: { hygiene: true } }, files: [], step: 'pre-commit-hygiene', on: true, source: 'repo', warn: '' },
     { name: 'repo off on guard is ignored with warning', user: null, repo: { steps: { review: { 'review-gate': false } } }, files: [], step: 'review-gate', on: true, source: 'default', warn: 'steps.review.review-gate is read from the user file only; ignored' },
+    { name: 'repo off on guard area (boolean) is ignored with warning', user: null, repo: { steps: { tdd: false } }, files: [], step: 'tdd-mandate', on: true, source: 'default', warn: 'is read from the user file only; ignored' },
+    { name: 'repo off on guard area (enabled) is ignored with warning', user: null, repo: { steps: { 'commit-conventions': { enabled: false } } }, files: [], step: 'enforce-co-author', on: true, source: 'default', warn: 'is read from the user file only; ignored' },
     { name: 'invalid JSON in user file', user: '{ nope', repo: null, files: [], step: 'read-trim', on: true, source: 'default', warn: 'invalid JSON' },
     { name: 'value "off" is not boolean', user: { steps: { orchestration: 'off' } }, repo: null, files: [], step: 'read-trim', on: true, source: 'default', warn: 'steps.orchestration' },
     { name: 'unknown step key warns', user: { steps: { orchestration: { 'no-such-step': false } } }, repo: null, files: [], step: 'read-trim', on: true, source: 'default', warn: 'steps.orchestration.no-such-step' },

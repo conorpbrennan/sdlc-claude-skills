@@ -40,9 +40,9 @@ function decide(input) {
     const toolInput = input.tool_input;
     if (!toolInput || typeof toolInput !== 'object') return null;
     if (toolInput.offset != null || toolInput.limit != null) return null;
-    if (stepIsOff(input.cwd)) return null;
     const trimmed = trimRead(input.tool_response);
     if (!trimmed) return null;
+    if (stepIsOff(input.cwd)) return null;
     return { hookSpecificOutput: { hookEventName: 'PostToolUse', updatedToolOutput: trimmed } };
 }
 

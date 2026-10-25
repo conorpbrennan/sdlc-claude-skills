@@ -116,6 +116,26 @@ console.log('\n== bad config still exits 0');
     assert('bad json: warning printed', r.lines.some(l => l.startsWith('warning: ')), true);
 }
 
+console.log('\n== usage errors');
+const USAGE_CASES = [
+    { name: 'no subcommand', args: [] },
+    { name: 'unknown subcommand', args: ['frobnicate'] },
+    { name: '--repo without a value', args: ['list', '--repo'] },
+];
+for (const c of USAGE_CASES) {
+    const s = scratch(null, null, []);
+    const r = spawnSync(process.execPath, [CLI, ...c.args], { env: s.env, encoding: 'utf8' });
+    assert(`${c.name}: exit`, r.status, 2);
+    assert(`${c.name}: usage on stderr`, r.stderr.includes('node steps-cli.js list'), true);
+}
+{
+    // Outside a repo with no --repo, list still runs on defaults and exits 0.
+    const s = scratch(null, null, []);
+    const r = spawnSync(process.execPath, [CLI, 'list'], { env: s.env, encoding: 'utf8', cwd: sb });
+    assert('outside a repo: exit', r.status, 0);
+    assert('outside a repo: every step on default', r.stdout.split('\n').filter(l => /\bon\b +default/.test(l)).length, ALL_IDS.length);
+}
+
 console.log('\n== set');
 // before: { user, repo } raw file text (string) or object or null; args after `set`
 //   (the --repo flag is added unless noRepo); after: { user, repo } expected parsed
