@@ -64,6 +64,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `agent-tier-gate` hook (Opus dispatch needs a TIER reason; appends the context-budget block) | `src/hooks/agent-tier-gate.js`, `src/hooks/lib/context-budget.js` |
 | `read-trim` hook (trims whole-file Reads over 12K chars inside sub-agents) | `src/hooks/read-trim.js`, `src/hooks/lib/read-trim.js` |
 | Orchestrator mode hook and `/sdlc:orchestrate` | `src/hooks/orchestrator-mode.js`, `commands/orchestrate.md` |
+| `/sdlc:steps` and the steps resolver (`steps` block of `sdlc-review.json`) | `commands/steps.md`, `src/hooks/steps-cli.js`, `src/hooks/lib/steps.js` |
 | `/sdlc:handoff` | `commands/handoff.md` |
 | `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js` |
 | `/sdlc:fit` and its tool | `commands/fit.md`, `tools/usage-fit.js` |

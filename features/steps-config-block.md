@@ -76,6 +76,13 @@
 
 ## History
 
+- 2026-10-25 `1d46a5a` — steps: session-start-instructions honours its four steps
+  - .claude-plugin/plugin.json
+  - docs/plans/steps-config-block/reports/11-implementer-1.md
+  - docs/plans/steps-config-block/tracker.md
+  - src/hooks/session-start-instructions.js
+  - src/hooks/test-session-start-instructions.js
+
 - 2026-10-25 `f4d9d3f` — steps: agent-tier-gate honours its three steps; read-trim honours its step
   - .claude-plugin/plugin.json
   - docs/plans/steps-config-block/reports/10-implementer-1.md

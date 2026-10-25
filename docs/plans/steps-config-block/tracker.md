@@ -5,8 +5,8 @@ Owner authorisation D1 (plan Section 3): stage, commit and dispatch fix agents p
 
 ## RESUME
 
-Next action: step 11 implementer dispatched (`session-start-instructions.js` four standalone steps; plan Section 5 step 11 plus Section 2; ASSUMES LANDED 1). On return: read the report, bump, stage, attempt the commit, review. Then step 12 (README, example config, CLAUDE.md) and step 13 (close-out).
-Last committed: step 10 `f4d9d3f`, step 9 `11e637f`, step 8 `46ef586`, step 7 `8eae77e`, step 6 `d58a18d`.
+Next action: step 12 built (README, example config, CLAUDE.md; plugin 1.0.78). Stage, attempt the commit, review in a throwaway worktree. Then step 13 (close-out).
+Last committed: step 11 `1d46a5a`, step 10 `f4d9d3f`, step 9 `11e637f`, step 8 `46ef586`, step 7 `8eae77e`, step 6 `d58a18d`.
 Last committed: step 5 `c7a1049`, step 4 `adf1d40`, step 3 `77d6cdb`, step 2 `c84818a`, step 1 `6af81c5`, commit 0 `81d7c19` (the plan).
 Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rewrites the README "Turning steps off" section; at step 13 verify it covers every step and every alias, and that `/sdlc:steps` is documented.
 
@@ -24,8 +24,8 @@ Owner request, 25 Oct 2026 (during step 5): "ensure README updated". Step 12 rew
 | 8 | committed | 46ef586 | 1 (PASS) | co-author 54/0; attribution-note 7/0; notify 10/0; all three are guard steps so no honoured repo-off row; reviewer advisories: no test for a steps.js-missing variant of the co-author crash (covered by the commit-command.js case); the co-author table merges stderr into stdout so it cannot prove H4 by itself |
 | 9 | committed | 11e637f | 1 (PASS) | orchestrator-mode 176/0; enforce-review-implementer 6/0; non-guard area so repo off honoured; reviewer advisories committed with the gaps named |
 | 10 | committed | f4d9d3f | 1 (PASS) | agent-tier-gate 145/0 (16 STEP_CASES rows); read-trim 29/0; non-guard area so repo off honoured; default path byte-identical to HEAD on 4 inputs |
-| 11 | not started | | | |
-| 12 | not started | | | |
+| 11 | committed | 1d46a5a | 1 (PASS) | session-start-instructions 556/0; 0 critical, 0 important; cache-ttl alias warns, no write |
+| 12 | built, in review | | | docs only; implementer could not verify the repo-file guard warning text (scratch repo had no .git) or that `hygiene: false` stops the hook in a listed repo; reviewer to check |
 | 13 | not started | | | |
 
 ## DISAGREEMENTS
