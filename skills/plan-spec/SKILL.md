@@ -269,3 +269,4 @@ At any size, on any shape:
 | The plan's ten sections | §20 |
 | The four dispatch prompts | §21 |
 | The T0 form for small changes | §22 |
+| Why a rule exists; the incidents | history.md |

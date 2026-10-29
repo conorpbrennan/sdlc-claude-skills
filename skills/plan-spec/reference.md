@@ -1,39 +1,8 @@
 # Plan specification: what a plan must contain to be built autonomously, one step at a time, with a review on every commit
 
-Written 3 Sep 2026 from the first run that did this end to end: Assay Phase 15
-(`docs/phase-15-plan.md`, revision 16, 23 steps), driven by one orchestrating
-agent, each step implemented by a fresh sub-agent, each commit reviewed by a
-separate reviewer before it landed. Twelve steps had landed when this was
-first written; the run has since finished all 23 and written its as-built
-section. Every step reproduced its frozen targets on the first implementation
-pass — which is not the same claim as landing in one commit, and three did
-not: 78b took three commits, 83 and 96 two each, in every case because a
-review asked for more (§18.6). What follows is what made that possible, what
-nearly broke it, and what the next plan has to carry so the same run costs
-less.
+Written 3 Sep 2026 from the Assay Phase 15 run (23 steps); amendments after that date say so in their own first line (history.md, Preamble).
 
-Everything in the original text was observed in that run. Where a rule comes
-from a specific incident, the incident is named. Amendments dated after 3 Sep
-2026 come from later runs and say so in their own first line, so "that run"
-always means Assay Phase 15 and never a reader's guess; the first of them,
-4 Sep 2026, is from a run building a parser against client material, and
-touched §§1, 2b, 14 and 18.6.
-
-**How a section grows, and how it stops.** A rule earns its first incident
-because the incident is the evidence: strip it and the rule is an assertion.
-But a section carrying two full narratives is already harder to use than the
-rule it states, and §2b explicitly invites a third — it asks for a second run
-as worth more than any argument in it. So: when a later run *reproduces* a
-rule, the earlier incident compresses to a clause and only the new one is
-written at length, because the sentence worth keeping is that the rule held
-twice, not the detail of the first time it held. When a later run
-*contradicts* it, both stay in full until the disagreement is resolved — that
-is the case the detail is for. A section should not carry three worked
-examples of equal weight. The division of labour that makes this document
-usable is that the reference accretes incidents and `SKILL.md` carries the
-rules stripped of them; it holds only while the reference stays readable, and
-a rule that has to be rediscovered under its own evidence has failed the same
-way an unstated one does.
+Incidents stay in full only while a later run contradicts a rule; once a later run reproduces it, the earlier one compresses to a clause (history.md, Preamble).
 
 **What this specifies, and what it does not.** Two assumptions run under
 every rule below, and leaving them unsaid is how a reader for different work
@@ -61,75 +30,14 @@ the change is small — three steps or fewer, one sitting, no two steps sharing
 a file — read §22 first: it says which of these forms you carry and which you
 do not, and it is a page.
 
-Reviewed twice on 3 Sep 2026 against the plan this describes. The first
-review found that every artefact the rules govern was tribal: the Assay plan
-named its own house style as "matches `docs/aprime-plan.md`", so a reader of
-the rules alone could not produce a step. §§16-19 closed that. The second
-review found that the fix had specified the step and not the document that
-holds it, and that three of the new rules were stricter than the run they
-came from. §20 and the corrections in §16 and §17 close those.
-
-Reviewed a third time on 3 Sep 2026 by an independent reviewer given only
-this document. It found that the document specified the step, the report and
-the plan and left the run loop unspecified — no dispatch prompt, no tracker,
-no fix path, and a contradiction between §7a and §10 exactly where the fix
-path should be — and that §16 presented as observed eight fields the run
-never carried. The Terms block, §19a, §21 and the corrections in §3, §4, §7,
-§10, §16, §18.3 and §20 close those.
-
-Reviewed a fourth time on 3 Sep 2026, again by a reviewer given only this
-document, which checked its claims against the plan, the signed spec, the
-reviewer agent definition, the hook source and the timing log. It found the
-new forms sound in themselves and broken at their seams: a tracker that
-could not be committed in the step it described, a reviewer worktree whose
-diff was invisible to the reviewer, reports that three prompts pasted from
-and nothing wrote down, and failure paths that ended at "ask the owner". It
-also found this document's own provenance stale in five places. §18.6, the
-report paths in §19, §21.4 and the corrections in §4, §7a, §19, §19a, §20,
-§21 and Terms close those.
-
-A fifth round, 3 Sep 2026, held the document against a new input: not a
-reading but an attempt to execute it. The reviewer picked two real defects in
-the harness this document lives in, wrote them up as steps to §16, filled the
-plan, the prompts and the tracker, then cloned the repository and drove the
-real gates through the whole loop — block, worktree, marker, FAIL, fix round,
-commit. Everything the document claims about the marker, the lock, the hash
-exclusion, the worktree and the fix export held under that test. What did not
-was the seams with the harness: a reused worktree that would have shown round
-two the diff that already failed, a per-commit consent rule the document
-never asks the owner to waive, and a first commit attempt that is the only
-source of the marker command and was nowhere described. §§2, 7a, 8, 9, 12,
-18.1, 18.3, 19a, 20.2, 20.3, 20.4, 21.1, 21.2, 21.3 and Terms close those and
-the twelve smaller silences found with them. It is the only round so far that
-found what it found; a document cannot be read into telling you that your
-sub-agent's shell is gated.
-
-A sixth round, 3 Sep 2026, held it against a project shape it was not written
-from — a user-facing feature, a search-shaped research task, a
-behaviour-preserving refactor — and found one defect wearing three faces: the
-two assumptions now stated at the top of this document were unstated, so an
-author whose work broke either followed the letter and built the wrong plan.
-Judgement-based acceptance had a gate form in §16 and was then made an
-illegitimate stall by §18.1 and §18.5; search-shaped work had no exit in §18
-for a step that ran correctly and returned a negative result; and a refactor
-was offered a substitute frozen target that its own suite already failed to
-provide. The scope statement, §1's named exception, §3's characterisation-set
-paragraph, and the corrections in §16, §18.1, §19a, §20.3 and §20.4 close
-those. It let four further observations go as below the bar (§2a), which is
-the first round to do so.
+Six review rounds on 3 Sep 2026 shaped §§16-21 and the scope statement above (history.md, Preamble).
 
 ## Terms used throughout
 
 Five of these were house words in the run this came from, resolvable only by
 reading the plan it came from. The rules below are unusable without them.
 
-- **`[A]`**, in the run's step headings — a scheduling tag, not a tier. It
-  comes from the previous plan (`docs/aprime-plan.md`), whose legend reads
-  "[T] tonight, [Th] Thursday-provable, [A] after", and means authorised but
-  not scheduled. All 23 steps of the Assay plan carry it, so there it
-  conveys nothing; it survived as house style. A plan either gives its tags
-  a legend in its working constraints (§20.2) and uses them to mean
-  something, or omits them. It is not in the §16 template for that reason.
+- **`[A]`**, in the run's step headings: a scheduling tag, not a tier. A plan gives its tags a legend in its working constraints (§20.2) or omits them (history.md, Terms).
 - **Single owner** — the one module that may implement a given thing, which
   every other caller imports rather than reimplements. The plan lists them
   in §20.2, each with the search that found the candidates, so
@@ -181,18 +89,7 @@ stated with each.
 
 ## 1. The plan does the design; the implementer executes
 
-The single biggest factor. The plan had been through eight independent review
-rounds before a line of code existed, each round asking a different input
-(source, the plan itself, the run artefact, the policy register). What drove
-those rounds and what ended them is §2a. Implementers therefore found the
-design settled and spent their budget on building and measuring, not choosing.
-
-The two places implementers had to design anyway were exactly where the plan
-was silent: the per-pass function signature (the plan sketched
-`derive_groups(run, axes)`; the spec required a slot in every subject, which a
-run artefact cannot supply) and which group an outlier is quoted from when it
-separates in several. Both were resolved conservatively and recorded. A
-thinner plan multiplies those calls, and they do not all go the same way.
+The Assay plan went through eight independent review rounds before any code, so implementers found the design settled; the two places they still had to design were the places the plan was silent (history.md §1).
 
 This is the rule with an exception, and it is the one named above: where the
 work is a search, the step *is* the design and cannot precede it. §9's
@@ -206,14 +103,7 @@ that says "add X" without saying what X's callers pass is a step that will be
 designed by whoever picks it up. The form is §16; the test of whether a step
 is small enough to be one commit is §17.
 
-**Amendment, 4 Sep 2026: not everything the plan *can* specify should be.**
-A rule the implementer can check against ground truth is a rule the plan
-should state as a property, not as an implementation. One run put three
-versions of a single parser regex into its plan document. The first was wrong
-on the real data (dropped three rows); the replacement fixed three of the
-four cases; the version that worked stated the requirement and the measured
-geometry and left the pattern to the implementer, who designed it against the
-fixture and the real file and reported 117 of 117.
+Amendment, 4 Sep 2026: a rule the implementer can check against ground truth is stated as a property, not an implementation (history.md §1).
 
 **Rule.** Where a rule can be checked against ground truth, the plan states
 the property and the measurement, not the implementation. A pattern written
@@ -226,14 +116,7 @@ detail out of prose that cannot fail and into a gate that can.
 
 ## 2. Owner decisions are resolved before the run starts
 
-The plan named its wait states (S1, the signature on the spec; D1, where a
-computation lives) in one section with where each bites. The owner answered
-them, plus the smaller sign-offs, in three question rounds before any agent
-was dispatched, and pre-authorised the orchestrator to complete a signature
-block once an independent review said READY.
-
-Result: zero wait states in twelve steps. That is the whole reason the run
-could proceed unattended.
+The Assay owner answered every decision in three question rounds before dispatch, and the run had zero wait states in twelve steps (history.md §2).
 
 **Rule.** A section named "Owner decisions" listing every point only the
 owner can settle, each with its options priced and the step it blocks. Ask
@@ -257,11 +140,7 @@ the first commit.
 
 ## 2a. The pre-run review loop
 
-Added on the owner's instruction, 3 Sep 2026, after the fourth review of this
-document. §1 credits eight independent review rounds before a line of code
-existed and never said what drove them, how they ended, or what a round was.
-This is that loop, and it is the reason §1's implementers found the design
-settled.
+Added 3 Sep 2026 on the owner's instruction, after the fourth review of this document (history.md §2a).
 
 **When it starts.** The plan and the spec are drafted and §2's owner
 questions are asked and answered. Not before: a round spent on a document
@@ -322,12 +201,7 @@ differently?" is nothing: a better sentence, a preference between two
 workable forms, a section that would read better reordered, a rule that is
 right and could be stated more strongly.
 
-The asymmetry sets the bar high. A material defect missed costs an amendment
-mid-run or a step built wrong. A minor one raised costs a round from every
-party, and its fix creates the next round's seam — which is exactly how a
-loop runs to its cap without converging. Converging on a document with three
-known blemishes beats four more rounds spent removing them and introducing a
-fourth.
+A material defect missed costs an amendment or a wrong step; a minor one raised costs every party a round and seeds the next round's seam, so converging with known blemishes beats removing them (history.md §2a).
 
 **A round below the bar is a converged round.** If every finding of a round
 fails the materiality test, the loop is finished: record them in the tracker's DISPOSITIONS field (§19a) as
@@ -358,32 +232,14 @@ cap come from `sdlc-review.json` (`planReview.source`, `planReview.consistency`,
 `node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap is not an
 owner question and does not rise mid-run (see "The cap of two" above).
 
-**Three failure modes, all seen.** *Churn*: each round's fix creates the next
-round's seam, and this document's fourth round found little else — seams
-where the third round's new forms met the old rules. That is the loop
-working, and it is also why a cap exists at all: a document still turning up
-new criteria one round short of its cap is being rewritten rather than
-reviewed, and the right move on reaching the cap is to dispatch step one and
-let the run find the rest.
-*Confirmation*: the fresh-context rule above, which is the whole reason a
-round is worth more than a reply to the last round. *The unreviewed fix*: no
-round reviews its own fold-in — the next round reviews the document that
-contains it, which is the only reason the loop converges on the document
-rather than on the reviewer's opinion of the patch. That last one holds only
-where the next round's input can see the kind of claim the fix wrote, which is
-a condition on it rather than a retraction of it: §2b.
+Three failure modes were seen: churn, confirmation, and the unreviewed fix. No round reviews its
+own fold-in: the next round reviews the document that contains it, and that holds only where its
+input can see the kind of claim the fix wrote (§2b). A document still turning up new criteria one
+round short of the cap is being rewritten, not reviewed (history.md §2a).
 
 ## 2b. The fold-in is the least-checked text in the document
 
-Added 3 Sep 2026 from one run: four rounds on an Assay plan for release-note
-ingestion. Twice in that run, the text a round added was itself the next
-round's defect.
-
-Round 2 found that round 1's fix asserted how an egress guard works, taken
-from a comment in the repository rather than from the code. Round 4 found that
-round 3's fix named a module as the emitter of an artefact it does not emit,
-and declared a function NEW that had existed all along. Neither defect was in
-the plan before its review. Both arrived as corrections.
+Added 3 Sep 2026 from a four-round Assay plan, where the text a round added was twice the next round's defect (history.md §2b).
 
 **The mechanism.** A finding is verified — that is what a round is for. The
 fix is not. It writes a new claim that no round has seen: the round that asked
@@ -393,14 +249,7 @@ prose around it rather than less. A reader who trusts anything in a reviewed
 document trusts its corrections most, and they are the only sentences in it
 that nothing has read.
 
-**Why §2a's answer is weaker than it sounds.** §2a says no round reviews its
-own fold-in, and the next round reviews the document that contains it. That is
-true, and it is why the loop converges. But it holds only where the next
-round's one input can see the *kind* of claim the fix introduced. Round 3's
-input was internal consistency, and a factual claim about code is invisible to
-that input — so round 3's own fixes passed through it untouched and survived
-until round 4, which happened to be a source round. That was luck. The rules
-below make it a property.
+Round 3's input was internal consistency, which cannot see a factual claim about code, so its fixes survived until a source round by luck; the rules below make that a property (history.md §2b).
 
 **Rules.**
 
@@ -434,39 +283,11 @@ below make it a property.
    it. The flag records that a sentence changed; it says nothing about whether
    the new one is true.
 
-**What none of this promises.** The checker resolves a citation; it cannot
-tell you that the claim attached to it is true. The wrongly-named module in
-round 3's fix existed, and naming it was still false — a resolving citation
-and a correct one are different properties, and only the first is mechanical.
-These rules tighten the loop. They do not shorten it, and none of them
-replaces a round.
+A resolving citation and a correct one are different properties and only the first is mechanical: these rules tighten the loop, none replaces a round (history.md §2b).
 
-**One calibration point.** All of the above is from a single run, in the same
-way §16 is explicit that its template is two observed fields and eight
-promoted. A second run that failed to reproduce it would be worth more than
-any argument here. The amendment below is that second run, and it neither
-reproduced nor contradicted the mechanism: it found the same defect with two
-authors this section had not named, which is why rules 1-5 and their incident
-stand unchanged beneath it.
+The mechanism above is from one run, and a second run that failed to reproduce it would be worth more than any argument here (history.md §2b).
 
-**Amendment, 4 Sep 2026: two more authors write unchecked text.** The
-mechanism above is about a review round's fold-in. Two adjacent cases from a
-later run behave identically and are not covered by rules 1-5 as written.
-
-*The orchestrator writing into the plan mid-run.* Inserting a step under
-§18.6 means writing a full §16 block that no review round will ever see — the
-pre-run loop closed before the step existed. Two such blocks in one run were
-wrong: a TESTS FIRST clause naming two drift tests when only one of them
-detects drift, and a GATE saying a count would "return to its unpolluted
-value" when the count had never moved. Both were caught by implementers who
-checked the block rather than complying with it.
-
-*A reviewer's supporting claims.* A FAIL carries authority, and its findings
-get verified — but the facts a finding rests on do not. One round-one FAIL
-read "zero at HEAD, no precedent, this diff opens the door". Both halves were
-false: three real identifiers were already committed. That changed the action
-from prevent to remediate, and the remedy from a fix round to a history
-rewrite.
+Amendment, 4 Sep 2026: the orchestrator writing a step mid-run and a reviewer's supporting facts are unchecked text too, covered by rules 6 and 7 (history.md §2b).
 
 **Rules, continued.**
 
@@ -482,12 +303,7 @@ rewrite.
 
 ## 3. Freeze the target before building against it
 
-The scoring target (a fixture of 94 assertions translated from a model-written
-review) was verified by an independent harness and frozen at step 82, before
-the first deriver existed at step 83. Every later step reproduced its slice of
-the frozen target byte for byte, and a third independent producer landing on
-the harness's figures rather than the model's was the strongest evidence the
-run produced.
+The Assay scoring target (94 assertions) was frozen at step 82, before the first deriver existed, and every later step reproduced its slice byte for byte (history.md §3).
 
 **Rule.** Where the deliverable is a deterministic artefact — a file, a
 figure, a table reproducible byte for byte — the harness that checks the
@@ -534,13 +350,7 @@ never through its internals.
 
 ## 4. The signed specification, and how amendments happen
 
-The spec was signed at step 79 and amended four times by step 87, each
-amendment dated in its final section: one before the freeze for a rule arm
-the plan left undecided, one before the freeze for a reading the harness
-found under-specified, one before the freeze for a worked example that
-disagreed with its own rule, and one after the freeze for a worked example
-that quoted the wrong artefact. None moved a fixture byte. Two more landed
-by step 93, on the same pattern.
+The Assay spec was signed at step 79 and amended six times by step 93, none moving a fixture byte (history.md §4).
 
 **Rule.** Sign the spec once, early, after an independent review. Expect
 amendments; make them cheap by requiring only a dated line in the signature
@@ -568,13 +378,7 @@ AMENDMENTS
 - <date>: <what moved>. <why>. Fixtures moved: <none | the list>.
 ```
 
-That block is a reduced form and not a transcription: the run's own
-signature section is a prose paragraph, a six-row table (specification,
-phase and step, name, role, organisation, signed on) and dated amendment
-paragraphs. What is promoted here is `Fixtures moved:` as a field — the run
-carried that fact in the amendment prose, where it has to be read for rather
-than read off.
-
+The block is a reduced form of the run's own signature section, promoting `Fixtures moved:` to a field (history.md §4).
 An amendment is that one line plus the edit it describes; nothing else is
 required, which is what makes it cheap enough to actually do. "Fixtures
 moved" is the field that makes it auditable: four amendments by step 87,
@@ -587,11 +391,7 @@ spec's.
 
 ## 5. Every step's gate includes every class-level guard in the repository
 
-The incident. Step 83's gate ran only the review tests. A class-level guard in
-`tests/test_mechanisms.py` scans every module reading field diffs for a
-presence check, and the new module had none. The suite was red at HEAD for
-two commits; step 84's agent found it by running its own gate. The fix was
-twelve lines. The lesson is structural.
+Step 83's gate ran only the review tests and left a class-level guard red for two commits (history.md §5).
 
 **Rule.** The plan enumerates the repository's class-level guard tests once,
 in its working-constraints section, and every step's GATE line includes them.
@@ -601,10 +401,7 @@ already enforces on that module's shape.
 
 ## 6. Never write a count before the measurement exists
 
-Assay's plan already had this rule ("all TRUE targets of type X as frozen at
-step 82", never "the 6"). It held. Where the plan did quote numbers it had
-measured, two were wrong (a per-file id split; an estimate of a sweep's size)
-and both were caught by the implementer measuring again.
+Assay's plan held this rule; the two counts it did quote were wrong and were caught by the implementer measuring again (history.md §6).
 
 **Rule.** Gates name the property, not the number. Where a number is quoted
 as a fact, the step says how it was measured so the implementer can re-run
@@ -612,12 +409,7 @@ it, and the implementer does.
 
 ## 7. Sequential, one sub-agent at a time
 
-The owner's instruction, given after two agents had been started in parallel.
-Kept for the rest of the run. Parallel steps on one working tree risk
-colliding edits, and two agents running test suites on one box is how this
-host has been killed before. The cost is wall clock; the benefit is that every
-report is read before the next step starts, and every step sees the tree its
-predecessor left.
+The owner ordered sequential steps after two agents were started in parallel; parallel steps on one tree collide, and two test suites on one box have killed the host before (history.md §7).
 
 **Rule.** At most one implementer and at most one reviewer at any moment,
 and never two of either. Strict alternation was the run's first twelve steps;
@@ -696,11 +488,7 @@ dispatched until N has landed. This is the entanglement cost §7a's last
 paragraph prices, and it is why overlap is not worth reaching for on steps
 that share a file.
 
-**What it buys.** Reviews took three to five minutes and implementations ten
-to twenty-five, so the overlap saves roughly a sixth of wall clock on the
-steps where it applies, at no cost to attribution. It is not worth reaching
-for on steps that share a file: the entanglement cost on a FAIL exceeds the
-saving.
+Reviews took three to five minutes and implementations ten to twenty-five, so overlap saves about a sixth of wall clock, and not on steps that share a file (history.md §7a).
 
 ## 8. The commit protocol
 
@@ -748,19 +536,7 @@ what was reviewed.
 
 ## 9. Review on every commit, sized to the diff
 
-What the per-commit reviews caught that the step's own tests had passed:
-
-- a real client trade id in a test comment, used as the "example shape" in
-  the file whose job was the no-client-data guard;
-- a review-queue census whose total and counts could disagree when one
-  withheld id carried two findings;
-- a zero-median group silently suppressing a member that moved 400 percent,
-  the exact case the spec's null-ratio clause anticipated;
-- a spec worked example quoting the policy file where the fixture and the
-  generator quote the run-embedded policy.
-
-Each was small, local, and would have been buried under later steps by the
-time a phase-level review looked. That is the case for per-commit.
+Per-commit review caught four small local defects the step tests had passed: a real client id in a test comment, a census total that could disagree with its counts, a zero-median group suppressing a member that moved 400 percent, and a spec example quoting the wrong policy file, which a phase-level review would have buried (history.md §9).
 
 **Rule.** Round one on the everyday reviewer (Sonnet), whatever the change.
 Any rerun after a FAIL on the deep reviewer (Opus). After two FAILs, stop
@@ -813,10 +589,7 @@ else, and does (§7a, §18.3, §21.3).
 
 ## 11. Red first, and say how
 
-Every step asked for red-first evidence on its refusal tests and got it,
-usually by the implementer removing the guard and quoting the failure text.
-This is cheap and it is the only thing that separates a conservation check
-from a comment.
+Every Assay step asked for red-first evidence on its refusal tests and got it, which is what separates a conservation check from a comment (history.md §11).
 
 **Rule.** Every test that asserts a refusal is run red first: one failing run
 of the named test before the implementation exists, and the report quotes the
@@ -827,15 +600,11 @@ once-per-phase step the plan names that runs mutation over the phase.
 The reviewer is told the claimed red and confirms it from
 the test body.
 
-*Evidence, 19 Oct 2026.* 38 of 46 implementer reports in one run carried
-mutation tables, and one step ran 109 mutants. Implementer runs over 100 calls
-were 8% of runs and 77% of implementer spend.
+Evidence, 19 Oct 2026: 38 of 46 implementer reports in one run carried mutation tables (history.md §11).
 
 ## 12. The gating tools are part of the system under test
 
-The first commit of the run skipped review entirely: a 13 MB diff overflowed
-the hook's read buffer, the catch returned an empty string, an empty diff
-scored as trivial, and a PASS marker was written for code nobody had read.
+The Assay run's first commit skipped review: a 13 MB diff overflowed the hook's read buffer, an empty diff scored as trivial, and a PASS marker was written for code nobody had read (history.md §12).
 Three passes on the hooks followed the same day; the incident is now a test.
 
 **Rule.** Before a run of this kind, run the hooks' own test suites and read
@@ -852,11 +621,8 @@ plan defect (§18.2).
 
 ## 13. As-built is recorded as it happens, not reconstructed
 
-Every implementer report ended with "where the plan, the spec, the harness
-and the code disagreed" and "decisions the spec left open". The orchestrator
-appended those to a tracker after every step. By step 88 there were some
-forty such lines, each with a path and a reason. The closing documentation
-step will be assembled from them, not from memory.
+In the Assay run each report ended with disagreements and open decisions, and the orchestrator appended about forty such lines to a tracker by step 88, so the closing documentation step will be assembled
+from them, not from memory (history.md §13).
 
 **Rule.** The report template asks for disagreements and open decisions by
 name (§19). The orchestrator writes them down before dispatching the next
@@ -877,15 +643,7 @@ no-client-data guard is a test in the repository, over every fixture that
 shares the obfuscation map. Examples of a real identifier's shape are written
 as a pattern, never as an instance.
 
-**Amendment, 4 Sep 2026: the run's own paperwork is inside the boundary.**
-§19 makes implementer and reviewer reports files in the repository, and §19a
-makes the tracker a committed file. Both are surfaces §14 predates, and an
-implementer measuring against real material writes its findings there. One
-run's inserted step transcribed ten real rows — identifier, page number and
-module name each time — into a tracked report, and that was the run's only
-review FAIL. The fixtures were clean: swept against 7.7 GB of client material
-twice, by two parties, with no collisions. The leak came through a door the
-guard did not have.
+Amendment, 4 Sep 2026: the run's own reports and tracker are inside this boundary, because one run's only review FAIL was a report that transcribed real identifiers (history.md §14).
 
 **Rule.** A measurement taken against real material is reported as ordinals,
 counts, lengths and shapes — never as identifiers. "Row 3 of 10, 143
@@ -894,12 +652,7 @@ the source. §19's reports and §19a's tracker are committed files, so they sit
 inside §14's boundary rather than outside it: the guard that covers fixtures
 covers the run's own paperwork.
 
-The test of a redaction is that the argument survives it. A reader with
-access to the source must be able to rebuild every number without the
-redacted text; if they cannot, the redaction removed evidence rather than
-identifiers. That is measurable, and it was measured — the round-two reviewer
-of the offending report re-derived all forty of its numbers from the source
-without reading the redacted text, and they matched cell for cell.
+A redaction is sound when a reader with the source can rebuild every number without the redacted text; the offending report's forty numbers re-derived cell for cell (history.md §14).
 
 ## 15. What to change in the next plan
 
@@ -932,14 +685,7 @@ without reading the redacted text, and they matched cell for cell.
 
 ## 16. The step, literally
 
-The template below has ten fields. Two of them were fields in the Assay run:
-`GATE:` and `ROLLBACK:`, on every step. The id, the file set and the owners
-were carried in each step's prose. WHY NOW, WHAT TO BUILD, IMPORTS, ASSUMES
-LANDED, MUST NOT TOUCH, TESTS FIRST, REVIEW and BUDGET were not fields at
-all — they are promoted here, each one because §§1-15 names an incident a
-field would have caught. That is the honest provenance: two observed and
-eight promoted, not ten observed. §15.8 says as much, and this section used
-to contradict it.
+Two of the ten fields, GATE and ROLLBACK, were observed in the Assay run; the other eight are promoted, each closing an incident named in §§1-15 (history.md §16).
 
 A step that omits a field names the decision its implementer will have to
 make instead. A field that genuinely does not apply says so in one word
@@ -1039,10 +785,7 @@ carried only the other two is the run in which those incidents happened.
 
 ## 17. How big a step is
 
-The Assay run's steps ranged from a twelve-line fix to a full day's re-pin
-sweep, and the sweep step said in its own text that it was "likely TWO
-commits". That is the right instinct written in the wrong place: the step was
-too big, and knew it.
+The Assay run's steps ranged from a twelve-line fix to a full day's re-pin sweep that said it was likely two commits (history.md §17).
 
 **Rule.** One step is one reviewable diff: one commit, one GATE, one
 implementer pass. The test an author applies before writing it:
@@ -1216,10 +959,7 @@ where there is such code.
 
 ### 18.6 A step is inserted mid-run
 
-An inserted step is the exception, not the normal case. In three runs on
-19 Oct 2026, inserted steps nearly doubled the commit count: 24 base steps
-plus 20 inserted; 20 plus 18; 32 plus 14. Most came from review findings that
-stayed inside the step's own file set and needed a fix round, not a step.
+In three runs on 19 Oct 2026 inserted steps nearly doubled the commit count, mostly from findings that needed a fix round and not a step (history.md §18).
 
 **When a finding is a fix round.** The fix stays inside the step's declared
 file set. It is a fix round on the same commit (§18.3): a fresh fix agent, the
@@ -1245,10 +985,7 @@ rule 6), so write the GATE as commands with expected output.
 
 ## 19. The implementer's report
 
-§13 requires this and never gave it. Every field below but one was in the
-Assay reports and each was read. The exception is BUDGET USED, promoted here
-alongside the step's BUDGET field (§16): the run's steps carried no budget,
-so its reports cannot have reported against one.
+Every field below but BUDGET USED was in the Assay reports and each was read (history.md §19).
 
 ```
 STEP: <id>
@@ -1299,13 +1036,7 @@ of its own. A prompt that says "verbatim" means from these files.
 
 ## 19a. The orchestrator's tracker
 
-§7 gives the orchestrator the run's state and the run itself kept it in a
-scratch file; §13 says the as-built record is assembled from that file, and
-the AS BUILT field (§19a, formerly §20.10) is written from it. This is that file, which the run never specified.
-Scratch space was the wrong home for it: forty-odd lines of as-built record
-for twelve steps lived in a directory nothing backs up, and a fresh
-orchestrator handed the plan alone could not have said which step was in
-flight.
+The run kept its state in a scratch file nothing backed up, so a fresh orchestrator given the plan alone could not have said which step was in flight (history.md §19a).
 
 One header block for the run, one block per step appended as the step closes:
 
@@ -1378,12 +1109,7 @@ orchestrator rewrites it before each dispatch, while nothing of the next
 step is staged — which is not the same as nothing being staged at all, since
 the machinery's own files are routinely sitting in the index by then.
 
-The alternative is to exclude the tracker from the hash the marker binds,
-and it is worth knowing why that was not the rule: the hook here excludes
-exactly one pathspec (`':(top,exclude)features/*.md'`, in
-`src/hooks/lib/git-read.js`), so a run that wants its tracker staged late
-must give the file a fixed path and add it there. One step behind needs no
-hook change and no exclusion to go stale.
+Excluding the tracker from the marker's hash would also work but needs a fixed path and a hook change, so one step behind is the rule (history.md §19a).
 
 Like the plan file and the feature record, the tracker is never listed in a
 step's file set and never counted against it (§20.2). On a small change there
@@ -1392,14 +1118,7 @@ is no separate tracker at all: the plan file carries a status line per step
 
 ## 20. The plan's own skeleton
 
-The step form (§16) says nothing about the document that holds it. The run's
-plan had nine numbered sections (1 to 8, plus an 8a added by a revision
-delta check) and an unnumbered as-built section, and the rules above lean on
-five of them by name without ever listing any. This is that list. The
-numbering below is this document's, not the run's; the names are what each
-section had to do. Nine of the ten were in that plan — item 9,
-DECISIONS-OPEN, is a promotion, which is why §15.9 asks for it rather than
-citing it.
+The Assay plan had nine numbered sections and an unnumbered as-built section; this list names what each had to do, with DECISIONS-OPEN promoted (history.md §20).
 
 Which sections a plan carries depends on its tier (SKILL.md section 0):
 
@@ -1749,13 +1468,9 @@ list. If nothing you found clears the bar, the verdict is READY: say what
 you noticed, name it as below the bar, and let it go.
 ```
 
-This is the prompt §2a's loop dispatches, once per iteration, to a fresh
-reviewer. One input per round is the whole method, not a formality: the run's
-eight rounds each held the plan against a different input, which is why they
-found different things and why the eighth still found something. A round asked
-to check everything checks nothing. Every finding and its disposition goes to
-the tracker's DISPOSITIONS field (§19a) as it is answered, which is what makes the rounds auditable rather than
-folklore.
+This prompt is dispatched once per iteration of §2a's loop to a fresh reviewer; one input per round is the whole method, because a round asked to check everything
+checks nothing. Every finding and disposition goes to the tracker's DISPOSITIONS field (§19a), which
+makes the rounds auditable rather than folklore (history.md §21).
 
 **Rule.** These four prompts are the orchestrator's only interface to a
 sub-agent, and every field in them is a paste from the plan, the step, a
@@ -1764,14 +1479,7 @@ step has found a field the plan owes it.
 
 ## 22. Scaling down: what a small change carries
 
-Added 3 Sep 2026 on the owner's instruction, after a review of this document
-observed that at sixty kilobytes the forms will be skipped wholesale rather
-than trimmed. Everything in §§16-21 was sized for a 23-step run whose plan
-ran to a quarter of a megabyte and whose orchestrator outlived several
-contexts. Carried whole onto a three-step change, they cost more than the
-change. The failure that actually follows is not that someone trims them —
-it is that at this length they are dropped entire, and the gates go out with
-the paperwork. So the trim is specified here rather than left to the moment.
+Added 3 Sep 2026 on the owner's instruction: the full forms cost more than a small change and would be dropped entire unless the trim is specified (history.md §22).
 
 **What "small" means.** All four hold, or the change is not small:
 
