@@ -21,6 +21,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { resolvePaths, Refusal } = require('./statusline-install.js');
 
 const INSTALLER = path.join(__dirname, 'statusline-install.js');
 const BACKUP_INFIX = '.backup.';
@@ -299,6 +300,38 @@ test('a null statusLine counts as absent; any other value still needs --force', 
             assert.strictEqual(kept.status, 2, `${JSON.stringify(other)}: ${kept.out}`);
         }
     } finally { s.cleanup(); }
+});
+
+test('resolvePaths: win32 treats backslash as a separator; other unsafe chars and POSIX backslashes still refuse', () => {
+    const WIN_DATA = 'C:\\Users\\x\\.claude\\plugins\\data\\sdlc-sdlc-claude-skills';
+    const WIN_COMMAND = 'node "C:/Users/x/.claude/plugins/data/sdlc-sdlc-claude-skills/statusline/statusline.js"';
+    const ok = [
+        { name: 'win32 CLAUDE_PLUGIN_DATA', platform: 'win32', env: { CLAUDE_PLUGIN_DATA: WIN_DATA }, command: WIN_COMMAND },
+        {
+            name: 'win32 CLAUDE_CONFIG_DIR fallback',
+            platform: 'win32',
+            env: { CLAUDE_CONFIG_DIR: 'C:\\Users\\x\\.claude' },
+            command: 'node "C:/Users/x/.claude/plugins/data/sdlc-sdlc-claude-skills/statusline/statusline.js"',
+        },
+        { name: 'win32 UNC share keeps the leading //', platform: 'win32', env: { CLAUDE_PLUGIN_DATA: '\\\\server\\share\\d' }, command: 'node "//server/share/d/statusline/statusline.js"' },
+        { name: 'win32 space in path', platform: 'win32', env: { CLAUDE_PLUGIN_DATA: 'C:\\Users\\John Smith\\.claude\\plugins\\data\\x' }, command: 'node "C:/Users/John Smith/.claude/plugins/data/x/statusline/statusline.js"' },
+        { name: 'win32 trailing backslash', platform: 'win32', env: { CLAUDE_PLUGIN_DATA: 'C:\\d\\' }, command: 'node "C:/d/statusline/statusline.js"' },
+        { name: 'win32 mixed separators', platform: 'win32', env: { CLAUDE_PLUGIN_DATA: 'C:\\d/e\\f' }, command: 'node "C:/d/e/f/statusline/statusline.js"' },
+    ];
+    for (const c of ok) {
+        const p = resolvePaths({}, c.env, c.platform);
+        assert.strictEqual(p.command, c.command, c.name);
+        assert.strictEqual(p.dataDir.includes('\\'), true, `${c.name}: dataDir is not rewritten to forward slashes`);
+    }
+    const refused = [
+        { name: 'win32 with $', platform: 'win32', data: 'C:\\Users\\a$b' },
+        { name: 'win32 with double quote', platform: 'win32', data: 'C:\\Users\\a"b' },
+        { name: 'win32 with backtick', platform: 'win32', data: 'C:\\Users\\a`b' },
+        { name: 'linux with backslash', platform: 'linux', data: '/home/a\\b' },
+    ];
+    for (const c of refused) {
+        assert.throws(() => resolvePaths({}, { CLAUDE_PLUGIN_DATA: c.data }, c.platform), Refusal, c.name);
+    }
 });
 
 if (failed) process.exit(1);
