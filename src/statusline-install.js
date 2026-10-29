@@ -29,6 +29,7 @@ const JSON_INDENT = 2;
 const DEFAULT_MODE = 0o644;
 const NEXT_SESSION_NOTE = 'The status line appears from the next session or refresh.';
 
+const PLATFORM_WINDOWS = 'win32';
 const UNSAFE_PATH_CHARS = ['"', '$', '`', '\\'];
 
 const FLAG_DRY_RUN = '--dry-run';
@@ -67,26 +68,35 @@ function parseArgs(argv) {
 
 // Resolves the settings file and the data dir from flags, then the environment.
 //
+// On Windows the backslash is a path separator, not an unsafe character: the command
+// string uses the data dir with backslashes turned into forward slashes (node accepts
+// them), and the unsafe-character check runs on that form. File operations keep the
+// native dataDir and scriptPath.
+//
 // Args:
 //   opts: parsed options.
 //   env: environment variables.
+//   platform: the Node platform name; defaults to the running one. Tests pass 'win32'.
 // Returns:
-//   { settings, dataDir, scriptDir, scriptPath, command } (absolute paths; command is
-//   the statusLine command string).
+//   { settings, dataDir, scriptDir, scriptPath, command } (native absolute paths; command
+//   is the statusLine command string).
 // Raises:
-//   Refusal: when the data dir has a double quote, $, backtick or backslash.
-function resolvePaths(opts, env) {
+//   Refusal: when the data dir has a double quote, $ or backtick, or (off Windows) a backslash.
+function resolvePaths(opts, env, platform = process.platform) {
     const configDir = env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), CLAUDE_DIR);
     const settings = opts.settings || path.join(configDir, SETTINGS_FILE);
     const dataDir = opts.dataDir || env.CLAUDE_PLUGIN_DATA || path.join(configDir, DEFAULT_DATA_SUBPATH);
     const scriptDir = path.join(dataDir, SCRIPT_DIR);
     const scriptPath = path.join(scriptDir, SCRIPT_NAME);
+    const isWindows = platform === PLATFORM_WINDOWS;
+    const commandDir = isWindows ? dataDir.replace(/\\/g, '/') : dataDir;
     for (const ch of UNSAFE_PATH_CHARS) {
-        if (dataDir.includes(ch)) {
+        if (commandDir.includes(ch)) {
             throw new Refusal(`The data dir ${dataDir} contains ${ch} which would break or expand in the shell command. Pick another --data-dir.`);
         }
     }
-    return { settings, dataDir, scriptDir, scriptPath, command: `node "${scriptPath}"` };
+    const commandPath = isWindows ? `${commandDir.replace(/\/+$/, '')}/${SCRIPT_DIR}/${SCRIPT_NAME}` : scriptPath;
+    return { settings, dataDir, scriptDir, scriptPath, command: `node "${commandPath}"` };
 }
 
 // Reads the settings file for a merge, refusing anything that is not a plain JSON object file.
@@ -327,4 +337,4 @@ function main(argv, env) {
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2), process.env);
 
-module.exports = { main, parseArgs, resolvePaths };
+module.exports = { main, parseArgs, resolvePaths, Refusal };
