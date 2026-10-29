@@ -22,39 +22,40 @@ const INSTRUCTIONS_TIMEOUT = 5;  // seconds
 // in order, since order decides which block wins. A null matcher means the
 // block has no matcher key. It is the legacy install's wiring plus the
 // instructions hook in its own SessionStart block ahead of the feature hook.
-// The other timeouts are copied verbatim from the legacy wiring.
+// Every timeout is in seconds (Claude Code's unit; the default is 60). The legacy
+// wiring's values were milliseconds, so they were not copied across.
 const EXPECTED_WIRING = {
     SessionStart: [
         { matcher: null, hooks: [['command', 'session-start-instructions.js', INSTRUCTIONS_TIMEOUT]] },
-        { matcher: null, hooks: [['command', 'session-start-feature.js', 2000]] },
+        { matcher: null, hooks: [['command', 'session-start-feature.js', 10]] },
     ],
     UserPromptSubmit: [
-        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 1000], ['command', 'orchestrator-mode.js', 1000]] },
+        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 5], ['command', 'orchestrator-mode.js', 5]] },
     ],
     PreToolUse: [
         {
             matcher: 'Bash', hooks: [
-                ['command', 'pre-commit-feature.js', 3000],
-                ['command', 'pre-commit-review.js', 2000],
-                ['command', 'pending-review-gate.js', 2000],
-                ['command', 'enforce-co-author.js', 1000],
-                ['command', 'pre-commit-hygiene.js', 200000],
-                ['command', 'pre-pr-verify.js', 2000],
+                ['command', 'pre-commit-feature.js', 10],
+                ['command', 'pre-commit-review.js', 30],
+                ['command', 'pending-review-gate.js', 10],
+                ['command', 'enforce-co-author.js', 5],
+                ['command', 'pre-commit-hygiene.js', 300],
+                ['command', 'pre-pr-verify.js', 10],
             ],
         },
-        { matcher: 'Agent', hooks: [['command', 'agent-tier-gate.js', 1000]] },
-        { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [['command', 'orchestrator-mode.js', 1000]] },
+        { matcher: 'Agent', hooks: [['command', 'agent-tier-gate.js', 5]] },
+        { matcher: 'Edit|Write|MultiEdit|NotebookEdit', hooks: [['command', 'orchestrator-mode.js', 5]] },
     ],
     PostToolUse: [
         {
             matcher: 'Bash', hooks: [
-                ['command', 'post-commit-notify.js', 10000],
-                ['command', 'claude-attribution-note.js', 5000],
-                ['command', 'post-commit-feature.js', 3000],
+                ['command', 'post-commit-notify.js', 10],
+                ['command', 'claude-attribution-note.js', 5],
+                ['command', 'post-commit-feature.js', 10],
             ],
         },
-        { matcher: 'Read|Bash|Skill|Agent', hooks: [['command', 'orchestrator-mode.js', 2000]] },
-        { matcher: 'Read', hooks: [['command', 'read-trim.js', 2000]] },
+        { matcher: 'Read|Bash|Skill|Agent', hooks: [['command', 'orchestrator-mode.js', 5]] },
+        { matcher: 'Read', hooks: [['command', 'read-trim.js', 10]] },
     ],
 };
 const PLUGIN_COMMAND = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/src\/hooks\/([A-Za-z0-9._-]+\.js)"$/;
@@ -155,6 +156,9 @@ if (hooksByEvent) {
     for (const event of Object.keys(EXPECTED_WIRING)) {
         assert(`${event}: matchers, scripts, order and timeouts`, actual[event], EXPECTED_WIRING[event]);
     }
+    // Seconds, not milliseconds: a value read as ms would hold a hung gate for hours.
+    const timeouts = Object.values(actual).flat().flatMap(b => b.hooks.map(h => h[2]));
+    assert('every timeout is a whole number of seconds, 1 to 300', timeouts.every(t => Number.isInteger(t) && t >= 1 && t <= 300), true);
 } else {
     assert('wiring comparable (hooks.json parsed)', false, true);
 }
@@ -276,6 +280,16 @@ function walk(dir) {
 const SKILLS_DIR = path.join(ROOT, 'skills');
 const AGENTS_DIR = path.join(ROOT, 'agents');
 
+console.log('\nsrc/hooks/ holds only wired hooks:');
+// Helpers that are not hooks: CLIs the commands call, and a shared logger.
+const NOT_HOOKS = ['record-verification.js', 'review-config-cli.js', 'steps-cli.js', 'timing-log.js'];
+const wiredScripts = Object.values(hooksByEvent || {}).flat().flatMap(b => b.hooks.map(h => (PLUGIN_COMMAND.exec(h.command) || [])[1]));
+const hookFiles = listDir(path.join(ROOT, 'src', 'hooks'))
+    .filter(e => e.isFile() && e.name.endsWith('.js') && !e.name.startsWith('test-') && !NOT_HOOKS.includes(e.name))
+    .map(e => e.name).sort();
+assert('every hook script in src/hooks/ is wired in hooks.json',
+    hookFiles.filter(f => !wiredScripts.includes(f)), []);
+
 console.log('\nSkills at the plugin layout paths:');
 const skillDirs = listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name).sort();
 assert('skills/ holds the three shipped skills', skillDirs,
@@ -283,6 +297,11 @@ assert('skills/ holds the three shipped skills', skillDirs,
 for (const dir of skillDirs) {
     assert(`skills/${dir}/SKILL.md name matches its directory`,
         frontmatterName(path.join(SKILLS_DIR, dir, 'SKILL.md')), dir);
+    // Claude Code reads user-invocable and argument-hint; the underscore keys are ignored.
+    const head = fs.readFileSync(path.join(SKILLS_DIR, dir, 'SKILL.md'), 'utf8').split(/^---\s*$/m)[1] || '';
+    assert(`skills/${dir}/SKILL.md frontmatter has no unrecognised user_invocable or arg_spec key`,
+        /^(user_invocable|arg_spec):/m.test(head), false);
+    assert(`skills/${dir}/SKILL.md frontmatter has an argument-hint`, /^argument-hint:/m.test(head), true);
 }
 
 console.log('\nAgents at the plugin layout paths:');

@@ -1,8 +1,7 @@
 ---
 name: code-review-pre-commit
 description: Runs the pre-commit review a PRE_COMMIT_REVIEW hook block asks for - one sdlc:code-reviewer (or, with --deep, sdlc:code-reviewer-deep) sub-agent on the staged diff, ending in the TDD_GATE trailer, then writes the marker with the printf command from the block message - or, on a gap-patching block, patches the uncovered lines. Not for ad-hoc PR or branch review; use the built-in code-review for that.
-user_invocable: true
-arg_spec: "[files|staged] [--fresh] [--deep] [--model <haiku|sonnet|opus>]"
+argument-hint: "[files|staged] [--fresh] [--deep] [--model <haiku|sonnet|opus>]"
 ---
 
 # Pre-commit review

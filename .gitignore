@@ -26,3 +26,7 @@ tmp/
 
 # IDE project files
 .idea/
+
+# Per-step implementer and review reports: working files, kept out of the install payload.
+# The tracker and closeout files under docs/plans/ carry the history.
+docs/plans/*/reports/

@@ -220,7 +220,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/sdlc:handoff [slug]` | Write a fixed-form handoff file in `tmp/` and print the line that resumes it in a fresh session. |
 | `/sdlc:model-spend [--days N] [--json]` | Weekly model spend from local transcripts: Opus and Sonnet share, orchestration, untiered Opus dispatches, review round 3, and (section 8) main-session prompt cache cost by backend and TTL. |
 | `/sdlc:fit [--days N] [--json]` | Usage fit from local transcripts: context size, resets, model mix, cache backend, and what each lever would have saved on your own history. Counterfactuals at list prices, not forecasts. |
-| `/sdlc:main-model [haiku\|sonnet\|opus\|off]` | Show or set the persistent main-session model (`mainModel` in `~/.claude/sdlc-review.json`; Sonnet by default). `off` opts out of the shipped default. |
+| `/sdlc:main-model [haiku\|sonnet\|opus\|off]` | Show or set the persistent main-session model (`mainModel` in `~/.claude/sdlc-review.json`; unset by default, so opt-in). `off` stores an explicit opt-out. |
 | `/sdlc:statusline [install\|remove\|preview] [force]` | Install or remove the sdlc status line. No argument previews and writes nothing. See [Status line](#status-line). |
 | `/verify` | Check the branch against its `## Acceptance` criteria: dispatches the `verifier` sub-agent, then records the result in the feature record and, on PASS, writes `.git/.claude-last-verify`. Needs a clean tree. Never commits or opens the PR. |
 
@@ -247,7 +247,7 @@ in order, cheapest rejection first.
 | `pre-pr-verify.js` | PreToolUse | On `gh pr create` in a repo listed in `verify-repos.json`: a notice (advisory, the default) or a block (enforce) when the verification is missing or stale |
 | `post-commit-notify.js`, `claude-attribution-note.js`, `post-commit-feature.js` | PostToolUse | Notification, attribution note, sha-stamped feature history |
 
-`stop-review-trigger.js` and `post-commit-review.js` ship but are not wired.
+`stop-review-trigger.js`, `post-commit-review.js` and `protect-user-dir.js` are not wired. They live in `src/unwired/` with their tests, so `src/hooks/` holds only wired hooks (a layout test checks it).
 
 ### What counts as code
 
@@ -411,7 +411,7 @@ the hygiene path that means a retry waits for fresh coverage again, up to
 
 Prompt-cache TTL. Claude Code gives the main conversation a 1-hour prompt cache on a claude.ai subscription, but 5 minutes on an API key, a custom `ANTHROPIC_BASE_URL` gateway, Bedrock, Vertex or Foundry. On 5 minutes, every wait over 5 minutes (a sub-agent, a review, the owner) re-caches the whole context. A plugin cannot set the TTL through plugin settings, so `session-start-instructions.js` writes `"promptCacheTtl": "1h"` into the user settings file (`$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json`) at session start when it finds a per-token backend on the 5-minute default. It keeps every other key, copies the old file to `settings.json.backup.<UTC timestamp>-pre-sdlc-cache-ttl` first, and tells the owner. The setting takes effect from the next session; the session that wrote it stays on 5 minutes. To opt out, `touch ~/.claude/sdlc-cache-ttl.disabled` (in the config directory); the hook then only warns. If settings.json is not a JSON object or cannot be written, the hook warns and the manual fix is `export CLAUDE_CODE_PROMPT_CACHE_TTL=1h` in the shell profile that launches claude. The hook does nothing if you have already chosen a TTL: `CLAUDE_CODE_PROMPT_CACHE_TTL` set to `1h` or `5m` (in your shell or an `env` block), a `promptCacheTtl` setting, `ENABLE_PROMPT_CACHING_1H` or `FORCE_PROMPT_CACHING_5M`. Sub-agents stay on 5 minutes on purpose. A 1h cache write costs more, and sub-agents mostly run without pauses, so a longer cache rarely helps them. `/sdlc:fit` prices the 1h cache for the main session only, and only on a per-token backend.
 
-Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc-review.json` makes the main-session model persistent when settings.json is reset on container start. The plugin ships `defaults/sdlc-review.json` with `"mainModel": "sonnet"`, so installing the plugin makes Sonnet the main-session model from the second session on, with no setup. The shipped default applies whenever the user file has no `mainModel` key (or there is no user file), and it overwrites an existing `model` in settings.json. A plugin cannot set `model` through its own `settings.json` (Claude Code honours only `agent` and `subagentStatusLine` there), so the hook does it. `/sdlc:main-model off` stores `"mainModel": "off"` as an explicit opt-out; removing the key would bring the default back. A malformed user file gets no default. At session start `session-start-instructions.js` writes it into `model` in `<config dir>/settings.json` when they differ, with the same safe single-key writer and a `settings.json.backup.<UTC timestamp>-pre-sdlc-model` copy, and tells the owner. It applies from the next session. It is read from the user file only (a repo file's `mainModel` is ignored with a warning, since settings.json is global), and an invalid value does nothing. If `ANTHROPIC_MODEL` is set it overrides settings, so the hook warns that `mainModel` has no effect. `/sdlc:main-model [haiku|sonnet|opus|off]` shows (the effective model and whether it comes from the user file, the shipped default or an opt-out) or changes it; `/model` changes only the current session.
+Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc-review.json` makes the main-session model persistent when settings.json is reset on container start. It is opt-in: `defaults/sdlc-review.json` ships no `mainModel`, so installing the plugin never changes the `model` in settings.json. Run `/sdlc:main-model sonnet` (or `haiku`, `opus`) to turn it on. If the shipped file ever carries a `mainModel`, it applies whenever the user file has no `mainModel` key (or there is no user file) and overwrites an existing `model`. A plugin cannot set `model` through its own `settings.json` (Claude Code honours only `agent` and `subagentStatusLine` there), so the hook does it. `/sdlc:main-model off` stores `"mainModel": "off"` as an explicit opt-out. A malformed user file gets no default. At session start `session-start-instructions.js` writes it into `model` in `<config dir>/settings.json` when they differ, with the same safe single-key writer and a `settings.json.backup.<UTC timestamp>-pre-sdlc-model` copy, and tells the owner. It applies from the next session. It is read from the user file only (a repo file's `mainModel` is ignored with a warning, since settings.json is global), and an invalid value does nothing. If `ANTHROPIC_MODEL` is set it overrides settings, so the hook warns that `mainModel` has no effect. `/sdlc:main-model [haiku|sonnet|opus|off]` shows (the effective model and whether it comes from the user file, the shipped default or an opt-out) or changes it; `/model` changes only the current session.
 
 - **Goal.** The main session runs on Sonnet (`mainModel`). Volume work (building, reviewing, investigating) runs on Sonnet. Opus is used where it is stated on purpose: writing new plans (switch with `/model`; editing an existing plan runs on Sonnet), plan source review, round-2 code review.
 - **Keep the main context short.** Every call re-reads the whole conversation. A call at 300K tokens costs far more than one at 100K, and a long session pays that on every turn. When the context reaches about a fifth of the window, run `/sdlc:handoff`, then `/clear`, then resume from the handoff file. Several short sessions cost less than one long one. Orchestrator mode also helps: it keeps the work in sub-agents, so the main context grows slowly. `/sdlc:fit` shows how much of your cost is in calls over 300K.
@@ -650,10 +650,17 @@ makes them block. It passes from any repo with history.
 
 ## Known issues
 
-**`protect-user-dir.js` ships but is not wired.** The hook and its passing
-test came across, but `hooks/hooks.json` declares no `Edit`/`Write` matcher
-for it, so the guard against editing `~/.claude` directly is not active. It
-is not wired upstream either. Add a `PreToolUse` entry if you want it.
+**`protect-user-dir.js` is not wired.** It sits in `src/unwired/` with its
+passing test. `hooks/hooks.json` declares no `Edit`/`Write` entry for it, so
+the guard against editing `~/.claude` directly is not active. It is left off
+on purpose: it blocks every edit under `~/.claude/` (including `settings.json`
+and `CLAUDE.md`), which a plugin should not impose on its users, and its
+message still points at the retired `install-skills.sh`.
+
+**Hook timeouts are seconds.** Claude Code reads `timeout` in `hooks/hooks.json`
+as seconds. A hook that times out does not block the tool call; it lets it
+through. So a hung gate fails open after its timeout. The values are short
+(5 to 30 s) except `pre-commit-hygiene.js` (300 s, it runs ruff and pytest).
 
 ---
 

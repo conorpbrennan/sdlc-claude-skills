@@ -10,7 +10,7 @@ const { execSync } = require('child_process');
 // MARKER_FILE in particular shared its NAME with the commit gate's per-repository
 // marker while living somewhere the commit gate never reads -- so the remedy these
 // hooks printed, `touch ~/.claude-last-review`, silently did nothing.
-const reviewMarkers = require('./lib/review-markers');
+const reviewMarkers = require('../hooks/lib/review-markers');
 const reviewPaths = reviewMarkers.markerPaths(process.cwd());
 const MARKER_FILE = reviewPaths.sessionMarker;
 const LOCK_FILE = reviewPaths.postLock;
@@ -27,7 +27,7 @@ const LOCK_MAX_AGE_MS = 5 * 60 * 1000;
 
 // One shared definition, in lib/source-files.js -- four hooks used to keep their
 // own copy, and all four were blind to shell. See that file for what changed.
-const sourceFiles = require('./lib/source-files');
+const sourceFiles = require('../hooks/lib/source-files');
 const { SOURCE_EXTENSIONS, EXCLUDE_PATTERNS } = sourceFiles;
 
 function approve() {

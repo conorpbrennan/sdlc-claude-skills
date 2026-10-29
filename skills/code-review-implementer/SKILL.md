@@ -1,8 +1,7 @@
 ---
 name: code-review-implementer
 description: Applies the numbered ACTIONABLE ITEMS from the most recent code review report in this conversation, by severity or by item number, through one Sonnet sub-agent that makes the minimum change per item and runs the tests. Use after a pre-commit review ends in TDD_GATE FAIL, before the rerun.
-user_invocable: true
-arg_spec: "[all|critical|important|advisory|<item-numbers>]"
+argument-hint: "[all|critical|important|advisory|<item-numbers>]"
 ---
 
 # Code review implementer
