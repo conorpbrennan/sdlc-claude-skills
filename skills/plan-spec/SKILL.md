@@ -85,7 +85,7 @@ dispatch step one. A T0 plan (§0) runs no agent review: it gets
 - **The cut job** runs after round 1 and before the fold-in, as a separate
   Sonnet pass, not the round-1 reviewer. Its prompt: "for each step, what
   could the implementer decide alone?" Each answer is a decision to pin in
-  that step or a reason to leave it; both are recorded in §20.8, which is
+  that step or a reason to leave it; both are recorded in the tracker's DISPOSITIONS field (§19a), which is
   where a later round and the owner read it. It cuts as well as adds: a
   step that survives it is shorter or the same.
 - **Round 2 runs only when the fold-in changed a seam table row or an
@@ -114,7 +114,7 @@ dispatch step one. A T0 plan (§0) runs no agent review: it gets
   Evidence, 19 Oct 2026: plans of 150-450 KB ran 3-5 review rounds and never
   converged; the one 86 KB plan converged in 3.
 - Disposition every finding as the round closes — folded in, or rejected
-  with the reason — into §20.8, before the next round starts.
+  with the reason — into the tracker's DISPOSITIONS field (§19a), before the next round starts.
 - **Stop on: no new criteria** (every finding names a defect class already
   dispositioned) **or the cap of two.**
 
@@ -182,8 +182,8 @@ Per step:
    `<step>-fix-<round>.md`) and returned the path plus a five-line summary;
    you do not write it. Append DISAGREEMENTS and DECISIONS to the tracker
    before dispatching anything else.
-3. **Stage everything** — the step's files, the plan if DECISIONS-OPEN was
-   written, the previous step's tracker block and reports — then **attempt
+3. **Stage everything** — the step's files, the tracker (with any DECISIONS-OPEN
+   entry), the previous step's tracker block and reports — then **attempt
    the commit once and expect the block.** That block message is the only
    source of the marker recipe. Nothing staged after the marker is written
    can be in the commit.

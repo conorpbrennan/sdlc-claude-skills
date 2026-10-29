@@ -277,7 +277,7 @@ answers change the text it is reviewing.
    reviews the fix list; a reviewer handed the document reviews the document.
 2. Every finding is dispositioned as the round closes: folded into the
    document, or rejected with the reason. Both go to the plan's review-
-   findings section (§20.8) — accepted and where it landed, rejected and
+   findings field in the tracker (DISPOSITIONS, §19a) — accepted and where it landed, rejected and
    why. A round whose findings are read and not recorded has bought nothing
    the next round will not have to buy again.
 3. The next iteration starts on the revised document, with a fresh reviewer.
@@ -285,7 +285,7 @@ answers change the text it is reviewing.
 **When it stops.** Either condition ends it, whichever comes first.
 
 - **No new criteria.** Every finding of the round names a defect class
-  already dispositioned in §20.8: restatements, re-finds of items already
+  already dispositioned in the tracker's DISPOSITIONS field (§19a): restatements, re-finds of items already
   closed, or preferences already rejected with a reason. This is the real
   stopping rule, and note what it is not — it is not "no findings". A heavy
   reviewer given a large document will almost always find something; the
@@ -306,7 +306,7 @@ answers change the text it is reviewing.
 **The cut job.** After round 1 and before the fold-in, a separate Sonnet
 pass (not the round-1 reviewer) is asked one question: "for each step, what
 could the implementer decide alone?" Each answer is either a decision to pin
-in that step or a reason to leave it open. Both go to §20.8 with the round's
+in that step or a reason to leave it open. Both go to the tracker's DISPOSITIONS field (§19a) with the round's
 findings, which is where a later round and the owner read them. The pass
 cuts as well as adds. **Fold-in growth.** A fold-in may not grow a step except
 in its INTERFACES and ACCEPTANCE fields. **A new rule must name the rule it
@@ -330,7 +330,7 @@ known blemishes beats four more rounds spent removing them and introducing a
 fourth.
 
 **A round below the bar is a converged round.** If every finding of a round
-fails the materiality test, the loop is finished: record them in §20.8 as
+fails the materiality test, the loop is finished: record them in the tracker's DISPOSITIONS field (§19a) as
 noted and not actioned, stop, and dispatch step one. Do not fold them in and
 run another round to see whether the fold-in was clean. That move is what the
 cap exists to catch, and taking it deliberately is worse than hitting the cap
@@ -338,7 +338,7 @@ by accident.
 
 **Rule.** The loop runs to one of those two conditions before the first step
 is dispatched, one fresh independent reviewer per iteration, one input per
-iteration, every finding dispositioned in §20.8 before the next iteration
+iteration, every finding dispositioned in the tracker's DISPOSITIONS field (§19a) before the next iteration
 starts. The plan's loop closes on READY; the spec's closes on the signature
 (§4). Log each round the way a diff review is logged (§8) — the run recorded
 its plan rounds through the same CLI, with the agent field naming the tier
@@ -723,7 +723,7 @@ one thing the rule below forbids.
 
 **What is staged, and by whom.** The orchestrator stages, and the list is
 longer than the step's own files: the step's file set, the plan file where an
-implementer wrote to DECISIONS-OPEN or an amendment landed, the previous
+amendment landed, the previous
 step's tracker block and report files (§19, §19a — they run one step behind),
 and whatever the commit machinery has already restaged on its own. All of it
 goes in before the commit attempt that produces the marker, because anything
@@ -923,7 +923,7 @@ without reading the redacted text, and they matched cell for cell.
    and ROLLBACK. A step missing GATE cannot be closed; a step missing
    ROLLBACK cannot be undone by the next agent, which is the one that will
    have to.
-9. Give the plan a DECISIONS-OPEN section (§18.5) so a choice discovered at
+9. Give the tracker a DECISIONS-OPEN field (§19a, §18.5) so a choice discovered at
    step 14 has somewhere to go that is not a stall and not a silent call.
 10. Write the plan itself to the ten-section skeleton in §20. The Assay plan
     had those sections and this document did not name them, which is how a
@@ -1199,7 +1199,7 @@ has to say so.
 §2 resolves the owner's decisions before dispatch, and in the Assay run that
 was worth twelve steps with no wait states. It will not catch every one.
 
-**Rule.** The plan carries a DECISIONS-OPEN section, empty at the start. An
+**Rule.** The tracker carries a DECISIONS-OPEN field (§19a), empty at the start. An
 implementer that hits a choice it cannot make from the plan writes the
 question there, with the options and what it would cost to be wrong, takes
 the conservative option, records the call in its report, and continues. The
@@ -1298,7 +1298,7 @@ of its own. A prompt that says "verbatim" means from these files.
 
 §7 gives the orchestrator the run's state and the run itself kept it in a
 scratch file; §13 says the as-built record is assembled from that file, and
-§20.10 is written from it. This is that file, which the run never specified.
+the AS BUILT field (§19a, formerly §20.10) is written from it. This is that file, which the run never specified.
 Scratch space was the wrong home for it: forty-odd lines of as-built record
 for twelve steps lived in a directory nothing backs up, and a fresh
 orchestrator handed the plan alone could not have said which step was in
@@ -1313,6 +1313,12 @@ IN FLIGHT: <step id and what is dispatched — implementer, reviewer, fix
   round n — or "nothing">
 TREE: staged <step id | nothing>; unstaged <step id | clean>. Worktrees
   open: <path, whose step, whose round | none> (§7a.2)
+DISPOSITIONS: <per review round, including the cut job's output: each finding,
+  accepted and where it landed, or rejected and why; a round is named by its
+  kind (source round 1, cut job, seam-scoped round 2, document review)>
+DECISIONS-OPEN: <empty at the start; each choice an implementer made
+  mid-run, with the option taken and why it is conservative (§18.5)>
+AS BUILT: <written last, from the STEP blocks below, never from memory (§13)>
 
 STEP <id>: <state, from the list below>
   commit:  <sha, once it exists>
@@ -1329,6 +1335,12 @@ STEP <id>: <state, from the list below>
   decisions:     <each, the option taken, why it is conservative> (§18.5)
   budget:  <used against stated>
 ```
+
+The three run-level fields after TREE (DISPOSITIONS, DECISIONS-OPEN, AS BUILT)
+are what a T1 or T2 plan's §20.8, §20.9 and §20.10 used to hold. A plan no
+longer carries those sections; §20.8-10 remain below as pointer stubs so old
+references resolve. A review or a decision lands in one file the orchestrator
+already rewrites, not in a plan that is under review.
 
 The states are exactly the exits §18 produces, and no others: IN FLIGHT;
 GATE FAILED (§18.2, not yet reviewed); STOPPED — PLAN (§18.4, awaiting the
@@ -1349,7 +1361,7 @@ will lose, and a 21-step run outlives any single orchestrator's context, so
 it will lose it.
 
 **It is committed, and it lands one step behind.** The tracker is written
-into the repository, not scratch, so the as-built record (§13, §20.10) grows
+into the repository, not scratch, so the as-built record (§13, the AS BUILT field) grows
 in the history rather than in a temporary directory. But a step's block
 cannot ship in that step's own commit, and the reason is the marker: `commit:`
 and `reviews:` are only known once the review has passed and the commit
@@ -1386,6 +1398,21 @@ section had to do. Nine of the ten were in that plan — item 9,
 DECISIONS-OPEN, is a promotion, which is why §15.9 asks for it rather than
 citing it.
 
+Which sections a plan carries depends on its tier (SKILL.md section 0):
+
+| Tier | Sections carried |
+|---|---|
+| T0 | 1, 2, 7, and the status lines (§22) |
+| T1 | 1, 2, 3, 4 with the seam table, 5, 6 (optional), 7 |
+| T2 | The index: 1, 2, 4 and the landed commits. Each phase plan: the T1 list, 6 optional |
+
+Sections 8, 9 and 10 are not carried by any tier: they live in the tracker
+(§19a), and their entries below are pointer stubs only. Section 6 (What NOT to
+do) is optional: a T1 plan or T2 phase plan keeps it as a short list of named
+wrong turns where there are any, and omits it otherwise. The numbering below
+does not change with the tier; a plan that omits a section leaves the number
+unused.
+
 1. **What this delivers, and what it does not.** The second half is the one
    that gets skipped and the one that stops scope drift at step 12.
 2. **Working constraints — read before the first step, they apply to every
@@ -1418,14 +1445,15 @@ citing it.
    every anchor before writing anything: `apply_edits` for one file, and
    `apply_edits_multi` when the change touches several, because the
    single-file form decides one file at a time and two calls to it can still
-   half-apply a change. An implementer writing to DECISIONS-OPEN, an
+   half-apply a change. An implementer writing to the tracker's DECISIONS-OPEN field, an
    orchestrator writing the tracker and every review fold-in all edit
    documents this way, and under an unattended authorisation nobody is
    watching when one goes wrong.
    Four paths belong here by name, as always permitted, never listed in a
    step's file set and never counted against it: the plan itself (an
-   implementer writes to its DECISIONS-OPEN, §18.5), the feature record (the
-   commit machinery rewrites it mid-commit, see Terms), the tracker, and the
+   amendment lands there), the feature record (the
+   commit machinery rewrites it mid-commit, see Terms), the tracker (an
+   implementer writes to its DECISIONS-OPEN field, §18.5), and the
    run's report directory (the orchestrator writes the tracker and the
    review reports, one step behind; an implementer writes its own report
    there; §19 and §19a). Each appears in some step's diff without being any step's
@@ -1439,13 +1467,14 @@ citing it.
    document, so the record of why sits beside the work. One answer is
    recorded here on every plan: the standing authorisation to stage, commit and dispatch
    fixes unattended, quoting the harness rules it overrides (§2). The review-loop
-   cap is not asked (it is two, §2a); an extra round is recorded here with its
-   reason. Where any step carries a named-reader condition (§16), a second: which steps those
+   cap is not asked (it is two, §2a); a third round is never allowed, and
+   the round-2 trigger and what it examined are recorded in the tracker's
+   DISPOSITIONS field (§19a), not here. Where any step carries a named-reader condition (§16), a second: which steps those
    are and at which breaks the owner clears them. Unbatched, they are read
    one at a time and the run waits on a person per step; unnamed, they are
    discovered at the end, which is the acceptance-step failure §18.1
    describes.
-4. **Prerequisites and ordering.** What must exist before step one, and the
+4. **Order and seams.** What must exist before step one, and the
    order the steps run in with the reason where it is not obvious. This is
    where a step's ASSUMES LANDED is checked against reality. Where the
    deliverable has a frozen target (§3), the first three steps are named
@@ -1461,6 +1490,15 @@ citing it.
    before step one, each with the step that turns it green or a note that it
    is out of scope. §20.7 then excludes the out-of-scope ones by name, so
    the definition of done does not rest on a suite nobody intended to fix.
+
+   **The seam table** is defined here once, and every other section quotes it
+   rather than restating it. One row per artefact that crosses between steps
+   (a file, a function signature, a schema, a constant); columns exactly:
+   `artefact, producer, consumer, shape`. Producer and consumer are step ids;
+   shape is the signature, format or keys, precise enough that the consumer's
+   step can be written without opening the producer's. A seam with no consumer
+   is dead; a consumer with no producer is a missing step. A round 2 of the
+   review (§2a) is scoped to the rows round 1 changed.
 5. **The steps.** Each to the §16 template.
 6. **What NOT to do.** The plausible wrong turns, named, with why each is
    wrong. Cheaper here than in a review of the diff that took one.
@@ -1469,24 +1507,33 @@ citing it.
    plan lands in stages, with the one full-suite run named and placed. The
    run's plan put its three blocks in reading order and said which held the
    single full-suite run.
-8. **Review findings — disposition.** Each finding from each plan review,
-   and what was done: accepted and where it landed, rejected and why,
+8. **Review findings — disposition.** *Pointer stub: a plan does not carry
+   this section. It lives in the tracker's DISPOSITIONS field (§19a); the
+   heading remains so references to §20.8 resolve.* Each finding from each
+   plan review, and what was done: accepted and where it landed, rejected and why,
    grouped by round. This is what makes the eight review rounds of §1
    auditable rather than folklore, and it is also the loop's own stopping
    rule: §2a ends when a round's findings all name classes already in this
    section, which is a question this section answers and memory does not.
-9. **DECISIONS-OPEN.** Empty at the start; §18.5 fills it mid-run.
-10. **As built.** Written last, from the tracker, never from memory (§13).
+9. **DECISIONS-OPEN.** *Pointer stub: a plan does not carry this section. It
+   lives in the tracker's DECISIONS-OPEN field (§19a).*
+   Empty at the start; §18.5 fills it mid-run.
+10. **As built.** *Pointer stub: a plan does not carry this section. It lives
+    in the tracker's AS BUILT field (§19a).* Written
+    last, from the tracker, never from memory (§13).
 
-**Rule.** A plan carries all ten. Sections 1, 2, 3, 4 and 7 are written and
-independently reviewed before the first step is dispatched; 8 grows with
-each review round; 9 and 10 are filled during and after the run. A plan
-missing section 2 will have its constraints rediscovered per step, which is
-the §5 incident; a plan missing section 7 cannot be finished, only abandoned.
+**Rule.** A plan carries the sections its tier lists in the table above, and no
+others; sections 8, 9 and 10 are pointer stubs, not plan sections. Of the tier's
+sections, 1, 2, 3, 4 and 7 (where the tier carries them) are written and
+independently reviewed before the first step is dispatched. The records that
+sections 8, 9 and 10 describe grow in the tracker (§19a): dispositions with
+each review round, DECISIONS-OPEN and AS BUILT during and after the run. A plan
+missing section 2 will have its constraints rediscovered per step, which is the
+§5 incident; a plan missing section 7 cannot be finished, only abandoned.
 
 **Size.** The skeleton holds one phase. A plan over 40,000 bytes, 15 step
 blocks, or 80 lines in a step block is split by phase, each phase its own plan
-with its own ten sections (§17; `check_size.py`). Plans of 150-450 KB never
+with its own tier's sections (§17; `check_size.py`). Plans of 150-450 KB never
 converged in review; the one 86 KB plan did, in 3 rounds (19 Oct 2026).
 
 ## 21. The four dispatch prompts
@@ -1651,7 +1698,7 @@ delta (§18.3).
 ### 21.4 The document review
 
 §1's eight rounds before a line of code, §4's review before the signature and
-§20.8's disposition all require a review of a *document*, and the three
+the DISPOSITIONS field's (§19a) record all require a review of a *document*, and the three
 prompts above are all reviews of a diff. This is the fourth. Its verdict is
 READY or NOT YET with findings (see Terms), never PASS: there is no diff for a
 PASS to bind to.
@@ -1702,7 +1749,7 @@ reviewer. One input per round is the whole method, not a formality: the run's
 eight rounds each held the plan against a different input, which is why they
 found different things and why the eighth still found something. A round asked
 to check everything checks nothing. Every finding and its disposition goes to
-§20.8 as it is answered, which is what makes the rounds auditable rather than
+the tracker's DISPOSITIONS field (§19a) as it is answered, which is what makes the rounds auditable rather than
 folklore.
 
 **Rule.** These four prompts are the orchestrator's only interface to a
