@@ -27,10 +27,18 @@ Two assumptions run under every rule. Check them before writing anything.
   result. Say so rather than forcing it; what transfers is §3's ordering
   (freeze the evaluation before the first experiment), §6 and §13.
 
-Then size it. **Three steps or fewer, no two steps sharing a file, one
-sitting, no frozen target?** Use the reduced form in §22 — a one-page plan,
-one review round, four fields per step — and skip most of what follows. The
-gates never scale down; the paperwork does.
+Then choose a tier. Coupling (shared interfaces and files) decides it, not
+step count alone. This table replaces the old "three steps or fewer" sizing
+paragraph and the reduced-form rule that stood here.
+
+| Tier | Rule | Form |
+|---|---|---|
+| T0 | Three steps or fewer, no two steps sharing a file, one sitting, no frozen target | The §22 list: one page, no agent review, a status line under each step. Keep `check_citations.py`. |
+| T1 | 10 steps or fewer, and the seam table fits in §20.4 | One plan, within the `check_size.py` caps. One Opus source round; a second, seam-scoped, only if round 1 changed a seam. |
+| T2 | More than 10 steps, or phases | An index plus self-contained phase plans, each a T1 plan. Plan text is never a pointer target: a phase plan states what it needs, it does not cite another plan's text. |
+
+Search-shaped work fits no tier; it is sent away (above). The gates never
+scale down; the paperwork does.
 
 ## 1. Mode: write a plan
 
@@ -60,8 +68,11 @@ gates never scale down; the paperwork does.
    test splits, and the split is written into the plan before dispatch.
    That includes a step an implementer could not finish in about 40 tool
    calls (§17); the plan review flags it.
-   Size the plan too: over 40,000 bytes, 15 steps, or 80 lines in a step
-   block, it is split by phase, each phase its own plan (§17).
+   Size the plan too. `check_size.py` blocks a line over `MAX_LINE_CHARS`
+   (fenced code and table rows exempt) and more than `MAX_STEPS` steps; a
+   plan that breaches is split by phase, each phase its own plan (§17).
+   `STEP_BUDGET_BYTES` and `PLAN_BUDGET_BASE` are advisory (`NOTE:`). This
+   replaces the old byte, step and block-line caps.
 5. **Run the review loop (§2a).** See below.
 
 ### The pre-run review loop (§2a)
@@ -102,8 +113,9 @@ the fix that closes it is new text no round has read, and a correction flag
 makes it look more checked, not less.
 
 - Run `check_citations.py` in this skill's base directory, as
-  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. Run `check_size.py` the same way (`python3 <that path> <plan>`) at the same points: a breach
-  (over 40,000 bytes, 15 steps, or 80 lines in a step block) means phases, each phase its own plan, not a longer plan. A
+  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. Run `check_size.py` the same way (`python3 <that path> [--tier t0|t1] <plan>`) at the same points. A
+  line starting `OVER:` or `BREACH:` is a breach and means phases, each phase its own plan, not a longer plan;
+  a line starting `NOTE:` is advisory. A
   `NEW` file set exempts paths and symbols; a `TESTS FIRST` field exempts
   symbols only, so the test's file must still resolve.
 - Apply a batch of edits with `edit_doc.py` in this skill's base directory — `apply_edits` for one file,
@@ -242,4 +254,4 @@ At any size, on any shape:
 | The orchestrator's tracker | §19a |
 | The plan's ten sections | §20 |
 | The four dispatch prompts | §21 |
-| The reduced form for small changes | §22 |
+| The T0 form for small changes | §22 |

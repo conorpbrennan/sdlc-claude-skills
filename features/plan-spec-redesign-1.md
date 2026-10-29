@@ -23,6 +23,8 @@
 - skills/plan-spec/fixtures/note-plan-budget.md
 - skills/plan-spec/fixtures/note-step-budget.md
 - skills/plan-spec/fixtures/pointer-breach.md
+- skills/plan-spec/fixtures/size-over-bytes.md
+- skills/plan-spec/fixtures/size-over-lines.md
 - skills/plan-spec/fixtures/steps-eleven.md
 - skills/plan-spec/fixtures/t0-clean.md
 - skills/plan-spec/fixtures/t0-extra-section.md
@@ -30,4 +32,16 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-29 `a0a18c0` — check_size: line cap, 10-step limit, T0 section and pointer checks; byte budgets advisory
+  - .claude-plugin/plugin.json
+  - skills/plan-spec/check_size.py
+  - skills/plan-spec/fixtures/line-over.md
+  - skills/plan-spec/fixtures/note-plan-budget.md
+  - skills/plan-spec/fixtures/note-step-budget.md
+  - skills/plan-spec/fixtures/pointer-breach.md
+  - skills/plan-spec/fixtures/size-over-bytes.md
+  - skills/plan-spec/fixtures/size-over-lines.md
+  - skills/plan-spec/fixtures/steps-eleven.md
+  - skills/plan-spec/fixtures/t0-clean.md
+  - skills/plan-spec/fixtures/t0-extra-section.md
+  - skills/plan-spec/test_check_size.py
