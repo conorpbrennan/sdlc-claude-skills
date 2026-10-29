@@ -27,10 +27,18 @@ Two assumptions run under every rule. Check them before writing anything.
   result. Say so rather than forcing it; what transfers is §3's ordering
   (freeze the evaluation before the first experiment), §6 and §13.
 
-Then size it. **Three steps or fewer, no two steps sharing a file, one
-sitting, no frozen target?** Use the reduced form in §22 — a one-page plan,
-one review round, four fields per step — and skip most of what follows. The
-gates never scale down; the paperwork does.
+Then choose a tier. Coupling (shared interfaces and files) decides it, not
+step count alone. This table replaces the old "three steps or fewer" sizing
+paragraph and the reduced-form rule that stood here.
+
+| Tier | Rule | Form |
+|---|---|---|
+| T0 | Three steps or fewer, no two steps sharing a file, one sitting, no frozen target | The §22 list: one page, no agent review, a status line under each step. Keep `check_citations.py`. |
+| T1 | 10 steps or fewer, and the seam table fits in §20.4 | One plan, within the `check_size.py` caps. One Opus source round; a second, seam-scoped, only if round 1 changed a seam. |
+| T2 | More than 10 steps, or phases | An index plus self-contained phase plans, each a T1 plan. Plan text is never a pointer target: a phase plan states what it needs, it does not cite another plan's text. |
+
+Search-shaped work fits no tier; it is sent away (above). The gates never
+scale down; the paperwork does.
 
 ## 1. Mode: write a plan
 
@@ -60,19 +68,31 @@ gates never scale down; the paperwork does.
    test splits, and the split is written into the plan before dispatch.
    That includes a step an implementer could not finish in about 40 tool
    calls (§17); the plan review flags it.
-   Size the plan too: over 40,000 bytes, 15 steps, or 80 lines in a step
-   block, it is split by phase, each phase its own plan (§17).
+   Size the plan too. `check_size.py` blocks a line over `MAX_LINE_CHARS`
+   (fenced code and table rows exempt) and more than `MAX_STEPS` steps; a
+   plan that breaches is split by phase, each phase its own plan (§17).
+   `STEP_BUDGET_BYTES` and `PLAN_BUDGET_BASE` are advisory (`NOTE:`). This
+   replaces the old byte, step and block-line caps.
 5. **Run the review loop (§2a).** See below.
 
 ### The pre-run review loop (§2a)
 
 The loop is capped at **two rounds**. Stop earlier on no new criteria, then
-dispatch step one.
+dispatch step one. A T0 plan (§0) runs no agent review: it gets
+`check_citations.py` and no round.
 
-- Round 1 is the Opus source round, on the whole document. Round 2 is the
-  Sonnet consistency round. Its **single input** is the sections changed
-  since revision 1 (the fold-in), not the whole document (§21.4's prompt).
-  A reduced-form plan (§22) gets one round.
+- Round 1 is the Opus source round, on the whole document.
+- **The cut job** runs after round 1 and before the fold-in, as a separate
+  Sonnet pass, not the round-1 reviewer. Its prompt: "for each step, what
+  could the implementer decide alone?" Each answer is a decision to pin in
+  that step or a reason to leave it; both are recorded in the tracker's DISPOSITIONS field (§19a), which is
+  where a later round and the owner read it. It cuts as well as adds: a
+  step that survives it is shorter or the same.
+- **Round 2 runs only when the fold-in changed a seam table row or an
+  ASSUMES LANDED line.** The test is a diff of the seam table (§20.4) and of
+  those lines between revision 1 and the fold-in: no changed row or line, no
+  round 2. Its **single input** is those rows and lines, not the whole
+  document (§21.4's prompt).
 - One **fresh** independent reviewer per round, given the document and
   **exactly one input** to hold it against (§21.4's prompt). Do not tell it
   what earlier rounds found or which round it is.
@@ -83,8 +103,9 @@ dispatch step one.
   (`planReview.source`, `planReview.consistency`, `planReview.cap`; defaults
   opus, sonnet, 2), read with
   `node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap is not
-  an owner question and does not rise mid-run. One extra round is allowed only
-  with its reason recorded in §20.3.
+  an owner question and does not rise mid-run. `review-config-cli.js
+  plan-review` reports the cap; it does not stop a third round, so the
+  orchestrator holds it. No third round, under any wording.
   When that command prints `enabled: false`, skip the review loop and record
   the skip in §20.3.
 - **A NOT YET with material findings at round 2** means the plan is too large
@@ -93,7 +114,7 @@ dispatch step one.
   Evidence, 19 Oct 2026: plans of 150-450 KB ran 3-5 review rounds and never
   converged; the one 86 KB plan converged in 3.
 - Disposition every finding as the round closes — folded in, or rejected
-  with the reason — into §20.8, before the next round starts.
+  with the reason — into the tracker's DISPOSITIONS field (§19a), before the next round starts.
 - **Stop on: no new criteria** (every finding names a defect class already
   dispositioned) **or the cap of two.**
 
@@ -102,8 +123,9 @@ the fix that closes it is new text no round has read, and a correction flag
 makes it look more checked, not less.
 
 - Run `check_citations.py` in this skill's base directory, as
-  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. Run `check_size.py` the same way (`python3 <that path> <plan>`) at the same points: a breach
-  (over 40,000 bytes, 15 steps, or 80 lines in a step block) means phases, each phase its own plan, not a longer plan. A
+  `python3 <that path> <plan> <branch>`, before every round and before dispatch — it is a gate, not a criterion. Run `check_size.py` the same way (`python3 <that path> [--tier t0|t1] <plan>`) at the same points. A
+  line starting `OVER:` or `BREACH:` is a breach and means phases, each phase its own plan, not a longer plan;
+  a line starting `NOTE:` is advisory. A
   `NEW` file set exempts paths and symbols; a `TESTS FIRST` field exempts
   symbols only, so the test's file must still resolve.
 - Apply a batch of edits with `edit_doc.py` in this skill's base directory — `apply_edits` for one file,
@@ -113,14 +135,18 @@ makes it look more checked, not less.
 - Cite by symbol first, line second; give both branches where a plan spans two.
 - Prefer a fix that removes a claim over one that adds one. A fix longer than
   its finding is a smell.
+- A fold-in may not grow a step, except in its INTERFACES and ACCEPTANCE
+  fields (a shape line the finding showed missing). Growth anywhere else
+  goes back to the finding.
+- A new rule must name the rule it replaces. A rule that replaces nothing
+  is added to a document that is already over its caps.
 - The round after an internal-consistency round is always a source round —
   generally, never follow a fold-in with an input blind to what it wrote.
 - Treat a flagged claim about code as unverified until a source round or the
   checker has seen it.
 
 **The materiality bar.** Raise a finding only if it would change what gets
-built: a step's file set, a signature, a gate, the step order, or what an
-implementer does on reading the plan. Ask "and then what would be built
+built: a step's file set, a seam, the step order, or a GATE. Ask "and then what would be built
 differently?" — if the answer is nothing, it is not a finding. A round whose
 findings all fall below the bar **is a converged round**: record them as
 noted-not-actioned, stop, dispatch. Do not fold them in and run another
@@ -156,8 +182,8 @@ Per step:
    `<step>-fix-<round>.md`) and returned the path plus a five-line summary;
    you do not write it. Append DISAGREEMENTS and DECISIONS to the tracker
    before dispatching anything else.
-3. **Stage everything** — the step's files, the plan if DECISIONS-OPEN was
-   written, the previous step's tracker block and reports — then **attempt
+3. **Stage everything** — the step's files, the tracker (with any DECISIONS-OPEN
+   entry), the previous step's tracker block and reports — then **attempt
    the commit once and expect the block.** That block message is the only
    source of the marker recipe. Nothing staged after the marker is written
    can be in the commit.
@@ -242,4 +268,5 @@ At any size, on any shape:
 | The orchestrator's tracker | §19a |
 | The plan's ten sections | §20 |
 | The four dispatch prompts | §21 |
-| The reduced form for small changes | §22 |
+| The T0 form for small changes | §22 |
+| Why a rule exists; the incidents | history.md |

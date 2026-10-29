@@ -20,12 +20,73 @@
 - README.md
 - commands/main-model.md
 - defaults/sdlc-review.json
+- docs/plans/fewer-stronger-tests/reports/1-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/1-review-1.md
+- docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/2-review-1.md
+- docs/plans/fewer-stronger-tests/reports/3-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/3-review-1.md
+- docs/plans/fewer-stronger-tests/reports/4-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/4-review-1.md
+- docs/plans/fewer-stronger-tests/reports/5-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/5-review-1.md
+- docs/plans/fewer-stronger-tests/reports/6-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/6-review-1.md
+- docs/plans/fewer-stronger-tests/reports/7-fix-1.md
+- docs/plans/fewer-stronger-tests/reports/7-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/7-review-1.md
+- docs/plans/fewer-stronger-tests/reports/C1-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/C1-review-1.md
+- docs/plans/fewer-stronger-tests/reports/C2-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/C2-review-1.md
+- docs/plans/fewer-stronger-tests/reports/C3-implementer-1.md
+- docs/plans/fewer-stronger-tests/reports/C3-review-1.md
+- docs/plans/steps-config-block/reports/1-implementer-1.md
+- docs/plans/steps-config-block/reports/10-implementer-1.md
+- docs/plans/steps-config-block/reports/11-implementer-1.md
+- docs/plans/steps-config-block/reports/12-implementer-1.md
+- docs/plans/steps-config-block/reports/13a-implementer-1.md
+- docs/plans/steps-config-block/reports/13b-implementer-1.md
+- docs/plans/steps-config-block/reports/13c-fix-1.md
+- docs/plans/steps-config-block/reports/14-fix-1.md
+- docs/plans/steps-config-block/reports/14b-fix-1.md
+- docs/plans/steps-config-block/reports/2-implementer-1.md
+- docs/plans/steps-config-block/reports/3-implementer-1.md
+- docs/plans/steps-config-block/reports/4-implementer-1.md
+- docs/plans/steps-config-block/reports/5-implementer-1.md
+- docs/plans/steps-config-block/reports/6-implementer-1.md
+- docs/plans/steps-config-block/reports/7-implementer-1.md
+- docs/plans/steps-config-block/reports/8-implementer-1.md
+- docs/plans/steps-config-block/reports/9-implementer-1.md
+- docs/plans/verification-stage/reports/0-review-1.md
+- docs/plans/verification-stage/reports/1-implementer-1.md
+- docs/plans/verification-stage/reports/1-review-1.md
+- docs/plans/verification-stage/reports/1-review-1b.md
+- docs/plans/verification-stage/reports/2-implementer-1.md
+- docs/plans/verification-stage/reports/2-review-1.md
+- docs/plans/verification-stage/reports/3-implementer-1.md
+- docs/plans/verification-stage/reports/3-review-1.md
+- docs/plans/verification-stage/reports/4-implementer-1.md
+- docs/plans/verification-stage/reports/4-review-1.md
+- docs/plans/verification-stage/reports/5-implementer-1.md
+- docs/plans/verification-stage/reports/5-review-1.md
+- docs/plans/verification-stage/reports/6-implementer-1.md
+- docs/plans/verification-stage/reports/6-review-1.md
+- docs/plans/verification-stage/reports/7-implementer-1.md
+- docs/plans/verification-stage/reports/7-review-1.md
+- docs/plans/verification-stage/reports/8-review-1.md
 - hooks/hooks.json
 - skills/code-review-implementer/SKILL.md
 - skills/code-review-pre-commit/SKILL.md
 - skills/plan-spec/SKILL.md
+- src/hooks/post-commit-review.js
+- src/hooks/protect-user-dir.js
+- src/hooks/stop-review-trigger.js
+- src/hooks/test-post-commit-hook.sh
+- src/hooks/test-protect-user-dir.js
 - src/hooks/test-review-config.js
 - src/hooks/test-session-start-instructions.js
+- src/hooks/test-stop-hook.sh
 - src/test-plugin-layout.js
 - src/unwired/post-commit-review.js
 - src/unwired/protect-user-dir.js
@@ -37,4 +98,84 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-29 `5644a51` — Fix external review findings: timeouts in seconds, skill frontmatter, opt-in mainModel, slimmer payload, test identity, unwired hooks
+  - .claude-plugin/plugin.json
+  - .gitignore
+  - README.md
+  - commands/main-model.md
+  - defaults/sdlc-review.json
+  - docs/plans/fewer-stronger-tests/reports/1-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/1-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/2-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/2-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/3-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/3-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/4-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/4-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/5-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/5-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/6-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/6-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/7-fix-1.md
+  - docs/plans/fewer-stronger-tests/reports/7-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/7-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/C1-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/C1-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/C2-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/C2-review-1.md
+  - docs/plans/fewer-stronger-tests/reports/C3-implementer-1.md
+  - docs/plans/fewer-stronger-tests/reports/C3-review-1.md
+  - docs/plans/steps-config-block/reports/1-implementer-1.md
+  - docs/plans/steps-config-block/reports/10-implementer-1.md
+  - docs/plans/steps-config-block/reports/11-implementer-1.md
+  - docs/plans/steps-config-block/reports/12-implementer-1.md
+  - docs/plans/steps-config-block/reports/13a-implementer-1.md
+  - docs/plans/steps-config-block/reports/13b-implementer-1.md
+  - docs/plans/steps-config-block/reports/13c-fix-1.md
+  - docs/plans/steps-config-block/reports/14-fix-1.md
+  - docs/plans/steps-config-block/reports/14b-fix-1.md
+  - docs/plans/steps-config-block/reports/2-implementer-1.md
+  - docs/plans/steps-config-block/reports/3-implementer-1.md
+  - docs/plans/steps-config-block/reports/4-implementer-1.md
+  - docs/plans/steps-config-block/reports/5-implementer-1.md
+  - docs/plans/steps-config-block/reports/6-implementer-1.md
+  - docs/plans/steps-config-block/reports/7-implementer-1.md
+  - docs/plans/steps-config-block/reports/8-implementer-1.md
+  - docs/plans/steps-config-block/reports/9-implementer-1.md
+  - docs/plans/verification-stage/reports/0-review-1.md
+  - docs/plans/verification-stage/reports/1-implementer-1.md
+  - docs/plans/verification-stage/reports/1-review-1.md
+  - docs/plans/verification-stage/reports/1-review-1b.md
+  - docs/plans/verification-stage/reports/2-implementer-1.md
+  - docs/plans/verification-stage/reports/2-review-1.md
+  - docs/plans/verification-stage/reports/3-implementer-1.md
+  - docs/plans/verification-stage/reports/3-review-1.md
+  - docs/plans/verification-stage/reports/4-implementer-1.md
+  - docs/plans/verification-stage/reports/4-review-1.md
+  - docs/plans/verification-stage/reports/5-implementer-1.md
+  - docs/plans/verification-stage/reports/5-review-1.md
+  - docs/plans/verification-stage/reports/6-implementer-1.md
+  - docs/plans/verification-stage/reports/6-review-1.md
+  - docs/plans/verification-stage/reports/7-implementer-1.md
+  - docs/plans/verification-stage/reports/7-review-1.md
+  - docs/plans/verification-stage/reports/8-review-1.md
+  - hooks/hooks.json
+  - skills/code-review-implementer/SKILL.md
+  - skills/code-review-pre-commit/SKILL.md
+  - skills/plan-spec/SKILL.md
+  - src/hooks/post-commit-review.js
+  - src/hooks/protect-user-dir.js
+  - src/hooks/stop-review-trigger.js
+  - src/hooks/test-post-commit-hook.sh
+  - src/hooks/test-protect-user-dir.js
+  - src/hooks/test-review-config.js
+  - src/hooks/test-session-start-instructions.js
+  - src/hooks/test-stop-hook.sh
+  - src/test-plugin-layout.js
+  - src/unwired/post-commit-review.js
+  - src/unwired/protect-user-dir.js
+  - src/unwired/stop-review-trigger.js
+  - src/unwired/test-post-commit-hook.sh
+  - src/unwired/test-protect-user-dir.js
+  - src/unwired/test-stop-hook.sh
+  - tools/run-tests.sh
