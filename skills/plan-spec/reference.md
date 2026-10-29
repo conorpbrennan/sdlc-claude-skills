@@ -1079,10 +1079,13 @@ step is the signal only when the work needed a file outside the step's set or
 a missing prerequisite (§18.6). A review finding inside the set is a fix round
 on the same commit (§18.3), not a second commit.
 
-**The plan has a cap too.** A plan is at most 40,000 bytes, 15 step blocks, and
-80 lines in any one step block, counting the step's heading line.
-`check_size.py` measures all three and exits 1
-with one line per breach. Plans of 150-450 KB went 3-5 review rounds and never
+**The plan has a cap too.** `check_size.py` owns the cap values; this
+section quotes them by name. A line is at most MAX_LINE_CHARS characters and a
+plan has at most MAX_STEPS step blocks; a breach of either exits 1 with one
+line per breach. A step block over STEP_BUDGET_BYTES, or a plan over
+PLAN_BUDGET_BASE plus STEP_BUDGET_BYTES per step, prints a NOTE and does not
+change the exit code. The two byte budgets are advisory until the §16
+template lands (phase 2 of the plan-spec redesign). Plans of 150-450 KB went 3-5 review rounds and never
 converged; the one 86 KB plan converged in 3 (19 Oct 2026). A plan over a cap
 is split by phase, each phase its own plan, not made longer.
 
@@ -1531,10 +1534,12 @@ each review round, DECISIONS-OPEN and AS BUILT during and after the run. A plan
 missing section 2 will have its constraints rediscovered per step, which is the
 §5 incident; a plan missing section 7 cannot be finished, only abandoned.
 
-**Size.** The skeleton holds one phase. A plan over 40,000 bytes, 15 step
-blocks, or 80 lines in a step block is split by phase, each phase its own plan
-with its own tier's sections (§17; `check_size.py`). Plans of 150-450 KB never
-converged in review; the one 86 KB plan did, in 3 rounds (19 Oct 2026).
+**Size.** The skeleton holds one phase. A plan that breaches MAX_LINE_CHARS or
+MAX_STEPS is split by phase (T2), each phase its own plan with its own tier's
+sections (§17; `check_size.py`). The byte budgets, STEP_BUDGET_BYTES and
+PLAN_BUDGET_BASE, are advisory NOTE lines and do not force a split. Plans of
+150-450 KB never converged in review; the one 86 KB plan did, in 3 rounds
+(19 Oct 2026).
 
 ## 21. The four dispatch prompts
 
@@ -1797,68 +1802,72 @@ where they are cheapest to keep:
 6. Decisions taken and disagreements found are written down (§13, §18.5),
    even when the record is three lines.
 
-**What collapses.**
+**The T0 form.** A small change is written as a T0 plan. It has sections 1, 2
+and 7 and nothing else at level 2: what this delivers and what it does not,
+the working constraints, and the definition of done. A status line under the
+title reads `Status: ready. Tier T0.` Each step block carries the current four
+fields of §16 and a status line, no more: the file set (`NEW` or `EXTEND`
+and every path), WHAT TO BUILD, GATE and REVIEW. A section 3 register is not
+written: an unanswered owner question is still a wait state, so it is asked
+before dispatch, but three answers do not need a section. Sections 4, 6, 8, 9
+and 10 fold into the step blocks and the definition of done.
+`skills/plan-spec/fixtures/t0-clean.md` is the model, and
+`check_size.py --tier t0` is the gate. T0_SECTIONS in `check_size.py` owns
+the section list. Any other level-2 heading is a breach, apart from a step
+heading such as `## S1`.
 
-*The plan (§20).* Sections 1, 2 and 7 only: what this delivers and what it
-does not, the working constraints, the definition of done. Section 3 becomes
-a line rather than a register — a small change with an unanswered owner
-question is still a wait state, so the question is still asked, but three
-answers do not need a section. Sections 4, 6, 8, 9 and 10 fold into the step
-blocks and the closing entry.
-
-*The review loop (§2a).* The cap is two, not asked, and a one-page plan runs
-one round: one independent reviewer
-holding the plan against the source it proposes to change. A second round
-only if the first returns NOT YET on something that changes a step. The
-convergence rule is unchanged and simply arrives sooner: a one-page plan runs
-out of new criteria fast, and that is the signal, not the round count.
-
-*The step (§16).* Four fields survive: the file set, WHAT TO BUILD, GATE and
-REVIEW. IMPORTS and MUST NOT TOUCH read "none" when no two steps share a file
-— written, not deleted, so a reader can tell. TESTS FIRST survives only where
-the step asserts a refusal (§11). ROLLBACK is "revert the commit" and says
-so. BUDGET is dropped: at this size an estimate carries nothing the plan does
-not already say.
+*No agent review of the plan.* A T0 plan gets no §2a round. The checks are
+mechanical: `check_size.py --tier t0` and `check_citations.py` both run and
+both must exit 0. The review that stays is the review of every commit (§9).
+A change that needs a plan review is not T0.
 
 *The report (§19).* GATE results, FILES, DISAGREEMENTS, DECISIONS. RED FIRST
-where TESTS FIRST applied, MEASUREMENTS where the step quotes a number. NEXT
-and BUDGET USED are dropped.
+where the step asserts a refusal, MEASUREMENTS where the step quotes a
+number. NEXT and BUDGET USED are dropped.
 
 *The tracker (§19a).* The plan file is the tracker. A status line under each
-step block — state, sha, review verdict, and the decisions and disagreements
-as they arrive — with no separate file and no report directory: at three
-steps the reports fit inline under the step they belong to. "One step behind"
-becomes "the next commit carries the previous step's line", which is what the
-feature hook does with its own history line anyway (§18.1.4).
+step block holds state, sha, review verdict, and the decisions and
+disagreements as they arrive, with no separate file and no report directory:
+at three steps the reports fit inline under the step they belong to. "One
+step behind" becomes "the next commit carries the previous step's line", which
+is what the feature hook does with its own history line anyway (§18.1.4).
 
 *The prompts (§21).* §21.1 and §21.2 unchanged, and §21.3 unchanged if a
 review fails. They are pastes, so they cost nothing to fill, and they are
-what keeps a dispatch from becoming a conversation. §21.4 is the single loop
-round above.
+what keeps a dispatch from becoming a conversation. There is no §21.4 round.
 
 The whole of it, for a two-step change:
 
 ```
-# <what this delivers>. NOT: <what it does not>.
+# <title>
 
-CONSTRAINTS, every step: <the class-level guards; the single owners; the
-commit protocol; the always-permitted paths (§20.2)>
-DONE, the whole change: <the commands and their expected results>
+Status: ready. Tier T0.
+
+## 1. What this delivers, and what it does not
+
+<what it delivers>. <what it does not>.
+
+## 2. Working constraints
+
+- <the class-level guards; the single owners; the commit protocol>
 
 **1. <what exists after this step that did not before>**
 <NEW|EXTEND> <every path this step may touch>.
 WHAT TO BUILD: <the decisions, already made: signatures, shapes, owners>
 GATE: <conditions, each settled by running something>
 REVIEW: <numbered questions; the FAIL criteria as a closed list>
-ROLLBACK: revert the commit.
 -- status: <state (§19a)> <sha> <agent:round:verdict> <decisions,
    disagreements, as they arrive>
 
 **2. ...**
+
+## 7. Definition of done
+
+<the commands and their expected results>
 ```
 
-**Rule.** A small change carries a one-page plan (§20.1, §20.2, §20.7), one
-review round on it, a step block of four fields per step, a review on every
+**Rule.** A small change carries a one-page plan (§20.1, §20.2, §20.7), no
+agent review of it, a step block of four fields per step, a review on every
 commit, and its whole record in the plan file. Everything else in §§16-21
 exists for runs that outlive a context or share a file. What scales with the
 work is the paperwork; the gates are the same at every size.
