@@ -78,12 +78,21 @@ scale down; the paperwork does.
 ### The pre-run review loop (§2a)
 
 The loop is capped at **two rounds**. Stop earlier on no new criteria, then
-dispatch step one.
+dispatch step one. A T0 plan (§0) runs no agent review: it gets
+`check_citations.py` and no round.
 
-- Round 1 is the Opus source round, on the whole document. Round 2 is the
-  Sonnet consistency round. Its **single input** is the sections changed
-  since revision 1 (the fold-in), not the whole document (§21.4's prompt).
-  A reduced-form plan (§22) gets one round.
+- Round 1 is the Opus source round, on the whole document.
+- **The cut job** runs after round 1 and before the fold-in, as a separate
+  Sonnet pass, not the round-1 reviewer. Its prompt: "for each step, what
+  could the implementer decide alone?" Each answer is a decision to pin in
+  that step or a reason to leave it; both are recorded in §20.8, which is
+  where a later round and the owner read it. It cuts as well as adds: a
+  step that survives it is shorter or the same.
+- **Round 2 runs only when the fold-in changed a seam table row or an
+  ASSUMES LANDED line.** The test is a diff of the seam table (§20.4) and of
+  those lines between revision 1 and the fold-in: no changed row or line, no
+  round 2. Its **single input** is those rows and lines, not the whole
+  document (§21.4's prompt).
 - One **fresh** independent reviewer per round, given the document and
   **exactly one input** to hold it against (§21.4's prompt). Do not tell it
   what earlier rounds found or which round it is.
@@ -94,8 +103,9 @@ dispatch step one.
   (`planReview.source`, `planReview.consistency`, `planReview.cap`; defaults
   opus, sonnet, 2), read with
   `node <plugin>/src/hooks/review-config-cli.js plan-review`. The cap is not
-  an owner question and does not rise mid-run. One extra round is allowed only
-  with its reason recorded in §20.3.
+  an owner question and does not rise mid-run. `review-config-cli.js
+  plan-review` reports the cap; it does not stop a third round, so the
+  orchestrator holds it. No third round, under any wording.
   When that command prints `enabled: false`, skip the review loop and record
   the skip in §20.3.
 - **A NOT YET with material findings at round 2** means the plan is too large
@@ -125,14 +135,18 @@ makes it look more checked, not less.
 - Cite by symbol first, line second; give both branches where a plan spans two.
 - Prefer a fix that removes a claim over one that adds one. A fix longer than
   its finding is a smell.
+- A fold-in may not grow a step, except in its INTERFACES and ACCEPTANCE
+  fields (a shape line the finding showed missing). Growth anywhere else
+  goes back to the finding.
+- A new rule must name the rule it replaces. A rule that replaces nothing
+  is added to a document that is already over its caps.
 - The round after an internal-consistency round is always a source round —
   generally, never follow a fold-in with an input blind to what it wrote.
 - Treat a flagged claim about code as unverified until a source round or the
   checker has seen it.
 
 **The materiality bar.** Raise a finding only if it would change what gets
-built: a step's file set, a signature, a gate, the step order, or what an
-implementer does on reading the plan. Ask "and then what would be built
+built: a step's file set, a seam, the step order, or a GATE. Ask "and then what would be built
 differently?" — if the answer is nothing, it is not a finding. A round whose
 findings all fall below the bar **is a converged round**: record them as
 noted-not-actioned, stop, dispatch. Do not fold them in and run another

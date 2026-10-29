@@ -292,22 +292,32 @@ answers change the text it is reviewing.
   question the loop asks is whether it found a *kind* of thing that is new.
 - **The cap of two.** The maximum number of iterations is two, the default of
   `planReview.cap` in `sdlc-review.json`. It is not an owner question and it
-  does not rise mid-run. One extra round is allowed only with its reason
-  recorded in §20.3. Round 1 is the Opus source round on the whole document.
-  Round 2 is the Sonnet consistency round; its input is in §21.4. A
-  reduced-form plan (§22) runs one round. Evidence, 19 Oct 2026: plans of
+  does not rise mid-run. `review-config-cli.js plan-review` reports the cap
+  but does not stop a further round; the orchestrator holds it. No third
+  round, under any wording. Round 1 is the Opus source round on the whole document.
+  Then the cut job (below). Round 2 runs only when the fold-in changed a seam
+  table row or an ASSUMES LANDED line, scoped to those rows (§21.4). A T0
+  plan runs no agent review. Evidence, 19 Oct 2026: plans of
   150-450 KB went 3-5 review rounds and never converged; the one 86 KB plan
   converged in 3. A NOT YET with material findings at round 2 means the plan is
   too large or a design point is open. Split it by phase (`check_size.py`,
   §17) or return to the owner decisions; do not run a third round.
 
+**The cut job.** After round 1 and before the fold-in, a separate Sonnet
+pass (not the round-1 reviewer) is asked one question: "for each step, what
+could the implementer decide alone?" Each answer is either a decision to pin
+in that step or a reason to leave it open. Both go to §20.8 with the round's
+findings, which is where a later round and the owner read them. The pass
+cuts as well as adds. **Fold-in growth.** A fold-in may not grow a step except
+in its INTERFACES and ACCEPTANCE fields. **A new rule must name the rule it
+replaces.**
+
 **The bar for raising a finding.** Convergence is the goal and the cap is a
 failure boundary, not a target: a loop that runs to its cap has usually spent
 its last rounds finding better wording rather than new criteria. So the
 reviewer is given the bar before it starts, and the bar is materiality. A
-finding clears it if it would change what gets built — a step's file set, a
-signature, a gate, the order of the steps, or what an implementer does on
-reading the plan. It fails if the answer to "and then what would be built
+finding clears it if it changes a file set, a seam, the step order, or a
+GATE. It fails if the answer to "and then what would be built
 differently?" is nothing: a better sentence, a preference between two
 workable forms, a section that would read better reordered, a rule that is
 right and could be stated more strongly.
@@ -1650,9 +1660,9 @@ Dispatch: the model comes from the round's input (§2a). A source round runs on
 `model: "opus"` and its prompt carries a `TIER: opus: plan source review`
 line. An internal-consistency round runs on `model: "sonnet"`. Read both with
 `node <plugin>/src/hooks/review-config-cli.js plan-review`; the cap it prints
-is 2 by default. Round 1 is a source round on the whole document. Round 2 is a
-consistency round; its input form is in the prompt below. One extra round only with its reason
-recorded in §20.3.
+is 2 by default. Round 1 is a source round on the whole document. Round 2
+runs only when the fold-in changed a seam table row or an ASSUMES LANDED
+line; its input is those rows (the prompt below). No third round.
 
 ```
 You are reviewing <document path>, revision <n>, as a document. You are
@@ -1664,16 +1674,16 @@ and by whom>
 THE ONE INPUT YOU HOLD IT AGAINST:
 <exactly one of: the source material it claims to describe; the document
 itself, for internal consistency; a run artefact; the policy or spec
-register; the rules it claims to satisfy; for the round-2 consistency round,
-only the sections changed since revision 1 (the fold-in), pasted or named by
-heading, and not the whole document>
+register; the rules it claims to satisfy; for round 2, only the seam table
+rows and ASSUMES LANDED lines the fold-in changed, pasted, and not the whole
+document>
 
 WHAT TO CHECK — answer each, numbered:
 <this round's questions>
+Always include: for every artefact written, name its reader; do the shapes agree?
 
 THE BAR FOR RAISING ANYTHING. Raise a finding only if it would change what
-gets built: a step's file set, a signature, a gate, the order of the steps,
-or what an implementer does on reading this. Ask of each one "and then what
+gets built: a step's file set, a seam, the step order, or a GATE. Ask of each one "and then what
 would be built differently?" — if the answer is nothing, it is not a
 finding. A better sentence, a preference between two workable forms, a rule
 that could be stated more strongly: say the section is sound and move on.
