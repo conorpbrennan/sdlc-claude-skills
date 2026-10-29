@@ -293,8 +293,8 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     const read = () => JSON.parse(fs.readFileSync(mmFile, 'utf-8'));
     let r = mm(['show']);
     assert('main-model show, no file: exit 0, null', [r.status, JSON.parse(r.stdout).mainModel], [0, null]);
-    assert('main-model show, no file: the shipped default is the effective model',
-        [JSON.parse(r.stdout).effective, JSON.parse(r.stdout).source], ['sonnet', 'default']);
+    assert('main-model show, no file: no shipped default, so no effective model',
+        [JSON.parse(r.stdout).effective, JSON.parse(r.stdout).source], [null, 'none']);
     r = mm(['set', 'opus']);
     assert('main-model set creates the file', [r.status, read()], [0, { mainModel: 'opus' }]);
     fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'opus' }));
@@ -315,7 +315,7 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     assert('main-model show after off: no effective model, source off', [JSON.parse(r.stdout).effective, JSON.parse(r.stdout).source], [null, 'off']);
     fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku' }));
     r = JSON.parse(mm(['show']).stdout);
-    assert('main-model show, file without the key: default applies', [r.mainModel, r.effective, r.source], [null, 'sonnet', 'default']);
+    assert('main-model show, file without the key: no default, none', [r.mainModel, r.effective, r.source], [null, null, 'none']);
     fs.writeFileSync(mmFile, JSON.stringify({ round1: 'haiku', rules: [{ paths: ['a'] }], mainModel: 'off' }));
     fs.rmSync(mmFile);
     r = mm(['off']);
@@ -362,7 +362,7 @@ assert('hook MAIN_MODELS matches lib MODELS', hookModels && JSON.parse(hookModel
 const hookOff = /const MAIN_MODEL_OFF = '([^']*)'/.exec(hookSrc);
 assert('hook MAIN_MODEL_OFF matches lib MAIN_MODEL_OFF', hookOff && hookOff[1], cfg.MAIN_MODEL_OFF);
 const shipped = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'defaults', 'sdlc-review.json'), 'utf8'));
-assert('shipped default mainModel is a valid model', cfg.MODELS.includes(shipped.mainModel), true);
+assert('the plugin ships no mainModel: the main model is opt-in', shipped.mainModel, undefined);
 
 console.log('\n====================');
 console.log(`Results: ${passed} passed, ${failed} failed`);

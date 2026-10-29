@@ -5,9 +5,8 @@ description: Set, show or clear the persistent main-session model (haiku, sonnet
 # Main-session model
 
 `mainModel` in `~/.claude/sdlc-review.json` is the model the main session
-starts on. The plugin ships `defaults/sdlc-review.json` with `mainModel` set
-to `sonnet`, used whenever the user file has no `mainModel` key, so a fresh
-install runs on Sonnet with no setup. At session start the SessionStart hook copies it into `model` in
+starts on. It is opt-in: the plugin ships no `mainModel`, so a fresh install
+leaves the `model` in settings.json alone until you run this command. At session start the SessionStart hook copies it into `model` in
 `~/.claude/settings.json` when the two differ. The owner's settings.json may
 be reset on container start; `sdlc-review.json` is not, so this sticks.
 
@@ -20,7 +19,7 @@ be reset on container start; `sdlc-review.json` is not, so this sticks.
 `<plugin>` is `${CLAUDE_PLUGIN_ROOT}`.
 
 1. Empty: run `node <plugin>/src/hooks/review-config-cli.js main-model show`.
-   Print `effective` (the model the next session start applies; null means none) and `source` (`user`, `default` for the shipped Sonnet, `off` or `none`) from its JSON and its warnings. Then
+   Print `effective` (the model the next session start applies; null means none) and `source` (`user`, `default` for a model the plugin ships (none today), `off` or `none`) from its JSON and its warnings. Then
    print the `model` key of `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json`
    (`grep '"model"'` is enough; say "not set" if absent). If the
    `ANTHROPIC_MODEL` environment variable is set (test with

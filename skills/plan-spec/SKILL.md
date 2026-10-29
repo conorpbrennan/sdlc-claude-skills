@@ -1,8 +1,7 @@
 ---
 name: plan-spec
 description: Write an implementation plan that sub-agents can build unattended - one step per commit, one review per commit - or run a plan that already exists. Use when work is large enough to need a plan before code, when asked to plan or orchestrate a multi-step build, or when dispatching implementers and reviewers step by step. Carries the step form, the plan skeleton, the pre-run review loop and the four dispatch prompts. Not for search-shaped work (research, exploration, prototyping to find the design), where the step list cannot be fixed before dispatch.
-user_invocable: true
-arg_spec: "[write <slug> | run <plan path> | check <plan path>]"
+argument-hint: "[write <slug> | run <plan path> | check <plan path>]"
 ---
 
 # Plan specification

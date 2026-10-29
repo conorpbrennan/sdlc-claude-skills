@@ -15,7 +15,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/session-start-feature.js\"",
-            "timeout": 2000
+            "timeout": 10
           }
         ]
       }
@@ -27,12 +27,12 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/enforce-review-implementer.js\"",
-            "timeout": 1000
+            "timeout": 5
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/orchestrator-mode.js\"",
-            "timeout": 1000
+            "timeout": 5
           }
         ]
       }
@@ -44,32 +44,32 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-commit-feature.js\"",
-            "timeout": 3000
+            "timeout": 10
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-commit-review.js\"",
-            "timeout": 2000
+            "timeout": 30
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pending-review-gate.js\"",
-            "timeout": 2000
+            "timeout": 10
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/enforce-co-author.js\"",
-            "timeout": 1000
+            "timeout": 5
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-commit-hygiene.js\"",
-            "timeout": 200000
+            "timeout": 300
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-pr-verify.js\"",
-            "timeout": 2000
+            "timeout": 10
           }
         ]
       },
@@ -79,7 +79,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/agent-tier-gate.js\"",
-            "timeout": 1000
+            "timeout": 5
           }
         ]
       },
@@ -88,7 +88,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/orchestrator-mode.js\"",
-            "timeout": 1000
+            "timeout": 5
           }
         ],
         "matcher": "Edit|Write|MultiEdit|NotebookEdit"
@@ -101,17 +101,17 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/post-commit-notify.js\"",
-            "timeout": 10000
+            "timeout": 10
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/claude-attribution-note.js\"",
-            "timeout": 5000
+            "timeout": 5
           },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/post-commit-feature.js\"",
-            "timeout": 3000
+            "timeout": 10
           }
         ]
       },
@@ -120,7 +120,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/orchestrator-mode.js\"",
-            "timeout": 2000
+            "timeout": 5
           }
         ],
         "matcher": "Read|Bash|Skill|Agent"
@@ -131,7 +131,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/read-trim.js\"",
-            "timeout": 2000
+            "timeout": 10
           }
         ]
       }

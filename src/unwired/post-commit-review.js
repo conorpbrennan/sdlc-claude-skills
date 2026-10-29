@@ -6,7 +6,7 @@ const { execSync } = require('child_process');
 
 // Per repository and per worktree, never $HOME -- see lib/review-markers.js. A
 // pending review is a fact about one commit in one repository.
-const reviewMarkers = require('./lib/review-markers');
+const reviewMarkers = require('../hooks/lib/review-markers');
 const PENDING_FILE = reviewMarkers.markerPaths(process.cwd()).pending;
 
 // No repository located -> nothing to record. Exit rather than print a remedy
@@ -21,7 +21,7 @@ if (!input.includes('git commit') || input.includes('--amend')) {
 
 // One shared definition, in lib/source-files.js -- four hooks used to keep their
 // own copy, and all four were blind to shell. See that file for what changed.
-const sourceFiles = require('./lib/source-files');
+const sourceFiles = require('../hooks/lib/source-files');
 const { SOURCE_EXTENSIONS, EXCLUDE_PATTERNS } = sourceFiles;
 
 function isInsideGitRepo() {

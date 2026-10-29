@@ -32,8 +32,8 @@ export SDLC_REVIEW_CONFIG_USER
 : > "$TIMING_LOG_PATH"
 
 shopt -s nullglob
-JS_FILES=(src/hooks/test-*.js src/test-*.js tools/test-*.js)
-SH_FILES=(src/hooks/test-*.sh src/test-*.sh tools/test-*.sh)
+JS_FILES=(src/hooks/test-*.js src/unwired/test-*.js src/test-*.js tools/test-*.js)
+SH_FILES=(src/hooks/test-*.sh src/unwired/test-*.sh src/test-*.sh tools/test-*.sh)
 # Fail closed: a root with no test files is a wrong ROOT, not a green run.
 if [ "$(( ${#JS_FILES[@]} + ${#SH_FILES[@]} ))" -eq 0 ]; then
     echo "no test files under $ROOT" >&2
