@@ -98,6 +98,7 @@ test('no settings file: created with only statusLine, scripts copied', () => {
         assert.deepStrictEqual(doc, { statusLine: { type: 'command', command: OWN_COMMAND(s), padding: 0 } });
         assert.ok(fs.existsSync(s.script));
         assert.ok(fs.existsSync(path.join(s.data, 'statusline', 'lib', 'day-cost.js')));
+        assert.ok(fs.existsSync(path.join(s.data, 'statusline', 'lib', 'pending-model.js')));
         assert.deepStrictEqual(backupsOf(s), []);
         assert.ok(/next session|refresh/.test(r.out), r.out);
     } finally { s.cleanup(); }

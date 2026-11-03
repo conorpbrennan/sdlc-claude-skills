@@ -6,6 +6,7 @@
 const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { dayCost } = require('./lib/day-cost.js');
+const { pendingModel } = require('./lib/pending-model.js');
 
 const GIT_TIMEOUT_MS = 1000;
 const NO_GIT = 'no git';
@@ -13,6 +14,8 @@ const UNKNOWN_MODEL = '?';
 const AMBER_USED = 20;
 const RED_USED = 30;
 const MILLION = 1000000;
+const PENDING_SUFFIX = 'next session';
+const PENDING_ARROW = '\u2192';
 
 const GREEN = '\x1b[32m';
 const AMBER = '\x1b[33m';
@@ -94,10 +97,24 @@ function usedColour(usedPct) {
     return GREEN;
 }
 
+/**
+ * Builds the pending-model note, or '' when there is none.
+ *
+ * @param {string|null} pending The model the next session starts on.
+ * @param {string} running The running model's display name or id.
+ * @returns {string} The note, e.g. "opus next session" with an arrow, or ''.
+ */
+function pendingNote(pending, running) {
+    if (!pending || running.toLowerCase().includes(pending)) return '';
+    return ` ${DIM}${PENDING_ARROW} ${pending} ${PENDING_SUFFIX}${RESET}`;
+}
+
 function render(input, options = {}) {
     const data = input && typeof input === 'object' ? input : {};
     const c = data.context_window && typeof data.context_window === 'object' ? data.context_window : {};
     const model = firstSet((data.model || {}).display_name, (data.model || {}).id) || UNKNOWN_MODEL;
+    const runningId = String(firstSet((data.model || {}).id, '')) + ' ' + String(firstSet((data.model || {}).display_name, ''));
+    const pending = options.pendingModel === undefined ? pendingModel() : options.pendingModel;
     const cost = Number(firstSet((data.cost || {}).total_cost_usd, 0));
     const dirRaw = firstSet((data.workspace || {}).current_dir, data.cwd);
     const dir = typeof dirRaw === 'string' ? dirRaw : '';
@@ -127,7 +144,7 @@ function render(input, options = {}) {
 
     const branchStr = `${MAGENTA}${branchOf(dir) || NO_GIT}${RESET}`;
     const sep = `${DIM} | ${RESET}`;
-    return [ctxStr, `${CYAN}${model}${RESET}`, costStr, branchStr].join(sep);
+    return [ctxStr, `${CYAN}${model}${RESET}${pendingNote(pending, runningId)}`, costStr, branchStr].join(sep);
 }
 
 // Reads all of stdin.
