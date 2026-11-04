@@ -150,7 +150,7 @@ exception is the opt-in `/sdlc:statusline install`, which writes the
 | Source | At run time | Purpose |
 |---|---|---|
 | `.claude-plugin/plugin.json`, `marketplace.json` | read by `/plugin` | the `sdlc` plugin, served by the `sdlc-claude-skills` marketplace |
-| `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer` | the three workflow skills |
+| `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer`, `sdlc:english-prose` | the four skills |
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
 | `agents/implementer.md` | `sdlc:implementer` (Sonnet, 80 turns) | the plan-step implementer; at 60 turns it wraps up, past 80 it reports PARTIAL |
 | `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
@@ -181,6 +181,14 @@ per commit, one review per commit — or runs a plan that already exists.
 Carries the step form, the plan skeleton, the pre-run review loop and the
 four dispatch prompts. Not for search-shaped work, where the step list
 cannot be fixed before dispatch.
+
+### `english-prose`
+`[text or file path]`
+
+Writes or rewrites text in plain, simple English in Conor's tone: terse,
+direct, finding first. For anything another person will read — reports,
+DBA or infra messages, incident write-ups, summaries, emails, Teams or chat
+replies. Not for internal working notes, code, or commit messages.
 
 ### `code-review-pre-commit`
 `[files|staged] [--fresh] [--deep]`

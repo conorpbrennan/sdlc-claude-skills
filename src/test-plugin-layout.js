@@ -292,8 +292,8 @@ assert('every hook script in src/hooks/ is wired in hooks.json',
 
 console.log('\nSkills at the plugin layout paths:');
 const skillDirs = listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name).sort();
-assert('skills/ holds the three shipped skills', skillDirs,
-    ['code-review-implementer', 'code-review-pre-commit', 'plan-spec']);
+assert('skills/ holds the four shipped skills', skillDirs,
+    ['code-review-implementer', 'code-review-pre-commit', 'english-prose', 'plan-spec']);
 for (const dir of skillDirs) {
     assert(`skills/${dir}/SKILL.md name matches its directory`,
         frontmatterName(path.join(SKILLS_DIR, dir, 'SKILL.md')), dir);
