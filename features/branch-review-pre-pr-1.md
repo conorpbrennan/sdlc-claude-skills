@@ -18,14 +18,18 @@
 - ## History
 - .claude-plugin/plugin.json
 - .claude/branch-review-repos.json.example
+- 2026-11-13 `18481d8` — branch-review S2: library that reads the branch-review repos config
 - 2026-11-13 `d073a88` — branch-review S1: library that resolves the base, hashes the branch diff and judges a branch marker
 - docs/plans/branch-review-pre-pr.md
 - run/reports/S1-implementer-1.md
 - run/reports/S2-implementer-1.md
+- run/reports/S3-implementer-1.md
 - run/tracker.md
+- src/hooks/lib/branch-report.js
 - src/hooks/lib/branch-repos-config.js
 - src/hooks/lib/branch-review.js
 - src/hooks/lib/review-markers.js
+- src/hooks/test-branch-report.js
 - src/hooks/test-branch-repos-config.js
 - src/hooks/test-branch-review.js
 - src/hooks/test-review-markers.js
