@@ -283,7 +283,7 @@ const AGENTS_DIR = path.join(ROOT, 'agents');
 
 console.log('\nsrc/hooks/ holds only wired hooks:');
 // Helpers that are not hooks: CLIs the commands call, and a shared logger.
-const NOT_HOOKS = ['record-verification.js', 'review-config-cli.js', 'steps-cli.js', 'timing-log.js'];
+const NOT_HOOKS = ['branch-review-cli.js', 'record-verification.js', 'review-config-cli.js', 'steps-cli.js', 'timing-log.js'];
 const wiredScripts = Object.values(hooksByEvent || {}).flat().flatMap(b => b.hooks.map(h => (PLUGIN_COMMAND.exec(h.command) || [])[1]));
 const hookFiles = listDir(path.join(ROOT, 'src', 'hooks'))
     .filter(e => e.isFile() && e.name.endsWith('.js') && !e.name.startsWith('test-') && !NOT_HOOKS.includes(e.name))
