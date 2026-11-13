@@ -16,6 +16,16 @@
 ## Files involved
 
 - ## History
+- 2026-11-13 `e279da8` — branch-review S7: the /sdlc:branch-review skill, command and reviewer prompt
+  - .claude-plugin/plugin.json
+  - commands/branch-review.md
+  - run/reports/S7-implementer-1.md
+  - run/tracker.md
+  - skills/branch-review/SKILL.md
+  - skills/branch-review/reviewer-prompt.md
+  - src/test-branch-review-skill.js
+  - src/test-plugin-layout.js
+
 - .claude-plugin/plugin.json
 - .claude/branch-review-repos.json.example
 - .claude/sdlc-review.json.example

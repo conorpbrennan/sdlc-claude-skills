@@ -1,6 +1,6 @@
 RUN: docs/plans/branch-review-pre-pr.md, revision 1 (T1, 10 steps: S1 S2 S3 S4 S5 S6 S6b S6c S7 S8). Branch: branch-review-pre-pr-1. Started: 2026-11-12.
 BUDGET: plan total 65,655 bytes; per-step budgets in each step block (about 30 tool calls each). Spent: S1 about 14 calls against 30.
-IN FLIGHT: S7, implementer round 1 dispatched.
+IN FLIGHT: S8, implementer round 1 dispatched.
 TREE: staged nothing; unstaged: features/statusline-windows-datadir.md (unrelated, the owner's, never stage it). Worktrees open: none.
 OWNER AUTHORISATION (2026-11-12, this session): stage, commit after each step's review PASS, dispatch fix agents, run the whole plan. Never push, never open a PR. Stop after two FAILs on one step.
 SESSION NOTE: the run lives in /home/coder/dev/sdlc-claude-skills on branch branch-review-pre-pr-1 (cut from main 90caf92). The sibling worktree /home/coder/dev/sdlc-branch-review-pre-pr and its branch branch-review-pre-pr are abandoned and left untouched. The first attempt to commit S1 there was blocked by PRE_COMMIT_GATE (different repo from the one the hook inspects). Reviewers run on the staged diff in this repo, not in a throwaway worktree (the owner's rule allows a worktree only on request).
@@ -104,7 +104,24 @@ STEP S6c: PASS
   budget:  about 14 calls against about 30
   next for S7: route on/off/status to enable/disable/status; status has no ok field; enable and disable print { ok:false, error } and exit 1 on refusal; writing test text with a commit-shaped string through bash trips the classifier, use the file tool.
 
+STEP S7: PASS
+  commit:  e279da8
+  gate:    test-branch-review-skill 28/0; test-plugin-layout 172/0; test-suite-isolation 57/0; `claude plugin validate .` rc 0; grep -c BRANCH_GATE on the prompt prints 2 (report S7-implementer-1.md)
+  reviews: code-reviewer, round 1, PASS, about 1 minute; 0 critical, 0 important, 5 advisory (see close-out). Reviewer followed the prompt literally to build reports: clean PASS exit 0; CONFIRMED CRITICAL with a FAIL trailer exit 1; CONFIRMED CRITICAL with a PASS trailer exit 1 (parser overrides the trailer); bare None sections exit 1. Every field the skill reads is in the real plan output.
+  reports: run/reports/S7-implementer-1.md
+  stage:   step files, plugin.json (1.0.98), tracker, report
+  files:   touched as declared (skills/branch-review/SKILL.md, reviewer-prompt.md, commands/branch-review.md, src/test-branch-review-skill.js, src/test-plugin-layout.js)
+  disagreements: none. The skill test calls isolateGitEnv() though it spawns no git (the isolation guard requires it).
+  decisions: four test blocks; non-over-cap pass scope is "all files"; SKILL.md fills <repo>, <base>, <head> from plan fields toplevel, base, head and tests overCap; the prompt mentions TDD_GATE inline only, never at a line start.
+  budget:  about 14 calls against about 35
+  next for S8: README and CLAUDE.md do not list the skill and command yet; BARE_INVOCATION now includes branch-review so a bare /branch-review in docs fails the layout test, write /sdlc:branch-review.
+
 CLOSE-OUT ITEMS (batch into one close-out step, plan 7 item): 
+  - S7: SKILL.md argument-hint advertises [on | off | status] but only the command handles them; drop the hint or say so.
+  - S7: SKILL.md step 5 says "rerun once ... as round 2" while step 5 also relies on maxRounds; word it as up to maxRounds rounds.
+  - S7: root-file group scope reads "files under foo.js only"; the skill does not say to pass the group's files list to the reviewer.
+  - S7: src/test-branch-review-skill.js checks the Q headings but not the exact titles.
+  - OPEN CHECK (S7/S5): the marker recipe uses `git -C '<top>'` inside $(...). The S5 reviewer ran it verbatim and it worked, but the owner's rule says PRE_COMMIT_GATE blocks `git -C`. Verify in the real harness (section 7 item 6 #8) that Claude can run the printed recipe without the gate blocking it.
   - S6b: add a test row that stubs fs.renameSync to throw and asserts ok:false, config bytes equal, no *.tmp left (reviewer advisory, missing test).
   - S3: a URL with a port counts as file:line evidence; optional tighter FILE_LINE plus a row.
   - S4: table rows for a string and a float maxChangedLines.

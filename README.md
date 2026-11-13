@@ -9,7 +9,7 @@ engineering workflow lives apart from the domain skills.
 
 Plugin components are namespaced, so commands and skills are invoked with
 the `sdlc:` prefix: `/sdlc:feature`, `/sdlc:feature-new`, `/sdlc:commit-prep`,
-`/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:orchestrate`, `/sdlc:handoff`,
+`/sdlc:review-timing`, `/sdlc:verify`, `/sdlc:branch-review`, `/sdlc:orchestrate`, `/sdlc:handoff`,
 `/sdlc:model-spend`, `/sdlc:fit`, `/sdlc:main-model`, `/sdlc:statusline`,
 `/sdlc:plan-spec`, `/sdlc:code-review-pre-commit` and
 `/sdlc:code-review-implementer`. The review
@@ -129,7 +129,8 @@ Check the manifests before pushing with `claude plugin validate .`.
   verify          /sdlc:verify ─► verifier sub-agent ─► VERIFY_GATE: PASS|FAIL
     │                             recorder writes ## Verification + marker
     ▼
-  pull request    gh pr create (gated per repo by pre-pr-verify.js)
+  pull request    gh pr create (gated per repo by pre-pr-verify.js and
+                  pre-pr-branch-review.js)
 ```
 
 A completed review never commits on your behalf. It writes the marker; the
@@ -198,6 +199,20 @@ only once no Python file differs from its staged copy and no test file or
 directory is the one it cannot see). Not for ad-hoc PR review — use the
 built-in `/code-review` for that.
 
+### `branch-review`
+`[on [--mode advisory|enforce] | off | status]`
+
+Reviews the whole branch against its base before the pull request. One
+fresh `code-reviewer-deep` sub-agent reads the changed files whole and looks
+for defects that only show across files. A CLI plans the review and checks
+each report. On PASS the skill writes the marker that `pre-pr-branch-review.js`
+reads. It does not commit, push or open the PR. `/sdlc:branch-review
+on|off|status` lists or unlists the current repo in
+`~/.claude/branch-review-repos.json`; the step switch is
+`/sdlc:steps off branch-review`. Settings are the `branchReview` keys in
+`sdlc-review.json`: `model` (opus), `maxRounds` (2) and `maxChangedLines`
+(25000).
+
 ### `code-review-implementer`
 `[all|critical|important|advisory|<item-numbers>]`
 
@@ -222,6 +237,7 @@ runs the tests. Use after a `TDD_GATE: FAIL`, before the rerun.
 | `/sdlc:fit [--days N] [--json]` | Usage fit from local transcripts: context size, resets, model mix, cache backend, and what each lever would have saved on your own history. Counterfactuals at list prices, not forecasts. |
 | `/sdlc:main-model [haiku\|sonnet\|opus\|off]` | Show or set the persistent main-session model (`mainModel` in `~/.claude/sdlc-review.json`; unset by default, so opt-in). `off` stores an explicit opt-out. |
 | `/sdlc:statusline [install\|remove\|preview] [force]` | Install or remove the sdlc status line. No argument previews and writes nothing. See [Status line](#status-line). |
+| `/sdlc:branch-review [on [--mode advisory\|enforce] \| off \| status]` | Review the whole branch against its base with a fresh reviewer, and on PASS write the branch-review marker. `on`, `off` and `status` list, unlist or show the current repo in `~/.claude/branch-review-repos.json`. Never commits or opens the PR. |
 | `/verify` | Check the branch against its `## Acceptance` criteria: dispatches the `verifier` sub-agent, then records the result in the feature record and, on PASS, writes `.git/.claude-last-verify`. Needs a clean tree. Never commits or opens the PR. |
 
 ---
@@ -245,6 +261,7 @@ in order, cheapest rejection first.
 | `enforce-co-author.js` | PreToolUse | Attribution trailer |
 | `pre-commit-hygiene.js` | PreToolUse | ruff + targeted pytest in opted-in repos |
 | `pre-pr-verify.js` | PreToolUse | On `gh pr create` in a repo listed in `verify-repos.json`: a notice (advisory, the default) or a block (enforce) when the verification is missing or stale |
+| `pre-pr-branch-review.js` | PreToolUse | On `gh pr create` in a repo listed in `branch-review-repos.json`: a notice (advisory, the default) or a block (enforce) when the branch review is missing, stale, empty or unreadable |
 | `post-commit-notify.js`, `claude-attribution-note.js`, `post-commit-feature.js` | PostToolUse | Notification, attribution note, sha-stamped feature history |
 
 `stop-review-trigger.js`, `post-commit-review.js` and `protect-user-dir.js` are not wired. They live in `src/unwired/` with their tests, so `src/hooks/` holds only wired hooks (a layout test checks it).
@@ -435,7 +452,7 @@ Main-session model. `mainModel` (`haiku`, `sonnet` or `opus`) in `~/.claude/sdlc
 ## Configuration
 
 ### `~/.claude/sdlc-review.json`
-Model steering: `round1`, `round2`, `maxRounds`, `planReview`, `orchestrator.bashNudge`, path `rules`, `mainModel` and `steps` (which workflow steps are on; see [Turning steps off](#turning-steps-off)). A repo file `<repo>/.claude/sdlc-review.json` layers over it, except `mainModel`, which is read from the user file only. Template: `.claude/sdlc-review.json.example`. Details under [Model steering](#model-steering).
+Model steering: `round1`, `round2`, `maxRounds`, `planReview`, `branchReview` (`model`, `maxRounds`, `maxChangedLines`), `orchestrator.bashNudge`, path `rules`, `mainModel` and `steps` (which workflow steps are on; see [Turning steps off](#turning-steps-off)). A repo file `<repo>/.claude/sdlc-review.json` layers over it, except `mainModel`, which is read from the user file only. Template: `.claude/sdlc-review.json.example`. Details under [Model steering](#model-steering).
 
 ### `~/.claude/hygiene-repos.json`
 Per-repo opt-in for the hygiene gate: `setup` shell lines plus a list of
@@ -488,6 +505,32 @@ acceptance criteria. Committing the feature record that `/sdlc:verify` writes
 keeps it fresh. Any other committed change, or a criteria edit, makes it
 stale. Only `gh pr create` is gated: not `git push`, not `gh pr merge`, not a
 PR opened from the web.
+
+### `~/.claude/branch-review-repos.json`
+Per-repo opt-in for `pre-pr-branch-review.js`, keyed by git toplevel:
+`{ "version": 1, "repos": { "<toplevel>": { "mode": "advisory", "base": "origin/main" } } }`.
+The `BRANCH_REVIEW_REPOS_CONFIG` environment variable overrides the path.
+`/sdlc:branch-review on|off|status` edits the entry for the current repo.
+A repo not listed is not gated.
+
+- `mode`: `advisory` (the default, and what a missing `mode` means) or
+  `enforce`. Advisory: `gh pr create` runs. When the review is missing,
+  stale, empty or unreadable, the user sees a notice. Claude does not see it;
+  Claude learns the rule from the session instructions. Enforce: the same
+  states block `gh pr create`, and the block names the fix.
+- `base`: the ref the branch is compared with. A missing `base` means the ref
+  `origin/HEAD` points at. If neither resolves, the state is `no-base`.
+- Fail-closed in every mode: a config that cannot be read or parsed, and an
+  invalid `mode` or `base` in the repo's own entry. The mode cannot be known,
+  so the PR is blocked.
+
+The marker is `.git/.claude-last-branch-review`. It has four lines: `PASS`,
+the HEAD sha, a hash of the branch diff against the base, and a tag
+(`code-reviewer-deep:round<n>`). The hook never runs the review and never
+writes the marker. The block text carries a command that records it. A change
+to the branch diff makes the marker stale. A change to `features/*.md` does
+not, because the hash leaves those files out. Only `gh pr create` is gated:
+not `git push`, not `gh pr merge`, not a PR opened from the web.
 
 ### `~/.claude/review-policy.json`
 Per-repo fast-path tuning for `pre-commit-review.js`:
@@ -587,6 +630,7 @@ Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`. Repo file
 | `review` | yes | `review-gate`, `pending-review-gate`, `plan-review` | None. `pending-review-gate.js` is dormant. |
 | `hygiene` | no | `pre-commit-hygiene` | It is opt-in. Remove the repo from `~/.claude/hygiene-repos.json`. For one commit, use the emergency override above. |
 | `verification` | no | `pre-pr-verify` | It is opt-in. Remove the repo from `~/.claude/verify-repos.json`, or set its `mode` to `advisory` so it warns and never blocks. |
+| `branch-review` | no | `pre-pr-branch-review` | It is opt-in. Remove the repo from `~/.claude/branch-review-repos.json`, set its `mode` to `advisory`, or run `/sdlc:branch-review off` in the repo. `/sdlc:steps off branch-review` switches the step off. |
 | `commit-conventions` | yes | `enforce-co-author`, `claude-attribution-note`, `post-commit-notify` | None. |
 | `standalone` | no | `main-model` | `/sdlc:main-model off`, which sets `"mainModel": "off"` in the user file. |
 | `standalone` | no | `cache-ttl` | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
