@@ -46,6 +46,7 @@ const AREAS = Object.freeze({
     'review': Object.freeze({ guard: true, steps: Object.freeze(['review-gate', 'pending-review-gate', 'plan-review']) }),
     'hygiene': Object.freeze({ guard: false, steps: Object.freeze(['pre-commit-hygiene']) }),
     'verification': Object.freeze({ guard: false, steps: Object.freeze(['pre-pr-verify']) }),
+    'branch-review': Object.freeze({ guard: false, steps: Object.freeze(['pre-pr-branch-review']) }),
     'commit-conventions': Object.freeze({ guard: true, steps: Object.freeze(['enforce-co-author', 'claude-attribution-note', 'post-commit-notify']) }),
     'standalone': Object.freeze({ guard: false, steps: Object.freeze(['main-model', 'cache-ttl', 'session-instructions', 'marketplace-autoupdate']) }),
 });
@@ -54,6 +55,7 @@ const AREAS = Object.freeze({
 const OPT_IN_DETAIL = Object.freeze({
     'pre-commit-hygiene': 'runs only in repos listed in ~/.claude/hygiene-repos.json',
     'pre-pr-verify': 'runs only in repos listed in ~/.claude/verify-repos.json',
+    'pre-pr-branch-review': 'runs only in repos listed in ~/.claude/branch-review-repos.json',
 });
 
 const FEATURE_STEPS = Object.freeze(['session-start-feature', 'pre-commit-feature', 'post-commit-feature']);

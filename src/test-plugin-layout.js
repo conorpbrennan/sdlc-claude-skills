@@ -41,6 +41,7 @@ const EXPECTED_WIRING = {
                 ['command', 'enforce-co-author.js', 5],
                 ['command', 'pre-commit-hygiene.js', 300],
                 ['command', 'pre-pr-verify.js', 10],
+                ['command', 'pre-pr-branch-review.js', 15],
             ],
         },
         { matcher: 'Agent', hooks: [['command', 'agent-tier-gate.js', 5]] },
