@@ -202,9 +202,11 @@ built-in `/code-review` for that.
 ### `branch-review`
 `[on [--mode advisory|enforce] | off | status]`
 
-Reviews the whole branch against its base before the pull request. One
-fresh `code-reviewer-deep` sub-agent reads the changed files whole and looks
-for defects that only show across files. A CLI plans the review and checks
+Reviews the whole branch against its base before the pull request. Under
+the size cap the review is one pass: one fresh `code-reviewer-deep` sub-agent
+reads the changed files whole and looks for defects that only show across
+files. Over the cap it runs one pass per directory, then a cross-file pass
+over all changed files. A CLI plans the review and checks
 each report. On PASS the skill writes the marker that `pre-pr-branch-review.js`
 reads. It does not commit, push or open the PR. `/sdlc:branch-review
 on|off|status` lists or unlists the current repo in
@@ -261,7 +263,7 @@ in order, cheapest rejection first.
 | `enforce-co-author.js` | PreToolUse | Attribution trailer |
 | `pre-commit-hygiene.js` | PreToolUse | ruff + targeted pytest in opted-in repos |
 | `pre-pr-verify.js` | PreToolUse | On `gh pr create` in a repo listed in `verify-repos.json`: a notice (advisory, the default) or a block (enforce) when the verification is missing or stale |
-| `pre-pr-branch-review.js` | PreToolUse | On `gh pr create` in a repo listed in `branch-review-repos.json`: a notice (advisory, the default) or a block (enforce) when the branch review is missing, stale, empty or unreadable |
+| `pre-pr-branch-review.js` | PreToolUse | On `gh pr create` in a repo listed in `branch-review-repos.json`: a notice (advisory, the default) or a block (enforce) when the branch review is missing, stale, empty or unreadable, or the base is unresolved (`no-base`) or HEAD is detached (`detached`) |
 | `post-commit-notify.js`, `claude-attribution-note.js`, `post-commit-feature.js` | PostToolUse | Notification, attribution note, sha-stamped feature history |
 
 `stop-review-trigger.js`, `post-commit-review.js` and `protect-user-dir.js` are not wired. They live in `src/unwired/` with their tests, so `src/hooks/` holds only wired hooks (a layout test checks it).
@@ -519,7 +521,7 @@ A repo not listed is not gated.
   Claude learns the rule from the session instructions. Enforce: the same
   states block `gh pr create`, and the block names the fix.
 - `base`: the ref the branch is compared with. A missing `base` means the ref
-  `origin/HEAD` points at. If neither resolves, the state is `no-base`.
+  `origin/HEAD` points at. If the base does not resolve to a commit, the state is `no-base`.
 - Fail-closed in every mode: a config that cannot be read or parsed, and an
   invalid `mode` or `base` in the repo's own entry. The mode cannot be known,
   so the PR is blocked.

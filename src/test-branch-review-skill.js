@@ -46,6 +46,8 @@ console.log('reviewer-prompt.md: headings and trailer:');
     ok('holds the threat-model words', ['ADVISORY', 'honest mistakes', 'not adversarial'].every(p => prompt.includes(p)));
     ok('has no TDD_GATE trailer line', !TDD_TRAILER_LINE.test(prompt));
     ok('overrides the containing-function rule', prompt.includes('containing function only') && prompt.includes('git show HEAD:'));
+    const TITLES = ['Handoffs between files', 'Where two writers meet', 'Timing', 'Repeated requests in flight', 'Flags and modes', 'Tests', 'Anything else spanning files'];
+    ok('exact Q titles', JSON.stringify(headings.map(h => h.replace(/^## Q\d /, ''))) === JSON.stringify(TITLES), headings.join('|'));
     ok('never mentions a round number', !/round\s*\d/i.test(prompt));
 }
 

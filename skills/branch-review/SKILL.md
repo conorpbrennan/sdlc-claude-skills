@@ -1,7 +1,7 @@
 ---
 name: branch-review
 description: Review the whole branch against its base before the pull request, with a fresh reviewer that reads changed files whole and looks for defects that only show across files. Records the review marker that the gh pr create gate checks. Use before opening a PR on a repo where the branch-review gate is on.
-argument-hint: "[on [--mode advisory|enforce] | off | status]"
+argument-hint: "[no arguments]"
 ---
 
 # Branch review
@@ -25,7 +25,8 @@ file. The reviewer criteria file is `<plugin>/agents/code-reviewer.md`.
      sub-agent with `model` from the plan, the filled prompt, and the absolute
      path of `<plugin>/agents/code-reviewer.md`. `<pass scope>` is "all files".
    - Over the cap: one pass per entry of `groups`, with `<pass scope>` "files
-     under <dir> only". Then one cross-file pass over all `files`, with
+     under <dir> only". For a group of root files, pass the group's `files`
+     list in the reviewer scope. Then one cross-file pass over all `files`, with
      `<pass scope>` "all files, interactions across directories only". Each
      pass is a fresh sub-agent. Run them one after another. A round is the
      whole set of passes.
@@ -40,8 +41,8 @@ file. The reviewer criteria file is `<plugin>/agents/code-reviewer.md`.
    Then stop. Do not commit, push or open the PR.
 5. FAIL: show the findings to the user. Fix only with the user's permission
    (or a standing authorisation), through a fresh fix agent, never the
-   reviewer. Then rerun once on a fresh reviewer as round 2. This is the
-   two-round stop: after `maxRounds` FAILs, stop and ask the owner to choose
+   reviewer. Then rerun on a fresh reviewer, up to `maxRounds` rounds. This is
+   the two-round stop: after `maxRounds` FAILs, stop and ask the owner to choose
    between fixing and opening the PR with the gap named.
 
 ## Threat model
