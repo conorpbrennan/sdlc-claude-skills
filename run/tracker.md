@@ -1,6 +1,6 @@
 RUN: docs/plans/branch-review-pre-pr.md, revision 1 (T1, 10 steps: S1 S2 S3 S4 S5 S6 S6b S6c S7 S8). Branch: branch-review-pre-pr-1. Started: 2026-11-12.
 BUDGET: plan total 65,655 bytes; per-step budgets in each step block (about 30 tool calls each). Spent: S1 about 14 calls against 30.
-IN FLIGHT: S6, implementer round 1 dispatched.
+IN FLIGHT: S6b, implementer round 1 dispatched.
 TREE: staged nothing; unstaged: features/statusline-windows-datadir.md (unrelated, the owner's, never stage it). Worktrees open: none.
 OWNER AUTHORISATION (2026-11-12, this session): stage, commit after each step's review PASS, dispatch fix agents, run the whole plan. Never push, never open a PR. Stop after two FAILs on one step.
 SESSION NOTE: the run lives in /home/coder/dev/sdlc-claude-skills on branch branch-review-pre-pr-1 (cut from main 90caf92). The sibling worktree /home/coder/dev/sdlc-branch-review-pre-pr and its branch branch-review-pre-pr are abandoned and left untouched. The first attempt to commit S1 there was blocked by PRE_COMMIT_GATE (different repo from the one the hook inspects). Reviewers run on the staged diff in this repo, not in a throwaway worktree (the owner's rule allows a worktree only on request).
@@ -67,3 +67,15 @@ STEP S5: PASS
   decisions: unlocatable marker path reports error in the repo's mode; config errors, invalid mode and invalid base are labelled error, mode unknown, deny; empty state has fixed text and no recipe; recipe sits on its own line starting with printf; test-steps areas count 22 to 23.
   budget:  about 17 calls against about 40
   next for S6: the hook uses markerPaths(toplevel).branch; recipe text is "Fix: run <cmd>. ...\n<printf line>"; the header comment of pre-pr-branch-review.js can be quoted by later docs. Hook tests: 5 blocks, 19 rows, 51 assertions.
+
+STEP S6: PASS
+  commit:  e330e6a
+  gate:    test-branch-review-cli 43/0; test-plugin-layout, test-suite-isolation and `claude plugin validate .` rc 0; `plan` in this repo prints valid JSON (changedLines 2561 against origin/main, cap 25000) (report S6-implementer-1.md)
+  reviews: code-reviewer, round 1, PASS, about 1 minute; 0 critical, 0 important, 2 advisory (parseArgs ignores an unknown flag, harmless; reviewer found no staged test at exactly the cap although the implementer reported one, reviewer's hand run of the boundary held). Accepted, none acted on.
+  reports: run/reports/S6-implementer-1.md
+  stage:   step files, plugin.json (1.0.95), tracker, report
+  files:   touched as declared (branch-review-cli.js, test-branch-review-cli.js, test-plugin-layout.js)
+  disagreements: none.
+  decisions: a broken repos config adds its error as a warning and falls back to no base; plan fails ok:false if git rev-parse HEAD or git status cannot be read; failure order no repo, branch unreadable, detached, invalid config base, no base, unreadable diff, empty range; check-report takes exactly one positional.
+  budget:  about 13 calls against about 30
+  next for S6b: plan output on failure has only ok and error, callers check ok; overCap is changedLines > cap; a root file is its own group named by the file; dirty is true for untracked files too.
