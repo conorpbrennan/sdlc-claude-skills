@@ -25,6 +25,7 @@
 - 2026-11-13 `651c9b1` — branch-review S3: parser that settles a branch-review report's verdict
 - 2026-11-13 `d073a88` — branch-review S1: library that resolves the base, hashes the branch diff and judges a branch marker
 - 2026-11-13 `e330e6a` — branch-review S6: CLI that plans a branch review and checks a report
+- 2026-11-13 `ebc8847` — branch-review S6b: library that lists and unlists a repo in the branch-review repos config
 - docs/plans/branch-review-pre-pr.md
 - hooks/hooks.json
 - run/reports/S1-implementer-1.md
@@ -34,6 +35,7 @@
 - run/reports/S5-implementer-1.md
 - run/reports/S6-implementer-1.md
 - run/reports/S6b-implementer-1.md
+- run/reports/S6c-implementer-1.md
 - run/tracker.md
 - src/hooks/branch-review-cli.js
 - src/hooks/lib/branch-report.js

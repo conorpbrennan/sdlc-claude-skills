@@ -1,6 +1,6 @@
 RUN: docs/plans/branch-review-pre-pr.md, revision 1 (T1, 10 steps: S1 S2 S3 S4 S5 S6 S6b S6c S7 S8). Branch: branch-review-pre-pr-1. Started: 2026-11-12.
 BUDGET: plan total 65,655 bytes; per-step budgets in each step block (about 30 tool calls each). Spent: S1 about 14 calls against 30.
-IN FLIGHT: S6b, implementer round 1 dispatched.
+IN FLIGHT: S6c, implementer round 1 dispatched.
 TREE: staged nothing; unstaged: features/statusline-windows-datadir.md (unrelated, the owner's, never stage it). Worktrees open: none.
 OWNER AUTHORISATION (2026-11-12, this session): stage, commit after each step's review PASS, dispatch fix agents, run the whole plan. Never push, never open a PR. Stop after two FAILs on one step.
 SESSION NOTE: the run lives in /home/coder/dev/sdlc-claude-skills on branch branch-review-pre-pr-1 (cut from main 90caf92). The sibling worktree /home/coder/dev/sdlc-branch-review-pre-pr and its branch branch-review-pre-pr are abandoned and left untouched. The first attempt to commit S1 there was blocked by PRE_COMMIT_GATE (different repo from the one the hook inspects). Reviewers run on the staged diff in this repo, not in a throwaway worktree (the owner's rule allows a worktree only on request).
@@ -79,3 +79,21 @@ STEP S6: PASS
   decisions: a broken repos config adds its error as a warning and falls back to no base; plan fails ok:false if git rev-parse HEAD or git status cannot be read; failure order no repo, branch unreadable, detached, invalid config base, no base, unreadable diff, empty range; check-report takes exactly one positional.
   budget:  about 13 calls against about 30
   next for S6b: plan output on failure has only ok and error, callers check ok; overCap is changedLines > cap; a root file is its own group named by the file; dirty is true for untracked files too.
+
+STEP S6b: PASS
+  commit:  ebc8847
+  gate:    test-branch-repos-write 83/0; test-branch-repos-config 23/0; test-plugin-layout, test-suite-isolation and `claude plugin validate .` rc 0; three greps (no spawnSync/execFileSync/os.homedir in the lib, no sdlc-review.json/settings.json in the lib, no os.homedir in the test) and the untouched-files git diff check rc 0 (report S6b-implementer-1.md)
+  reviews: code-reviewer, round 1, PASS, about 1 minute; 0 critical, 0 important, 3 advisory. Reviewer forced a rename failure and a partial write by monkeypatching fs: no .tmp left, config unchanged. Missing test, not a bug.
+  reports: run/reports/S6b-implementer-1.md
+  stage:   step files, plugin.json (1.0.96), tracker, report
+  files:   touched as declared (branch-repos-write.js 137 lines, test-branch-repos-write.js)
+  disagreements: none. Lib is 137 lines against about 120 (Args/Returns comments).
+  decisions: temp name <config>.<pid>.tmp opened wx, mode copied, chmod after write; invalid existing mode with mode omitted becomes advisory; disableRepo refuses a matched non-object entry and writes nothing until its loop ends; ok:false results carry only ok and error; unchanged only when the old entry deep-equals the new one; disableRepo key is the first removed key or null.
+  budget:  about 7 calls against about 30
+  next for S6c: call enableRepo({configPath,toplevel,mode}) and disableRepo({configPath,toplevel}) and check ok first; callers pass the git toplevel; written JSON is re-indented to 2 spaces; ok:false means the file was not changed.
+
+CLOSE-OUT ITEMS (batch into one close-out step, plan 7 item): 
+  - S6b: add a test row that stubs fs.renameSync to throw and asserts ok:false, config bytes equal, no *.tmp left (reviewer advisory, missing test).
+  - S3: a URL with a port counts as file:line evidence; optional tighter FILE_LINE plus a row.
+  - S4: table rows for a string and a float maxChangedLines.
+  - S6: a staged test row at exactly the cap (implementer reported one; reviewer found none).

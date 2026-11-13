@@ -90,7 +90,7 @@ function newRepo(name) {
 
 // Args: args - CLI argv; cwd - working directory; reposFile - repos config path.
 // Returns: { status, json, stderr }; json is the parsed stdout line or null.
-function run(args, cwd, reposFile) {
+function run(args, cwd, reposFile, extraEnv) {
     const r = spawnSync('node', [CLI, ...args], {
         cwd,
         encoding: 'utf-8',
@@ -99,6 +99,7 @@ function run(args, cwd, reposFile) {
             HOME: HOME_DIR,
             BRANCH_REVIEW_REPOS_CONFIG: reposFile || reposConfig(null),
             SDLC_REVIEW_CONFIG_USER: path.join(SCRATCH, 'no-user-config.json'),
+            ...(extraEnv || {}),
         },
     });
     let json = null;
@@ -242,6 +243,107 @@ for (const [name, file, wantStatus, wantVerdict] of reportRows) {
     const res = run([CHECK, file], SCRATCH, null);
     assert(name + ' (exit, verdict)', [res.status, res.json ? res.json.verdict : undefined], [wantStatus, wantVerdict]);
 }
+
+// Args: file - a path. Returns: string | null, the file's text or null when missing.
+const slurp = file => (fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null);
+const STEP_OFF_USER = { steps: { 'branch-review': { 'pre-pr-branch-review': false } } };
+
+// Args: res - a run() result; want - object. Returns: the res.json fields named in want.
+function pick(res, want) {
+    const got = {};
+    for (const k of Object.keys(want)) got[k] = res.json ? res.json[k] : undefined;
+    return got;
+}
+
+console.log('enable/disable/status usage:');
+{
+    const repo = newRepo('usage');
+    const cfg = reposConfig({ repos: {} });
+    const before = slurp(cfg);
+    const usageRows = [
+        ['enable --mode bad', ['enable', '--mode', 'bad'], EXIT_USAGE],
+        ['--mode alone', ['enable', '--mode'], EXIT_USAGE],
+        ['--mode twice', ['enable', '--mode', 'advisory', '--mode', 'enforce'], EXIT_USAGE],
+        ['unknown flag', ['enable', '--loud', 'x'], EXIT_USAGE],
+        ['unknown subcommand', ['frobnicate'], EXIT_USAGE],
+        ['disable --mode', ['disable', '--mode', 'advisory'], EXIT_USAGE],
+    ];
+    for (const [name, args, want] of usageRows) {
+        assert(name + ' (exit, bytes equal)', [run(args, repo, cfg).status, slurp(cfg) === before], [want, true]);
+    }
+    const outside = fs.mkdtempSync(path.join(SCRATCH, 'outside-'));
+    const res = run(['enable'], outside, cfg);
+    assert('enable outside a repo (exit, ok, bytes equal)', [res.status, res.json && res.json.ok, slurp(cfg) === before], [EXIT_FAIL, false, true]);
+}
+
+console.log('enable/disable cycle:');
+{
+    const repo = newRepo('cycle');
+    const cfg = reposConfig(null);
+    const steps = [
+        ['status unlisted', ['status'], { listed: false, mode: null, step: 'on' }],
+        ['enable', ['enable'], { action: 'created', mode: 'advisory', ok: true }],
+        ['status listed', ['status'], { listed: true, mode: 'advisory', baseSource: 'origin-head', base: BASE_REF }],
+        ['enable enforce', ['enable', '--mode', 'enforce'], { action: 'updated', mode: 'enforce' }],
+        ['disable', ['disable'], { removed: true }],
+        ['disable again', ['disable'], { removed: false, message: 'not listed' }],
+    ];
+    for (const [name, args, want] of steps) {
+        const res = run(args, repo, cfg);
+        assert(name + ' (exit, fields)', [res.status, pick(res, want)], [EXIT_OK, want]);
+    }
+}
+
+console.log('status:');
+{
+    const statusRows = [
+        ['listed advisory', repo => ({ repos: { [repo]: { mode: 'advisory' } } }), false, { step: 'on', listed: true, mode: 'advisory' }, 0],
+        ['listed enforce', repo => ({ repos: { [repo]: { mode: 'enforce' } } }), false, { step: 'on', listed: true, mode: 'enforce' }, 0],
+        ['unlisted', () => ({ repos: {} }), false, { step: 'on', listed: false, mode: null }, 0],
+        ['step off', repo => ({ repos: { [repo]: {} } }), true, { step: 'off', listed: true, mode: 'advisory' }, 0],
+        ['unparsable config', () => '{bad', false, { step: 'on', listed: false, mode: null }, 1],
+    ];
+    let n = 0;
+    for (const [name, body, stepOff, want, warns] of statusRows) {
+        const repo = newRepo('status-' + n++);
+        const cfg = reposConfig(null);
+        const content = body(repo);
+        fs.writeFileSync(cfg, typeof content === 'string' ? content : JSON.stringify(content));
+        const userFile = path.join(SCRATCH, 'user-' + n + '.json');
+        if (stepOff) fs.writeFileSync(userFile, JSON.stringify(STEP_OFF_USER));
+        const userBefore = slurp(userFile);
+        const cfgBefore = slurp(cfg);
+        const res = run(['status'], repo, cfg, { SDLC_REVIEW_CONFIG_USER: userFile });
+        assert(name + ' (exit, fields, warnings)', [res.status, pick(res, want), res.json ? res.json.warnings.length : -1], [EXIT_OK, want, warns]);
+        assert(name + ' (files unchanged)', [slurp(userFile) === userBefore, slurp(cfg) === cfgBefore], [true, true]);
+    }
+}
+
+console.log('nested repo and step off:');
+{
+    const outer = newRepo('outer');
+    const inner = path.join(outer, 'inner');
+    fs.mkdirSync(inner);
+    git(['init', '-q', '-b', MAIN], inner);
+    git(['config', 'user.email', 't@example.com'], inner);
+    git(['config', 'user.name', 'T'], inner);
+    fs.writeFileSync(path.join(inner, 'x.js'), '1\n');
+    git(['add', '-A'], inner);
+    git(['commit', '-q', '-m', 'init'], inner);
+    const cfg = reposConfig({ repos: { [outer]: { mode: 'enforce' } } });
+    const st = run(['status'], inner, cfg);
+    assert('nested status says listed false', [st.status, st.json && st.json.listed], [EXIT_OK, false]);
+    const en = run(['enable'], inner, cfg);
+    const repos = JSON.parse(slurp(cfg)).repos;
+    assert('nested enable adds its own key', [en.status, Object.keys(repos).sort()], [EXIT_OK, [outer, fs.realpathSync(inner)].sort()]);
+    assert('ancestor entry equal', repos[outer], { mode: 'enforce' });
+
+    const userFile = path.join(SCRATCH, 'user-off.json');
+    fs.writeFileSync(userFile, JSON.stringify(STEP_OFF_USER));
+    const off = run(['enable'], outer, reposConfig(null), { SDLC_REVIEW_CONFIG_USER: userFile });
+    assert('enable with step off (exit, ok, warning)', [off.status, off.json.ok, off.json.warnings.some(w => w.includes('/sdlc:steps on branch-review'))], [EXIT_OK, true, true]);
+}
+
 
 fs.rmSync(SCRATCH, { recursive: true, force: true });
 console.log(`\n${passed} passed, ${failed} failed`);
