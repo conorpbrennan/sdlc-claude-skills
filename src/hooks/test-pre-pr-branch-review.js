@@ -224,6 +224,8 @@ const ROWS = [
     { name: 'git unreadable, enforce', mode: ENFORCE, kind: KIND_DENY, match: /error/, setup: () => ({ shim: true }) },
     { name: 'invalid mode', mode: 'strict', kind: KIND_DENY, match: /mode/, setup: () => ({}) },
     { name: 'unparsable config', mode: ADVISORY, kind: KIND_DENY, match: /parse/, setup: () => ({ config: writeConfig('{not json') }) },
+    { name: 'unparsable config, fix text names the config file', mode: ADVISORY, kind: KIND_DENY, match: /Fix the config file [^\s]*\.json[\s\S]*retry/, nomatch: /git problem/, setup: () => ({ config: writeConfig('{not json') }) },
+    { name: 'git unreadable, fix text keeps the git advice', mode: ENFORCE, kind: KIND_DENY, match: /Fix the git problem/, setup: () => ({ shim: true }) },
     { name: 'invalid base', mode: ADVISORY, kind: KIND_DENY, match: /base/, entry: { mode: ADVISORY, base: '--evil' }, setup: () => ({}) },
 ];
 
@@ -237,6 +239,7 @@ try {
         const r = run(s.cwd || dir, row.command || PR_COMMAND, config, { env: s.env, shim: s.shim });
         assert(row.name + ': kind', kindOf(r), row.kind);
         if (row.match) assert(row.name + ': text', row.match.test(textOf(r)), true);
+        if (row.nomatch) assert(row.name + ': text lacks', row.nomatch.test(textOf(r)), false);
         if (row.kind === KIND_NOTICE) assert(row.name + ': notice never blocks', r.status, 0);
     }
 

@@ -55,6 +55,8 @@ const rows = [
     ['missing Q5', build({ omit: [5] }), { verdict: 'FAIL', problemMatch: /Q5/ }],
     ['repeated Q2', build({ repeat: [2] }), { verdict: 'FAIL', problemMatch: /Q2/ }],
     ['file:line above the first Q only', build({ bodies: { 1: 'nothing' }, head: 'See src/a.js:9' }), { verdict: 'FAIL', problemMatch: /Q1/ }],
+    ['URL with a port is not file:line', build({ bodies: { 1: 'see http://example.com:8080/x' } }), { verdict: 'FAIL', problemMatch: /Q1/ }],
+    ['path with line after a URL still counts', build({ bodies: { 1: 'http://example.com:8080/x and lib/a.js:12' } }), { verdict: 'PASS', problemMatch: null }],
     ['PASS trailer with CONFIRMED CRITICAL', build({ extra: '### F1 CONFIRMED CRITICAL\nbad' }), { verdict: 'FAIL', problemMatch: /CRITICAL|blocking/i }],
     ['PASS trailer with CONFIRMED ADVISORY', build({ extra: '### F1 CONFIRMED ADVISORY\nminor' }), { verdict: 'PASS', problemMatch: null }],
     ['FAIL trailer', build({ trailer: 'BRANCH_GATE: FAIL' }), { verdict: 'FAIL', problemMatch: /FAIL/ }],

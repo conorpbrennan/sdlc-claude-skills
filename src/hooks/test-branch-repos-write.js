@@ -132,6 +132,23 @@ for (const [name, content] of refuseRows) {
         if (content !== null) assert(`${name} / ${fn}: bytes equal`, slurp(file), content);
     }
 }
+// 2b. A rename that throws: refused, bytes equal, no temp file left.
+console.log('rename failure:');
+for (const fn of ['enable', 'disable']) {
+    const before = doc({ [repoA]: { mode: 'advisory' } });
+    const file = setup(before);
+    const real = fs.renameSync;
+    fs.renameSync = () => { throw new Error('rename boom'); };
+    let r;
+    try {
+        r = fn === 'enable' ? enableRepo({ configPath: file, toplevel: repoA, mode: 'enforce' }) : disableRepo({ configPath: file, toplevel: repoA });
+    } finally {
+        fs.renameSync = real;
+    }
+    assert(`rename throws / ${fn}: refused`, [r.ok, typeof r.error], [false, 'string']);
+    assert(`rename throws / ${fn}: bytes equal`, slurp(file), before);
+    assert(`rename throws / ${fn}: no tmp file`, strays(file), []);
+}
 {
     const file = setup(doc({ [repoA]: 5 }));
     const r = disableRepo({ configPath: file, toplevel: repoA });

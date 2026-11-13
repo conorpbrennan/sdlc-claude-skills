@@ -229,6 +229,8 @@ const BR_ROWS = [
         repo: { branchReview: { maxChangedLines: 9000 } },
         want: { model: 'sonnet', maxRounds: 2, maxChangedLines: 9000 }, warns: 0 },
     { name: 'maxChangedLines 0 falls back with one warning', user: null, repo: { branchReview: { maxChangedLines: 0 } }, want: BR_DEFAULTS, warns: 1 },
+    { name: 'maxChangedLines string falls back with one warning', user: null, repo: { branchReview: { maxChangedLines: '5000' } }, want: BR_DEFAULTS, warns: 1 },
+    { name: 'maxChangedLines float falls back with one warning', user: null, repo: { branchReview: { maxChangedLines: 2500.5 } }, want: BR_DEFAULTS, warns: 1 },
     { name: 'model gpt falls back with one warning', user: null, repo: { branchReview: { model: 'gpt' } }, want: BR_DEFAULTS, warns: 1 },
     { name: 'top-level maxRounds does not leak in', user: { maxRounds: 7 }, repo: null, want: BR_DEFAULTS, warns: 0 },
 ];

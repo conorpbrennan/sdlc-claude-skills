@@ -25,6 +25,8 @@ const SECTION_END = /^(## |### F)/;
 const FINDING_ANY = /^###\s+F\d+/;
 const FINDING_HEADING = /^###\s+F\d+\s+(CONFIRMED|PLAUSIBLE)\s+(CRITICAL|IMPORTANT|ADVISORY)\b/;
 const FILE_LINE = /[\w./\\-]+\.\w+:\d+/;
+// A URL such as http://example.com:8080/x has the host.tld:digits shape; cut it out before FILE_LINE is tried.
+const URL_TOKEN = /\b[a-z][a-z0-9+.-]*:\/\/\S*/gi;
 const NONE_FOUND = /^\s*(?:[-*+]\s+)?none found, checked:(.*)$/i;
 const ITEM_SPLIT = /[,;]/;
 
@@ -33,7 +35,7 @@ const ITEM_SPLIT = /[,;]/;
 // Returns:
 //   string: KIND_EVIDENCE, KIND_NONE_FOUND or KIND_BAD.
 function sectionKind(body) {
-    if (body.some(l => FILE_LINE.test(l))) return KIND_EVIDENCE;
+    if (body.some(l => FILE_LINE.test(l.replace(URL_TOKEN, ' ')))) return KIND_EVIDENCE;
     for (const line of body) {
         const m = NONE_FOUND.exec(line);
         if (!m) continue;

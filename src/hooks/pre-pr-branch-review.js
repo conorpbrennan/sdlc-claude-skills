@@ -78,6 +78,8 @@ const DECISION_APPROVE = 'approve';
 const ROUND_NOTE = 'Before running it, replace round<n> with the round used.';
 const FIX_NO_BASE = 'Set `base` in the repo\'s entry in the branch-review repos config, or run `git remote set-head origin -a`.';
 const FIX_DETACHED = 'Check out a branch before opening the PR.';
+const FIX_CONFIG_PREFIX = 'Fix the config file ';
+const FIX_CONFIG_SUFFIX = ' (unreadable, not valid JSON or no "repos" object), then retry.';
 const FIX_ERROR = 'Fix the git problem named above, then retry.';
 const FIX_EMPTY = 'The branch has no changes ahead of its base; there is nothing to review. Check the `base` setting.';
 
@@ -139,7 +141,7 @@ if (!stepRead.on) approve();
 // 3. Config.
 const config = reposConfig.readReposConfig(reposConfig.configPath());
 if (config.missing) approve();
-if (config.error) emit(report(STATE.ERROR, config.error, FIX_ERROR, null));
+if (config.error) emit(report(STATE.ERROR, config.error, FIX_CONFIG_PREFIX + reposConfig.configPath() + FIX_CONFIG_SUFFIX, null));
 
 // 4. D9: no git is spawned unless a listed key holds the cwd.
 const cwd = reposConfig.realNormalized(process.cwd());

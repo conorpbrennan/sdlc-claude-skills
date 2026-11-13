@@ -16,16 +16,6 @@
 ## Files involved
 
 - ## History
-- 2026-11-13 `e279da8` — branch-review S7: the /sdlc:branch-review skill, command and reviewer prompt
-  - .claude-plugin/plugin.json
-  - commands/branch-review.md
-  - run/reports/S7-implementer-1.md
-  - run/tracker.md
-  - skills/branch-review/SKILL.md
-  - skills/branch-review/reviewer-prompt.md
-  - src/test-branch-review-skill.js
-  - src/test-plugin-layout.js
-
 - .claude-plugin/plugin.json
 - .claude/branch-review-repos.json.example
 - .claude/sdlc-review.json.example
@@ -35,11 +25,13 @@
 - 2026-11-13 `18481d8` — branch-review S2: library that reads the branch-review repos config
 - 2026-11-13 `651c9b1` — branch-review S3: parser that settles a branch-review report's verdict
 - 2026-11-13 `d073a88` — branch-review S1: library that resolves the base, hashes the branch diff and judges a branch marker
+- 2026-11-13 `e279da8` — branch-review S7: the /sdlc:branch-review skill, command and reviewer prompt
 - 2026-11-13 `e330e6a` — branch-review S6: CLI that plans a branch review and checks a report
 - 2026-11-13 `ebc8847` — branch-review S6b: library that lists and unlists a repo in the branch-review repos config
 - commands/branch-review.md
 - docs/plans/branch-review-pre-pr.md
 - hooks/hooks.json
+- run/reports/C1-implementer-1.md
 - run/reports/S1-implementer-1.md
 - run/reports/S2-implementer-1.md
 - run/reports/S3-implementer-1.md
