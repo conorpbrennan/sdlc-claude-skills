@@ -1,6 +1,6 @@
 RUN: docs/plans/branch-review-pre-pr.md, revision 1 (T1, 10 steps: S1 S2 S3 S4 S5 S6 S6b S6c S7 S8). Branch: branch-review-pre-pr-1. Started: 2026-11-12.
 BUDGET: plan total 65,655 bytes; per-step budgets in each step block (about 30 tool calls each). Spent: S1 about 14 calls against 30.
-IN FLIGHT: S6c, implementer round 1 dispatched.
+IN FLIGHT: S7, implementer round 1 dispatched.
 TREE: staged nothing; unstaged: features/statusline-windows-datadir.md (unrelated, the owner's, never stage it). Worktrees open: none.
 OWNER AUTHORISATION (2026-11-12, this session): stage, commit after each step's review PASS, dispatch fix agents, run the whole plan. Never push, never open a PR. Stop after two FAILs on one step.
 SESSION NOTE: the run lives in /home/coder/dev/sdlc-claude-skills on branch branch-review-pre-pr-1 (cut from main 90caf92). The sibling worktree /home/coder/dev/sdlc-branch-review-pre-pr and its branch branch-review-pre-pr are abandoned and left untouched. The first attempt to commit S1 there was blocked by PRE_COMMIT_GATE (different repo from the one the hook inspects). Reviewers run on the staged diff in this repo, not in a throwaway worktree (the owner's rule allows a worktree only on request).
@@ -91,6 +91,18 @@ STEP S6b: PASS
   decisions: temp name <config>.<pid>.tmp opened wx, mode copied, chmod after write; invalid existing mode with mode omitted becomes advisory; disableRepo refuses a matched non-object entry and writes nothing until its loop ends; ok:false results carry only ok and error; unchanged only when the old entry deep-equals the new one; disableRepo key is the first removed key or null.
   budget:  about 7 calls against about 30
   next for S6c: call enableRepo({configPath,toplevel,mode}) and disableRepo({configPath,toplevel}) and check ok first; callers pass the git toplevel; written JSON is re-indented to 2 spaces; ok:false means the file was not changed.
+
+STEP S6c: PASS
+  commit:  0fcdfc6
+  gate:    test-branch-review-cli 70/0; test-branch-repos-write 83/0; test-plugin-layout, test-suite-isolation and `claude plugin validate .` rc 0; no writeFileSync/renameSync in the CLI; untouched-files git diff check rc 0; sandboxed cycle /tmp/s6c-cycle.sh ended CYCLE OK (report S6c-implementer-1.md)
+  reviews: code-reviewer, round 1, PASS, about 1 minute; 0 critical, 0 important, 2 advisory (dispatch table built per call; status base-resolution fallbacks are warnings with null base, exit 0). Reviewer ran every exit code, compared plan and check-report output byte for byte against the previous commit, all identical. Accepted, none acted on.
+  reports: run/reports/S6c-implementer-1.md
+  stage:   step files, plugin.json (1.0.97), tracker, report
+  files:   touched as declared (branch-review-cli.js, test-branch-review-cli.js)
+  disagreements: none. The usage rows expecting exit 2 passed red because unknown subcommands already exited 2.
+  decisions: plan still lets a repeated --repo pass (last wins), only the new subcommands reject repeated flags; disable --mode x, a positional and a repeated --repo exit 2; status on an unlisted repo still resolves a base from origin/HEAD; status on a detached HEAD warns and exits 0; disable removal message is "removed <key>"; step-off warning text names /sdlc:steps on branch-review; tests switch the step off through SDLC_REVIEW_CONFIG_USER.
+  budget:  about 14 calls against about 30
+  next for S7: route on/off/status to enable/disable/status; status has no ok field; enable and disable print { ok:false, error } and exit 1 on refusal; writing test text with a commit-shaped string through bash trips the classifier, use the file tool.
 
 CLOSE-OUT ITEMS (batch into one close-out step, plan 7 item): 
   - S6b: add a test row that stubs fs.renameSync to throw and asserts ok:false, config bytes equal, no *.tmp left (reviewer advisory, missing test).

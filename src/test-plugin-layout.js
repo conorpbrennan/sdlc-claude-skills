@@ -293,8 +293,8 @@ assert('every hook script in src/hooks/ is wired in hooks.json',
 
 console.log('\nSkills at the plugin layout paths:');
 const skillDirs = listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name).sort();
-assert('skills/ holds the three shipped skills', skillDirs,
-    ['code-review-implementer', 'code-review-pre-commit', 'plan-spec']);
+assert('skills/ holds the four shipped skills', skillDirs,
+    ['branch-review', 'code-review-implementer', 'code-review-pre-commit', 'plan-spec']);
 for (const dir of skillDirs) {
     assert(`skills/${dir}/SKILL.md name matches its directory`,
         frontmatterName(path.join(SKILLS_DIR, dir, 'SKILL.md')), dir);
@@ -494,7 +494,7 @@ assert('no hook literal outside plugin-names.js spells sdlc:', spellsPlugin, [])
 console.log('\nEvery name Claude is told to invoke is namespaced:');
 // A slash command or skill named bare: `/feature-new`, but not
 // `/sdlc:feature-new` or a path such as `skills/plan-spec/`.
-const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec|verify)\b/m;
+const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec|verify|branch-review)\b/m;
 const SUBAGENT_VALUE = /subagent_type:\s*"([^"]+)"/g;
 const SKILL_VALUE = /skill:\s*"([^"]+)"/g;
 const BUILT_IN_AGENTS = ['general-purpose'];
