@@ -18,4 +18,7 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-10-29 `2316672` — statusline install: accept a native Windows data dir by writing the command with forward slashes
+  - .claude-plugin/plugin.json
+  - src/statusline-install.js
+  - src/test-statusline-install.js
