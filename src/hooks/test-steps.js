@@ -99,7 +99,7 @@ for (const c of CASES) {
 {
     const all = [].concat(...Object.values(steps.AREAS).map(a => a.steps));
     assert('areasShape: each id in exactly one area', new Set(all).size, all.length);
-    assert('areasShape: 22 steps', all.length, 22);
+    assert('areasShape: 24 steps', all.length, 24);
     assert('areasShape: guards', Object.keys(steps.AREAS).filter(k => steps.AREAS[k].guard).sort(), ['commit-conventions', 'review', 'tdd']);
     assert('areasShape: frozen', Object.isFrozen(steps.AREAS), true);
     scratch(null, null, []);

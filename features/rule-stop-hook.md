@@ -1,0 +1,66 @@
+# Rule Stop Hook
+
+**Requirement**: Make the owner's two rules (never give up; do it to the best of your ability) hold without the model remembering them: a Stop hook that blocks option questions to the owner outside the gates, and a UserPromptSubmit end-of-turn check, both switchable through /sdlc:steps.
+
+**Started**: 2026-11-14
+**Last updated**: 2026-11-14
+**Branch**: rule-stop-hook
+
+## Acceptance
+
+1. Running `node src/hooks/test-rule-stop-hook.js` exits 0.
+2. Running `node src/hooks/test-rule-reminder.js` exits 0.
+3. `/sdlc:steps` lists `rule-stop-hook` and `rule-reminder` under `conduct`.
+4. Running `bash tools/run-tests.sh` shows 0 failed.
+
+## Files involved
+
+- .claude-plugin/plugin.json
+- README.md
+- docs/plans/rule-stop-hook.md
+- hooks/hooks.json
+- run/reports/S1-implementer-1.md
+- run/reports/S2-implementer-1.md
+- src/hooks/lib/steps.js
+- src/hooks/rule-reminder.js
+- src/hooks/rule-stop-hook.js
+- src/hooks/test-rule-reminder.js
+- src/hooks/test-rule-stop-hook.js
+- src/hooks/test-steps.js
+- src/test-plugin-layout.js
+
+## History
+
+- 2026-11-14 `758eb22` — rule-stop-hook S2: UserPromptSubmit end-of-turn check
+  - .claude-plugin/plugin.json
+  - README.md
+  - hooks/hooks.json
+  - run/reports/S2-implementer-1.md
+  - src/hooks/lib/steps.js
+  - src/hooks/rule-reminder.js
+  - src/hooks/test-rule-reminder.js
+  - src/hooks/test-steps.js
+  - src/test-plugin-layout.js
+
+- 2026-11-14 `e35d31a` — rule-stop-hook S1: Stop hook that blocks option questions to the owner outside the gates
+  - .claude-plugin/plugin.json
+  - README.md
+  - docs/plans/rule-stop-hook.md
+  - hooks/hooks.json
+  - run/reports/S1-implementer-1.md
+  - src/hooks/lib/steps.js
+  - src/hooks/rule-stop-hook.js
+  - src/hooks/test-rule-stop-hook.js
+  - src/hooks/test-steps.js
+  - src/test-plugin-layout.js
+
+## Verification — 2026-11-14 @ 758eb22
+
+| # | Criterion | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | Running `node src/hooks/test-rule-stop-hook.js` exits 0. | PASS | `node src/hooks/test-rule-stop-hook.js; echo $?` printed `0` |
+| 2 | Running `node src/hooks/test-rule-reminder.js` exits 0. | PASS | `node src/hooks/test-rule-reminder.js; echo $?` printed `0` |
+| 3 | `/sdlc:steps` lists `rule-stop-hook` and `rule-reminder` under `conduct`. | PASS | `node src/hooks/steps-cli.js list` printed `conduct rule-stop-hook on default` and `conduct rule-reminder on default`. I ran the CLI, not the `/sdlc:steps` slash command itself. |
+| 4 | Running `bash tools/run-tests.sh` shows 0 failed. | PASS | `bash tools/run-tests.sh` printed `Files: 51  failed: 0` |
+
+**Verdict**: PASS
