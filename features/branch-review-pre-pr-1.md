@@ -16,6 +16,13 @@
 ## Files involved
 
 - ## History
+- 2026-11-13 `a26fd5a` — branch-review C2: skill prose, exact-title test, README wording
+  - .claude-plugin/plugin.json
+  - README.md
+  - run/reports/C2-implementer-1.md
+  - skills/branch-review/SKILL.md
+  - src/test-branch-review-skill.js
+
 - .claude-plugin/plugin.json
 - .claude/branch-review-repos.json.example
 - .claude/sdlc-review.json.example
