@@ -30,7 +30,7 @@ const EXPECTED_WIRING = {
         { matcher: null, hooks: [['command', 'session-start-feature.js', 10]] },
     ],
     UserPromptSubmit: [
-        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 5], ['command', 'orchestrator-mode.js', 5]] },
+        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 5], ['command', 'orchestrator-mode.js', 5], ['command', 'rule-reminder.js', 5]] },
     ],
     PreToolUse: [
         {

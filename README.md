@@ -244,6 +244,7 @@ in order, cheapest rejection first.
 | `session-start-feature.js` | SessionStart | Creates `features/<branch>.md` on a new feature branch and asks for the requirement |
 | `enforce-review-implementer.js` | UserPromptSubmit | Routes review-fix prompts through the implementer skill |
 | `orchestrator-mode.js` | UserPromptSubmit, PreToolUse (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`), PostToolUse (`Read`, `Bash`, `Skill`, `Agent`) | Orchestrator mode: turns on from a handoff, denies main-session code edits, nudges after inline Bash |
+| `rule-reminder.js` | UserPromptSubmit | Injects a three-point end-of-turn check: no option question outside a gate, open the code behind every claim, a negative result is not a stop. Step `rule-reminder` (area `conduct`) |
 | `rule-stop-hook.js` | Stop | Blocks a turn that ends in an option question to the owner outside the gates (commit, push, secrets, delete or overwrite, spend). Step `rule-stop-hook` (area `conduct`). Each block is logged to `sdlc-rule-stop.log` in the config dir |
 | `session-start-instructions.js` | SessionStart | Injects the session instructions; sets `promptCacheTtl` and `model` in settings.json (see [Model steering](#model-steering)) |
 | `agent-tier-gate.js` | PreToolUse (`Agent`) | Opus dispatch needs a `TIER` reason; unset models on built-in agents go to Sonnet |
@@ -597,7 +598,7 @@ Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`. Repo file
 | `hygiene` | no | `pre-commit-hygiene` | It is opt-in. Remove the repo from `~/.claude/hygiene-repos.json`. For one commit, use the emergency override above. |
 | `verification` | no | `pre-pr-verify` | It is opt-in. Remove the repo from `~/.claude/verify-repos.json`, or set its `mode` to `advisory` so it warns and never blocks. |
 | `commit-conventions` | yes | `enforce-co-author`, `claude-attribution-note`, `post-commit-notify` | None. |
-| `conduct` | no | `rule-stop-hook` | `/sdlc:steps off rule-stop-hook`, or `off conduct`. |
+| `conduct` | no | `rule-stop-hook`, `rule-reminder` | `/sdlc:steps off rule-reminder`, or `off conduct`. |
 | `standalone` | no | `main-model` | `/sdlc:main-model off`, which sets `"mainModel": "off"` in the user file. |
 | `standalone` | no | `cache-ttl` | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
 | `standalone` | no | `marketplace-autoupdate` | `touch ~/.claude/sdlc-autoupdate.disabled`, or set `"autoUpdate": false` on the marketplace entry. See [Auto-update](#auto-update). |

@@ -20,12 +20,25 @@
 - docs/plans/rule-stop-hook.md
 - hooks/hooks.json
 - run/reports/S1-implementer-1.md
+- run/reports/S2-implementer-1.md
 - src/hooks/lib/steps.js
+- src/hooks/rule-reminder.js
 - src/hooks/rule-stop-hook.js
+- src/hooks/test-rule-reminder.js
 - src/hooks/test-rule-stop-hook.js
 - src/hooks/test-steps.js
 - src/test-plugin-layout.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-11-14 `e35d31a` — rule-stop-hook S1: Stop hook that blocks option questions to the owner outside the gates
+  - .claude-plugin/plugin.json
+  - README.md
+  - docs/plans/rule-stop-hook.md
+  - hooks/hooks.json
+  - run/reports/S1-implementer-1.md
+  - src/hooks/lib/steps.js
+  - src/hooks/rule-stop-hook.js
+  - src/hooks/test-rule-stop-hook.js
+  - src/hooks/test-steps.js
+  - src/test-plugin-layout.js
