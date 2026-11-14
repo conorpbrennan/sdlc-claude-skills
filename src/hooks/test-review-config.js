@@ -219,6 +219,31 @@ assert('invalid bashNudge falls back', o.bashNudge, 12);
 assert('orchestrator warns', o.warnings.length, 1);
 clearUserCfg();
 
+console.log('\nbranchReview table:');
+const BR_DEFAULTS = { model: 'opus', maxRounds: 2, maxChangedLines: 25000 };
+const BR_ROWS = [
+    { name: 'no files: defaults', user: null, repo: null, want: BR_DEFAULTS, warns: 0 },
+    { name: 'user sets the cap', user: { branchReview: { maxChangedLines: 40000 } }, repo: null, want: { ...BR_DEFAULTS, maxChangedLines: 40000 }, warns: 0 },
+    { name: 'repo overrides user, user fills the gap',
+        user: { branchReview: { model: 'sonnet', maxChangedLines: 40000 } },
+        repo: { branchReview: { maxChangedLines: 9000 } },
+        want: { model: 'sonnet', maxRounds: 2, maxChangedLines: 9000 }, warns: 0 },
+    { name: 'maxChangedLines 0 falls back with one warning', user: null, repo: { branchReview: { maxChangedLines: 0 } }, want: BR_DEFAULTS, warns: 1 },
+    { name: 'maxChangedLines string falls back with one warning', user: null, repo: { branchReview: { maxChangedLines: '5000' } }, want: BR_DEFAULTS, warns: 1 },
+    { name: 'maxChangedLines float falls back with one warning', user: null, repo: { branchReview: { maxChangedLines: 2500.5 } }, want: BR_DEFAULTS, warns: 1 },
+    { name: 'model gpt falls back with one warning', user: null, repo: { branchReview: { model: 'gpt' } }, want: BR_DEFAULTS, warns: 1 },
+    { name: 'top-level maxRounds does not leak in', user: { maxRounds: 7 }, repo: null, want: BR_DEFAULTS, warns: 0 },
+];
+BR_ROWS.forEach((row, i) => {
+    const repo = newRepo('repoBR' + i);
+    if (row.user) writeUserCfg(row.user); else clearUserCfg();
+    if (row.repo) writeRepoCfg(repo, row.repo);
+    const r = cfg.resolveBranchReview({ repoRoot: repo });
+    assert('branchReview: ' + row.name, [r.model, r.maxRounds, r.maxChangedLines, r.warnings.length],
+        [row.want.model, row.want.maxRounds, row.want.maxChangedLines, row.warns]);
+});
+clearUserCfg();
+
 console.log('\nCLI:');
 const cli = path.join(__dirname, 'review-config-cli.js');
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf-8' });
@@ -353,6 +378,15 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     r = JSON.parse(spawnSync('node', [cli, 'main-model', 'show', '--repo', mmDir], { encoding: 'utf-8', env: mmEnv }).stdout);
     assert('show: repo mainModel ignored with a warning', [r.mainModel, r.warnings.some(w => w.includes('mainModel'))], ['haiku', true]);
 }
+
+console.log('\nbranch-review CLI:');
+writeUserCfg({ branchReview: { maxChangedLines: 40000 } });
+const brRes = runCliRaw(['branch-review', '--repo', gitRepo], sb);
+const brJson = JSON.parse(brRes.stdout.trim());
+assert('branch-review CLI exits 0 and prints the section',
+    [brRes.status, brJson.model, brJson.maxRounds, brJson.maxChangedLines, brJson.warnings],
+    [0, 'opus', 2, 40000, []]);
+clearUserCfg();
 
 fs.rmSync(sb, { recursive: true, force: true });
 

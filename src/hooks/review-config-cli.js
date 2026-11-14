@@ -3,6 +3,7 @@
 //
 //   node review-config-cli.js review --round <n> [--model <m>] [--repo <path>]
 //   node review-config-cli.js plan-review [--repo <path>]
+//   node review-config-cli.js branch-review [--repo <path>]
 //   node review-config-cli.js main-model show [--repo <path>] | set <haiku|sonnet|opus> | off
 //
 // Prints one JSON line. The repo defaults to the git toplevel of the cwd and
@@ -13,7 +14,7 @@
 const path = require('path');
 const { gitRead, locateRepo, splitNul } = require('./lib/git-read.js');
 const { stepState } = require('./lib/steps.js');
-const { resolveReview, resolvePlanReview, resolveMainModel, setMainModel, MAIN_MODEL_OFF } = require('./lib/review-config.js');
+const { resolveReview, resolvePlanReview, resolveBranchReview, resolveMainModel, setMainModel, MAIN_MODEL_OFF } = require('./lib/review-config.js');
 
 // A flag with no value (last on the line, or followed by another flag) is a
 // usage error, reported through `error`.
@@ -81,6 +82,12 @@ function main(argv) {
         console.log(JSON.stringify(res));
         return 0;
     }
+    if (cmd === 'branch-review') {
+        const res = resolveBranchReview({ repoRoot });
+        res.warnings = warnings.concat(res.warnings);
+        console.log(JSON.stringify(res));
+        return 0;
+    }
     if (cmd === 'review') {
         const round = /^\d+$/.test(flags.round || '') ? parseInt(flags.round, 10) : 0;
         if (round < 1) {
@@ -101,7 +108,7 @@ function main(argv) {
         console.log(JSON.stringify(res));
         return 0;
     }
-    console.error('usage: review-config-cli.js review --round <n> [--model <m>] [--repo <path>] | plan-review [--repo <path>]');
+    console.error('usage: review-config-cli.js review --round <n> [--model <m>] [--repo <path>] | plan-review [--repo <path>] | branch-review [--repo <path>]');
     return 2;
 }
 

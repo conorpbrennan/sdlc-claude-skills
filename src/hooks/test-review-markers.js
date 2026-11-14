@@ -105,6 +105,14 @@ assert('verify differs between repos', a.verify === b.verify, false);
 assert('verify differs from the main worktree in a linked one', a.verify === w.verify, false);
 assert('linked verify path goes under worktrees/', w.verify.includes(path.join('worktrees', 'linked')), true);
 
+console.log('\nThe branch-review marker path:');
+const branchOthers = [a.marker, a.lock, a.sessionMarker, a.postLock, a.pending, a.verify];
+assert('BRANCH_MARKER_NAME is exported', markers.BRANCH_MARKER_NAME, '.claude-last-branch-review');
+assert('branch uses that name inside the git dir', a.branch, path.join(path.resolve(repoA, '.git'), '.claude-last-branch-review'));
+assert('branch differs from every other marker path', branchOthers.includes(a.branch), false);
+assert('branch differs from the linked worktree branch path', a.branch === w.branch, false);
+assert('linked branch path goes under worktrees/', w.branch.includes(path.join('worktrees', 'linked')), true);
+
 console.log('\nOutside a repository:');
 const notRepo = path.join(sb, 'plain-dir');
 fs.mkdirSync(notRepo);
@@ -116,6 +124,7 @@ assert('offers no marker path', n.marker, null);
 assert('offers no lock path', n.lock, null);
 assert('offers no pending path', n.pending, null);
 assert('offers no verify path', n.verify, null);
+assert('offers no branch path', n.branch, null);
 
 console.log('\nUnreadable git state is not mistaken for "no repo":');
 const broken = markers.markerPaths(path.join(sb, 'does-not-exist-at-all'));

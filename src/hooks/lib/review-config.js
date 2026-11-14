@@ -32,6 +32,7 @@ const DEFAULTS = {
     maxRounds: 2,
     planReview: { source: 'opus', consistency: 'sonnet', cap: 2 },
     orchestrator: { bashNudge: 8 },
+    branchReview: { model: 'opus', maxRounds: 2, maxChangedLines: 25000 },
 };
 
 function isModel(v) { return typeof v === 'string' && MODELS.includes(v); }
@@ -206,6 +207,16 @@ function resolvePlanReview({ repoRoot } = {}) {
 // Args:
 //   repoRoot: Repository root.
 // Returns:
+//   { model, maxRounds, maxChangedLines, warnings }: the branch review model,
+//   its round cap and the changed-line cap. Read from the `branchReview`
+//   section only; the top-level `maxRounds` is not consulted.
+function resolveBranchReview({ repoRoot } = {}) {
+    return resolveSection(repoRoot, 'branchReview', { model: isModel, maxRounds: isPosInt, maxChangedLines: isPosInt });
+}
+
+// Args:
+//   repoRoot: Repository root.
+// Returns:
 //   { bashNudge, warnings }.
 function resolveOrchestrator({ repoRoot } = {}) {
     return resolveSection(repoRoot, 'orchestrator', { bashNudge: isPosInt });
@@ -321,4 +332,4 @@ function setMainModel(model) {
     return updateConfigFile(target, data => { data[MAIN_MODEL_KEY] = model; });
 }
 
-module.exports = { resolveReview, resolvePlanReview, resolveOrchestrator, resolveMainModel, setMainModel, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };
+module.exports = { resolveReview, resolvePlanReview, resolveBranchReview, resolveOrchestrator, resolveMainModel, setMainModel, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };

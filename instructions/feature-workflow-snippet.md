@@ -24,6 +24,7 @@ advisory. Never work around it by disabling tracking without asking.
 - Seed or update a feature explicitly: `/sdlc:feature-new <slug> "<requirement>"`.
 - Recall prior context: `/sdlc:feature <slug>` or `/sdlc:feature list`.
 - Before `gh pr create` in a repo listed in `~/.claude/verify-repos.json`, run `/sdlc:verify`.
+- Before `gh pr create` in a repo listed in `~/.claude/branch-review-repos.json`, run `/sdlc:branch-review`.
 - The `post-commit-feature` hook then appends the sha-stamped history entry
   and stages it for the next commit — the sha cannot exist before the commit
   does, so that one line always lands with the following commit.

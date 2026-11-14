@@ -75,6 +75,11 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-pr-verify.js\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-pr-branch-review.js\"",
+            "timeout": 15
           }
         ]
       },

@@ -57,6 +57,9 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `/commit-prep`, `/review-timing`, `/feature`, `/feature-new`, `/sdlc:main-model` | `commands/` |
 | `/verify` and its recorder | `commands/verify.md`, `src/hooks/record-verification.js` |
 | `gh pr create` gate (advisory by default) | `src/hooks/pre-pr-verify.js` |
+| `branch-review` skill and `/sdlc:branch-review` command | `skills/branch-review/`, `commands/branch-review.md` |
+| `gh pr create` branch-review gate (advisory by default) | `src/hooks/pre-pr-branch-review.js`, `src/hooks/lib/branch-review.js`, `src/hooks/lib/branch-repos-config.js`, `src/hooks/lib/branch-report.js`, `src/hooks/lib/branch-repos-write.js`, `src/hooks/branch-review-cli.js` |
+| `branchReview` config key (`model`, `maxRounds`, `maxChangedLines`) | `src/hooks/lib/review-config.js`, `.claude/sdlc-review.json.example` |
 | Pre/post-commit hooks and their libs | `src/hooks/` |
 | Plugin manifests and hook wiring | `.claude-plugin/`, `hooks/hooks.json` |
 | Legacy-install removal (`uninstall.sh`) | `src/unmerge-*.js`, `src/lib/`, `legacy/` |
@@ -69,6 +72,8 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `/sdlc:handoff` | `commands/handoff.md` |
 | `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js` |
 | `/sdlc:fit` and its tool | `commands/fit.md`, `tools/usage-fit.js` |
+
+`/sdlc:branch-review on|off|status` lists or unlists the current repo in the branch-review repos config.
 
 See `README.md` for how the pieces fit together at run time.
 

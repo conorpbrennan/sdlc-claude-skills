@@ -40,7 +40,11 @@ const PENDING_NAME = '.claude-pending-review';
 // for the same reason as above: it must never be the same file as the commit gate's.
 const VERIFY_MARKER_NAME = '.claude-last-verify';
 
-// { gitDir, toplevel, notARepo, error, marker, lock, sessionMarker, postLock, pending, verify }
+// The branch-review marker (lib/branch-review.js owns its body): a review of the
+// whole branch against its base. Its own name, never the commit gate's.
+const BRANCH_MARKER_NAME = '.claude-last-branch-review';
+
+// { gitDir, toplevel, notARepo, error, marker, lock, sessionMarker, postLock, pending, verify, branch }
 //
 // The paths are null whenever the repository could not be located, whether
 // because there is none or because git could not be read. A caller must not
@@ -61,6 +65,7 @@ function markerPaths(cwd) {
             postLock: null,
             pending: null,
             verify: null,
+            branch: null,
         };
     }
     // `--git-dir` is relative ('.git') in a main worktree and absolute in a linked
@@ -77,6 +82,7 @@ function markerPaths(cwd) {
         postLock: path.join(base, POST_LOCK_NAME),
         pending: path.join(base, PENDING_NAME),
         verify: path.join(base, VERIFY_MARKER_NAME),
+        branch: path.join(base, BRANCH_MARKER_NAME),
     };
 }
 
@@ -87,5 +93,6 @@ module.exports = {
     POST_LOCK_NAME,
     PENDING_NAME,
     VERIFY_MARKER_NAME,
+    BRANCH_MARKER_NAME,
     markerPaths,
 };

@@ -41,6 +41,7 @@ const EXPECTED_WIRING = {
                 ['command', 'enforce-co-author.js', 5],
                 ['command', 'pre-commit-hygiene.js', 300],
                 ['command', 'pre-pr-verify.js', 10],
+                ['command', 'pre-pr-branch-review.js', 15],
             ],
         },
         { matcher: 'Agent', hooks: [['command', 'agent-tier-gate.js', 5]] },
@@ -285,7 +286,7 @@ const AGENTS_DIR = path.join(ROOT, 'agents');
 
 console.log('\nsrc/hooks/ holds only wired hooks:');
 // Helpers that are not hooks: CLIs the commands call, and a shared logger.
-const NOT_HOOKS = ['record-verification.js', 'review-config-cli.js', 'steps-cli.js', 'timing-log.js'];
+const NOT_HOOKS = ['branch-review-cli.js', 'record-verification.js', 'review-config-cli.js', 'steps-cli.js', 'timing-log.js'];
 const wiredScripts = Object.values(hooksByEvent || {}).flat().flatMap(b => b.hooks.map(h => (PLUGIN_COMMAND.exec(h.command) || [])[1]));
 const hookFiles = listDir(path.join(ROOT, 'src', 'hooks'))
     .filter(e => e.isFile() && e.name.endsWith('.js') && !e.name.startsWith('test-') && !NOT_HOOKS.includes(e.name))
@@ -295,8 +296,8 @@ assert('every hook script in src/hooks/ is wired in hooks.json',
 
 console.log('\nSkills at the plugin layout paths:');
 const skillDirs = listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name).sort();
-assert('skills/ holds the four shipped skills', skillDirs,
-    ['code-review-implementer', 'code-review-pre-commit', 'english-prose', 'plan-spec']);
+assert('skills/ holds the five shipped skills', skillDirs,
+    ['branch-review', 'code-review-implementer', 'code-review-pre-commit', 'english-prose', 'plan-spec']);
 for (const dir of skillDirs) {
     assert(`skills/${dir}/SKILL.md name matches its directory`,
         frontmatterName(path.join(SKILLS_DIR, dir, 'SKILL.md')), dir);
@@ -496,7 +497,7 @@ assert('no hook literal outside plugin-names.js spells sdlc:', spellsPlugin, [])
 console.log('\nEvery name Claude is told to invoke is namespaced:');
 // A slash command or skill named bare: `/feature-new`, but not
 // `/sdlc:feature-new` or a path such as `skills/plan-spec/`.
-const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec|verify)\b/m;
+const BARE_INVOCATION = /(^|[^:a-z])\/(feature|feature-new|code-review-pre-commit|code-review-implementer|commit-prep|review-timing|plan-spec|verify|branch-review)\b/m;
 const SUBAGENT_VALUE = /subagent_type:\s*"([^"]+)"/g;
 const SKILL_VALUE = /skill:\s*"([^"]+)"/g;
 const BUILT_IN_AGENTS = ['general-purpose'];

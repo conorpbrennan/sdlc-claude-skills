@@ -1,26 +1,31 @@
-# S2 implementer report (rule-reminder)
+STEP: S2. A library that reads the branch-review repos config.
 
-Status: DONE. Nothing staged or committed.
+GATE:
+- `node src/hooks/test-branch-repos-config.js` -> exit 0, "23 passed, 0 failed".
+- `node src/test-plugin-layout.js` -> exit 0.
+- `node src/test-suite-isolation.js` -> exit 0 ("52 passed, 0 failed"). First run failed because the new test lacked `isolateGitEnv()`; added it, reran green.
+- `claude plugin validate .` -> exit 0.
+- `node -e "JSON.parse(...branch-review-repos.json.example...)"` -> exit 0.
 
-## Files touched
-NEW: src/hooks/rule-reminder.js, src/hooks/test-rule-reminder.js.
-EDIT: hooks/hooks.json (hook added to the single UserPromptSubmit entry after orchestrator-mode.js, timeout 5), src/hooks/lib/steps.js (conduct area: rule-stop-hook, rule-reminder), src/hooks/test-steps.js (step count 23 -> 24), src/test-plugin-layout.js (frozen wiring), README.md (hook table row; conduct row in the steps table lists both steps).
-Not touched: features/statusline-windows-datadir.md (pre-existing modification).
+RED FIRST: ran `node src/hooks/test-branch-repos-config.js` before the module existed: "Error: Cannot find module './lib/branch-repos-config.js'".
 
-## Red run
-Before rule-reminder.js existed: `node src/hooks/test-rule-reminder.js` ended `1 passed, 10 failed`. Every spawn exited 1 (script missing). Cause is "script missing"; I did not make a stub to get a different red.
-Example: `FAIL: error: invalid stdin prints nothing, exit 0 expected ["",0] actual ["",1]`.
+FILES: new `src/hooks/lib/branch-repos-config.js`, `src/hooks/test-branch-repos-config.js`, `.claude/branch-review-repos.json.example`. Exactly the declared set. pre-pr-verify.js not imported or edited.
 
-## Gate
-- `node src/hooks/test-rule-reminder.js`: 11 passed, 0 failed, exit 0.
-- `grep -c '"UserPromptSubmit"' hooks/hooks.json`: 1.
-- `bash tools/run-tests.sh`: `Files: 51  failed: 0`.
-- `claude plugin validate .`: exit 0.
+DISAGREEMENTS: none. The step's test list did not mention `isolateGitEnv()`, but `src/test-suite-isolation.js` requires it in every suite; added.
 
-## Decisions
-- Output is printed as a literal hookSpecificOutput object, as orchestrator-mode.js does for UserPromptSubmit. It does not use hook-output.js: that file exports only deny and notice, which are PreToolUse/PostToolUse shapes.
-- Text is a 4-line block: a header and points (a), (b), (c).
-- A first test run failed because I wrote the per-step off as `{steps:{'rule-reminder':false}}`. The resolver wants `{steps:{conduct:{'rule-reminder':false}}}`. I fixed the test, not the code.
+DECISIONS THE PLAN LEFT OPEN:
+- Added private helpers `isObject` and `listed` (not exported). Same behaviour as pre-pr-verify.js.
+- `entryFor` normalizes its `dir` argument as well (harmless for a realNormalized input). Ties on key length: first key wins.
+- `entryFor` and `ownEntry` return `{key, entry}` only; the `keys` spellings are internal. Non-object `repos` gives null, never a throw.
+- `baseOf` on a non-object entry returns `{ok:true, base:null}` (modeOf is the check for a bad entry shape).
+- Test blocks: 4 (baseOf/modeOf table, readReposConfig table, configPath, entryFor/ownEntry); the unreadable-row and error rows also assert the message names the file.
 
-## Disagreements
-None.
+MEASUREMENTS: 23 assertions passed (`node src/hooks/test-branch-repos-config.js`). Suite-isolation 52 passed.
+
+BUDGET USED: about 9 tool calls, under budget; no review round run by me.
+
+NEXT: `readReposConfig` takes the path as an argument; callers pass `configPath()`. `entryFor` expects the caller to pass `realNormalized(cwd)`. `ownEntry` takes the git toplevel from `gitRead` (S1/git-read owner). The example file has no `base` key in the entry, per the plan.
+
+TEST COMMAND: `node src/hooks/test-branch-repos-config.js` -> "23 passed, 0 failed".
+
+git diff --stat (working tree, tracked files): only pre-existing edits (features/statusline-windows-datadir.md, run/tracker.md). My three files are untracked (new): `.claude/branch-review-repos.json.example`, `src/hooks/lib/branch-repos-config.js`, `src/hooks/test-branch-repos-config.js`.

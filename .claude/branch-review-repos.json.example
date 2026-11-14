@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "_comment": "Per-repo opt-in for the branch-review gate on gh pr create. Install to ~/.claude/branch-review-repos.json. Keys are git toplevel paths with forward slashes, e.g. /home/you/dev/your-repo. A repo not listed is not gated. mode is advisory (the PR is allowed and the user sees a notice) or enforce (the PR is blocked until the branch is reviewed). A missing mode means advisory (the default). base is optional: the branch to diff against, e.g. origin/dev; a missing base is resolved from git. Set \"mode\": \"enforce\" to block.",
+  "repos": {
+    "/home/you/dev/your-repo": { "mode": "advisory" }
+  }
+}
