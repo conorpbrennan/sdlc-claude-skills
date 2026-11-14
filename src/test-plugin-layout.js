@@ -30,7 +30,7 @@ const EXPECTED_WIRING = {
         { matcher: null, hooks: [['command', 'session-start-feature.js', 10]] },
     ],
     UserPromptSubmit: [
-        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 5], ['command', 'orchestrator-mode.js', 5]] },
+        { matcher: '', hooks: [['command', 'enforce-review-implementer.js', 5], ['command', 'orchestrator-mode.js', 5], ['command', 'rule-reminder.js', 5]] },
     ],
     PreToolUse: [
         {
@@ -57,6 +57,9 @@ const EXPECTED_WIRING = {
         },
         { matcher: 'Read|Bash|Skill|Agent', hooks: [['command', 'orchestrator-mode.js', 5]] },
         { matcher: 'Read', hooks: [['command', 'read-trim.js', 10]] },
+    ],
+    Stop: [
+        { matcher: null, hooks: [['command', 'rule-stop-hook.js', 5]] },
     ],
 };
 const PLUGIN_COMMAND = /^node "\$\{CLAUDE_PLUGIN_ROOT\}\/src\/hooks\/([A-Za-z0-9._-]+\.js)"$/;
@@ -293,8 +296,8 @@ assert('every hook script in src/hooks/ is wired in hooks.json',
 
 console.log('\nSkills at the plugin layout paths:');
 const skillDirs = listDir(SKILLS_DIR).filter(e => e.isDirectory()).map(e => e.name).sort();
-assert('skills/ holds the four shipped skills', skillDirs,
-    ['branch-review', 'code-review-implementer', 'code-review-pre-commit', 'plan-spec']);
+assert('skills/ holds the five shipped skills', skillDirs,
+    ['branch-review', 'code-review-implementer', 'code-review-pre-commit', 'english-prose', 'plan-spec']);
 for (const dir of skillDirs) {
     assert(`skills/${dir}/SKILL.md name matches its directory`,
         frontmatterName(path.join(SKILLS_DIR, dir, 'SKILL.md')), dir);

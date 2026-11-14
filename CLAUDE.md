@@ -50,6 +50,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `plan-spec` skill | `skills/plan-spec/` |
 | `code-review-pre-commit` skill | `skills/code-review-pre-commit/SKILL.md` |
 | `code-review-implementer` skill | `skills/code-review-implementer/SKILL.md` |
+| `english-prose` skill | `skills/english-prose/SKILL.md` |
 | `code-reviewer` / `code-reviewer-deep` agents | `agents/` |
 | `implementer` agent (Sonnet, turn budget) | `agents/implementer.md` |
 | `verifier` agent (read-only, outside-in) | `agents/verifier.md` |

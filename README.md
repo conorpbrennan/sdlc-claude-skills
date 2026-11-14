@@ -151,7 +151,7 @@ exception is the opt-in `/sdlc:statusline install`, which writes the
 | Source | At run time | Purpose |
 |---|---|---|
 | `.claude-plugin/plugin.json`, `marketplace.json` | read by `/plugin` | the `sdlc` plugin, served by the `sdlc-claude-skills` marketplace |
-| `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer` | the three workflow skills |
+| `skills/*/SKILL.md` | skills `sdlc:plan-spec`, `sdlc:code-review-pre-commit`, `sdlc:code-review-implementer`, `sdlc:english-prose` | the four skills |
 | `agents/*.md` | `sdlc:code-reviewer` (Sonnet), `sdlc:code-reviewer-deep` (Opus) | the review sub-agents |
 | `agents/implementer.md` | `sdlc:implementer` (Sonnet, 80 turns) | the plan-step implementer; at 60 turns it wraps up, past 80 it reports PARTIAL |
 | `agents/verifier.md` | `sdlc:verifier` (Sonnet) | the read-only verification sub-agent |
@@ -182,6 +182,14 @@ per commit, one review per commit — or runs a plan that already exists.
 Carries the step form, the plan skeleton, the pre-run review loop and the
 four dispatch prompts. Not for search-shaped work, where the step list
 cannot be fixed before dispatch.
+
+### `english-prose`
+`[text or file path]`
+
+Writes or rewrites text in plain, simple English in Conor's tone: terse,
+direct, finding first. For anything another person will read — reports,
+DBA or infra messages, incident write-ups, summaries, emails, Teams or chat
+replies. Not for internal working notes, code, or commit messages.
 
 ### `code-review-pre-commit`
 `[files|staged] [--fresh] [--deep]`
@@ -254,6 +262,8 @@ in order, cheapest rejection first.
 | `session-start-feature.js` | SessionStart | Creates `features/<branch>.md` on a new feature branch and asks for the requirement |
 | `enforce-review-implementer.js` | UserPromptSubmit | Routes review-fix prompts through the implementer skill |
 | `orchestrator-mode.js` | UserPromptSubmit, PreToolUse (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`), PostToolUse (`Read`, `Bash`, `Skill`, `Agent`) | Orchestrator mode: turns on from a handoff, denies main-session code edits, nudges after inline Bash |
+| `rule-reminder.js` | UserPromptSubmit | Injects a three-point end-of-turn check: no option question outside a gate, open the code behind every claim, a negative result is not a stop. Step `rule-reminder` (area `conduct`) |
+| `rule-stop-hook.js` | Stop | Blocks a turn that ends in an option question to the owner outside the gates (commit, push, secrets, delete or overwrite, spend). Step `rule-stop-hook` (area `conduct`). Each block is logged to `sdlc-rule-stop.log` in the config dir |
 | `session-start-instructions.js` | SessionStart | Injects the session instructions; sets `promptCacheTtl` and `model` in settings.json (see [Model steering](#model-steering)) |
 | `agent-tier-gate.js` | PreToolUse (`Agent`) | Opus dispatch needs a `TIER` reason; unset models on built-in agents go to Sonnet |
 | `read-trim.js` | PostToolUse (`Read`) | Trims whole-file Reads over 12,000 chars inside sub-agents |
@@ -634,6 +644,7 @@ Config-directory files live in `$CLAUDE_CONFIG_DIR`, else `~/.claude`. Repo file
 | `verification` | no | `pre-pr-verify` | It is opt-in. Remove the repo from `~/.claude/verify-repos.json`, or set its `mode` to `advisory` so it warns and never blocks. |
 | `branch-review` | no | `pre-pr-branch-review` | It is opt-in. Remove the repo from `~/.claude/branch-review-repos.json`, set its `mode` to `advisory`, or run `/sdlc:branch-review off` in the repo. `/sdlc:steps off branch-review` switches the step off. |
 | `commit-conventions` | yes | `enforce-co-author`, `claude-attribution-note`, `post-commit-notify` | None. |
+| `conduct` | no | `rule-stop-hook`, `rule-reminder` | `/sdlc:steps off rule-reminder`, or `off conduct`. |
 | `standalone` | no | `main-model` | `/sdlc:main-model off`, which sets `"mainModel": "off"` in the user file. |
 | `standalone` | no | `cache-ttl` | `touch ~/.claude/sdlc-cache-ttl.disabled`. The hook then only warns. |
 | `standalone` | no | `marketplace-autoupdate` | `touch ~/.claude/sdlc-autoupdate.disabled`, or set `"autoUpdate": false` on the marketplace entry. See [Auto-update](#auto-update). |

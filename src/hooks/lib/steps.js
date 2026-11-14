@@ -48,6 +48,7 @@ const AREAS = Object.freeze({
     'verification': Object.freeze({ guard: false, steps: Object.freeze(['pre-pr-verify']) }),
     'branch-review': Object.freeze({ guard: false, steps: Object.freeze(['pre-pr-branch-review']) }),
     'commit-conventions': Object.freeze({ guard: true, steps: Object.freeze(['enforce-co-author', 'claude-attribution-note', 'post-commit-notify']) }),
+    'conduct': Object.freeze({ guard: false, steps: Object.freeze(['rule-stop-hook', 'rule-reminder']) }),
     'standalone': Object.freeze({ guard: false, steps: Object.freeze(['main-model', 'cache-ttl', 'session-instructions', 'marketplace-autoupdate']) }),
 });
 
