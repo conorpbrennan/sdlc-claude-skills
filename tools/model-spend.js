@@ -19,19 +19,7 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
-// List prices in USD per million tokens, as cached on 6 Oct 2026. An estimate: it
-// ignores discounts and anything the transcript does not record.
-// Cache writes: 5-minute = 1.25x input, 1-hour = 2x input.
-const PRICING_DATE = '6 Oct 2026';
-const PRICES = {
-    opus: { input: 4, output: 20, cacheRead: 0.20 },
-    sonnet: { input: 2, output: 10, cacheRead: 0.20 },
-    haiku: { input: 0.10, output: 0.50, cacheRead: 0.01 },
-    fable: { input: 10, output: 50, cacheRead: 0.25 },
-};
-const CACHE_WRITE_5M = 1.25;
-const CACHE_WRITE_1H = 2;
-const OTHER = 'other';
+const { PRICES, MODEL_PRICES, PRICING_DATE, PRICING_SOURCE, family, cost, cacheWriteCost } = require('./lib/prices.js');
 
 // Main-session prompt cache. Claude Code picks the TTL by auth route: 1h on a
 // claude.ai login (inference_geo "global"), 5m through an API key or gateway.
@@ -72,52 +60,6 @@ const ORCH_FILE = /HANDOFF|handoff|tracker|TRACKER|\/reports\/|features\/|memory
 const GIT_STAGE = /^(?:git (?:add|commit|worktree|apply)|printf)\b/;
 const RUN_TESTS = /pytest|make test|npm test|node .*test/;
 const READ_ONLY_CMD = /^(?:(?:cat|head|tail|sed -n|grep|rg|find|ls|wc|awk)\b|git (?:diff|show|log|status)\b)/;
-
-// Family of a model id, by substring.
-//
-// Args:
-//   model: model id string, possibly missing.
-// Returns:
-//   a key of PRICES, or OTHER.
-function family(model) {
-    const m = String(model || '');
-    for (const k of Object.keys(PRICES)) if (m.includes(k)) return k;
-    return OTHER;
-}
-
-// Estimated cost of one API message.
-//
-// Args:
-//   model: model id string.
-//   u: the message's usage object.
-// Returns:
-//   USD, 0 for a model with no price.
-function cost(model, u) {
-    const p = PRICES[family(model)];
-    if (!p) return 0;
-    const w1h = ((u.cache_creation || {}).ephemeral_1h_input_tokens) || 0;
-    const w5m = (u.cache_creation_input_tokens || 0) - w1h;
-    return ((u.input_tokens || 0) * p.input
-        + w5m * p.input * CACHE_WRITE_5M
-        + w1h * p.input * CACHE_WRITE_1H
-        + (u.cache_read_input_tokens || 0) * p.cacheRead
-        + (u.output_tokens || 0) * p.output) / 1e6;
-}
-
-// Cache-write cost of one API message, split by TTL.
-//
-// Args:
-//   model: model id string.
-//   u: the message's usage object.
-// Returns:
-//   {w5m, w1h} in USD, both 0 for a model with no price.
-function cacheWriteCost(model, u) {
-    const p = PRICES[family(model)];
-    if (!p) return { w5m: 0, w1h: 0 };
-    const t1h = ((u.cache_creation || {}).ephemeral_1h_input_tokens) || 0;
-    const t5m = (u.cache_creation_input_tokens || 0) - t1h;
-    return { w5m: t5m * p.input * CACHE_WRITE_5M / 1e6, w1h: t1h * p.input * CACHE_WRITE_1H / 1e6 };
-}
 
 // Sorts one tool call into a turn group and label.
 //
@@ -251,7 +193,7 @@ async function buildReport(root, days, now) {
 
     const rep = {
         window: { days, since: since ? new Date(since).toISOString() : null },
-        pricing: { date: PRICING_DATE, perMTok: PRICES },
+        pricing: { date: PRICING_DATE, source: PRICING_SOURCE, perMTok: PRICES, perModel: MODEL_PRICES },
         total: { calls: 0, cost: 0 },
         byModel: {},
         mainVsSub: { main: {}, sub: {} },
@@ -397,7 +339,7 @@ function render(rep) {
     const out = [];
     const win = rep.window.days > 0 ? `last ${rep.window.days} day(s), since ${rep.window.since}` : 'all time';
     out.push(`Model spend, ${win}`);
-    out.push(`Estimate at list prices (cached ${rep.pricing.date}); real bills differ.`);
+    out.push(`Estimate at list prices (page of ${rep.pricing.date}); real bills differ.`);
     out.push('');
     out.push(`Total: ${usd(rep.total.cost)} over ${rep.total.calls} API calls`);
     out.push('');
