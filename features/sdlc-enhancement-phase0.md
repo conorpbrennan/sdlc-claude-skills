@@ -27,6 +27,12 @@
 
 ## History
 
+- 2026-11-21 `93d6762` — tools/lib/orch-signals.js: readSessions turns the transcript tree into session records (Phase 0, S2)
+  - .claude-plugin/plugin.json
+  - docs/plans/sdlc-phase0/tracker.md
+  - tools/lib/orch-signals.js
+  - tools/test-orch-signals.js
+
 - 2026-11-21 `57e4cf9` — tools/lib/prices.js: price per model id from the live price page (Phase 0, S1)
   - .claude-plugin/plugin.json
   - docs/plans/sdlc-phase0.md

@@ -13,7 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { readSessions } = require('./lib/orch-signals.js');
+const { readSessions, classify, signals, isPartial } = require('./lib/orch-signals.js');
 
 const OPUS = 'claude-opus-4-8';
 const DAY = 24 * 3600 * 1000;
@@ -191,7 +191,125 @@ async function testInterruptsAndPeak() {
     });
 }
 
+const DEV = path.join(os.homedir(), 'dev');
+const IMPL_TYPE = 'sdlc:implementer';
+const REV_TYPE = 'sdlc:code-reviewer';
+const GP_TYPE = 'general-purpose';
+const T0 = Date.parse('2026-11-01T00:00:00Z');
+
+// Hand-built record with the fields classify and signals read.
+function rec(over) {
+    return Object.assign({
+        famTurns: {}, agents: [], subs: [], mainEdits: [], events: [], firstUserText: '',
+        peakCtx: 0, interrupts: 0, commits: 0, mainCost: 0,
+    }, over);
+}
+
+// One dispatch record; `ms` is the offset from T0.
+function ag(type, o) {
+    const x = o || {};
+    return {
+        id: x.id || 'id' + Math.random(), ts: new Date(T0 + (x.ms || 0)).toISOString(), type, desc: x.desc || '',
+        promptLen: x.len || 0, promptHash: x.hash || 'h' + Math.random(), isError: Boolean(x.err),
+    };
+}
+
+const many = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+
+function testClassify() {
+    const impl2 = many(2, () => ag(IMPL_TYPE));
+    const gp = (desc, len) => many(2, () => ag(GP_TYPE, { desc, len }));
+    const files = (n) => [{ files: many(n, (i) => '/x/f' + i + '.js'), cost: 0 }];
+    const rows = [
+        ['implementer by type', rec({ agents: impl2 }), { nImpl: 2, orch: true }],
+        ['gp by description and length', rec({ agents: gp('build S1', 1501) }), { nImpl: 2, orch: true }],
+        ['gp at 1500 chars is not one', rec({ agents: gp('build S1', 1500) }), { nImpl: 0, orch: false }],
+        ['gp with other description', rec({ agents: gp('research it', 3000) }), { nImpl: 0, orch: false }],
+        ['reviewers by prefix', rec({ agents: [ag(REV_TYPE), ag('sdlc:code-reviewer-deep')] }), { nRev: 2, orch: true }],
+        ['denied reviewer counts', rec({ agents: [ag(REV_TYPE, { err: true })] }), { nRev: 1, orch: false }],
+        ['main = most turns', rec({ famTurns: { opus: 6, sonnet: 4 } }), { main: 'opus', mixed: true }],
+        ['second at exactly 10% is mixed', rec({ famTurns: { opus: 9, sonnet: 1 } }), { mixed: true }],
+        ['second under 10% is not', rec({ famTurns: { opus: 19, sonnet: 1 } }), { mixed: false }],
+        ['haiku never makes mixed', rec({ famTurns: { opus: 8, haiku: 2 } }), { mixed: false }],
+        ['no turns', rec(), { main: 'none', mixed: false }],
+        ['first message and one dispatch', rec({ firstUserText: 'continue HANDOFF-x.md', agents: [ag(IMPL_TYPE)] }), { orch: true }],
+        ['first message, no dispatch', rec({ firstUserText: 'continue HANDOFF-x.md' }), { orch: false }],
+        ['eleven steps alone is low', rec({ agents: many(11, () => ag(IMPL_TYPE)) }), { sigN: 1, tier: 'low', orch: true }],
+        ['steps and reviews is high', rec({ agents: [...many(11, () => ag(IMPL_TYPE)), ...many(6, () => ag(REV_TYPE))] }), { sigN: 2, tier: 'high' }],
+        ['21 files and peak context is high', rec({ subs: files(21), peakCtx: 250000 }), { sigN: 2, tier: 'high' }],
+        ['20 files and 249999 context is low', rec({ subs: files(20), peakCtx: 249999 }), { sigN: 0, tier: 'low' }],
+        ['sensitive path and two repos is high', rec({ mainEdits: [path.join(DEV, 'a', 'src/hooks/x.js'), path.join(DEV, 'b', 'y.js')] }), { sigN: 2, tier: 'high' }],
+        ['sensitive path in one repo is low', rec({ mainEdits: [path.join(DEV, 'a', 'auth.js')] }), { sigN: 1, tier: 'low' }],
+        ['.env is not sensitive', rec({ mainEdits: [path.join(DEV, 'a', '.env')] }), { sigN: 0 }],
+    ];
+    for (const [name, r, want] of rows) {
+        const got = classify(r);
+        const bad = Object.keys(want).filter((k) => got[k] !== want[k]);
+        ok('classify: ' + name, bad.length === 0, bad.map((k) => k + '=' + got[k]));
+    }
+}
+
+function testIsPartial() {
+    const rows = [
+        ['bare', 'Status: PARTIAL', true],
+        ['lowercase is not the marker', 'partial', false],
+        ['inside a word', 'PARTIALLY done', false],
+        ['nothing negates', 'nothing was PARTIAL', false],
+        ['not negates', 'this is not PARTIAL', false],
+        ['never negates', 'never PARTIAL here', false],
+    ];
+    for (const [name, t, want] of rows) ok('isPartial: ' + name, isPartial(t) === want, t);
+}
+
+function testBlockLoops() {
+    const C = 'COMMIT_OK';
+    const rows = [
+        ['three of one kind', ['A', 'A', 'A'], 1],
+        ['four of one kind is one loop', ['A', 'A', 'A', 'A'], 1],
+        ['commit between', ['A', 'A', C, 'A', 'A'], 0],
+        ['commit resets, then three', ['A', 'A', 'A', C, 'A', 'A', 'A'], 2],
+        ['two kinds alternating', ['A', 'B', 'A', 'B', 'A', 'B'], 0],
+    ];
+    for (const [name, kinds, want] of rows) {
+        const events = kinds.map((k, i) => ({ ts: new Date(T0 + i).toISOString(), k }));
+        const got = signals(rec({ events })).blockLoops;
+        ok('blockLoops: ' + name, got === want, got);
+    }
+}
+
+function testNewSignals() {
+    const ev = (ms, k) => ({ ts: new Date(T0 + ms).toISOString(), k });
+    const COMMIT = 'COMMIT_OK';
+    const r = rec({
+        agents: [
+            ag(IMPL_TYPE, { ms: 0, err: true, hash: 'a' }),
+            ag(IMPL_TYPE, { ms: 119000, hash: 'b' }),
+            ag(REV_TYPE, { ms: 200000, err: true, hash: 'c' }),
+            ag(REV_TYPE, { ms: 321000, hash: 'd' }),
+            ag(GP_TYPE, { ms: 400000, hash: 'h1' }),
+            ag(GP_TYPE, { ms: 459000, hash: 'h1' }),
+            ag(GP_TYPE, { ms: 470000, hash: 'h1' }),
+            ag(GP_TYPE, { ms: 600000, hash: 'h2' }),
+            ag(GP_TYPE, { ms: 661000, hash: 'h2' }),
+            ag(REV_TYPE, { ms: 700000, hash: 'j' }),
+            ag(REV_TYPE, { ms: 710000, hash: 'k' }),
+            ag(REV_TYPE, { ms: 900000, hash: 'l' }),
+        ],
+        events: [ev(10000, COMMIT), ev(330000, COMMIT), ev(800000, COMMIT)],
+    });
+    const s = signals(r);
+    ok('reviewCycles: denied ignored, empty commit closes none, open kept',
+        JSON.stringify(s.reviewCycles) === JSON.stringify({ 1: 1, 2: 1, 3: 0, '4+': 0, open: 1 }), s.reviewCycles);
+    ok('reviews counts the denied dispatch', s.reviews === 5, s.reviews);
+    ok('denyRetryPairs: 119 s counts, 121 s does not', s.denyRetryPairs === 1, s.denyRetryPairs);
+    ok('identicalPromptPairs: 59 s and 11 s count, 61 s does not', s.identicalPromptPairs === 2, s.identicalPromptPairs);
+}
+
 (async () => {
+    testClassify();
+    testIsPartial();
+    testBlockLoops();
+    testNewSignals();
     await testSubsAttach();
     await testResumeDedupe();
     await testWindows();

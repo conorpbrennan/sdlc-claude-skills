@@ -6,7 +6,7 @@ RUN: tmp/sdlc-phase0-plan.md, revision 2. Branch: sdlc-enhancement-phase0. Start
 BUDGET: six steps, about 165 implementer tool calls, 6-9 review rounds. Spent: plan writing only.
 OWNER DECISIONS (21 Nov 2026): all four answered yes: standing authorisation (stage, commit, fix agents
   unattended S1-S6; no push, no PR), reproduction rule max(5%, 1 event), plan copied to docs/plans/, scope.
-IN FLIGHT: S2 implementer (round 1)
+IN FLIGHT: S3 implementer (round 1)
 TREE: staged nothing; unstaged clean (tmp/ is gitignored). Worktrees open: none
 DISPOSITIONS:
   source round 1 (Opus, whole document vs HEAD + reference scripts), verdict NOT YET, 4 findings:
@@ -43,3 +43,17 @@ STEP S1: committed
            object, so a Haiku message over 100000 prompt tokens can price its write split at the low tier (estimate
            only; usage-fit.js is MUST NOT TOUCH). Review ran on the staged diff in place, no review worktree
            (owner's global rule: no worktree unless asked).
+
+STEP S2: committed
+  commit:  93d6762
+  gate:    test-orch-signals 18 assertions passed (7 test functions); layout, isolation, model-spend, usage-fit tests
+           and `claude plugin validate .` exit 0
+  reviews: sdlc:code-reviewer round 1, PASS, 0/0/2
+  reports: docs/plans/sdlc-phase0/reports/S2-implementer-1.md, S2-review-1.md (gitignored)
+  stage:   the step's two files, plugin.json (1.0.107), the S1 tracker block, the feature record
+  files:   as declared
+  notes:   implementer wrote the lib before the test, moved it aside for the red run (red shows only a missing
+           module). The TDD gate did not block. Step text says "seven tests" and lists eight items; seven test
+           functions written, the repeated-Agent check sits in the resume test. Advisories (NaN since/until at a
+           direct caller; 18 assertions vs ceiling 8) noted not actioned. Sorted sub-file read order is a
+           deliberate change from the reference's readdir order.

@@ -5,6 +5,7 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
@@ -46,6 +47,41 @@ const DENIAL_ORCHESTRATOR_RE = /Orchestrator mode/;
 const DENIAL_COMMIT_GATE_RE = /PRE_COMMIT_GATE/;
 const DENIAL_COMMIT_REVIEW_RE = /PRE_COMMIT_REVIEW/;
 const DENIAL_OTHER_HOOK_RE = /hook error|blocked by hook|Hook .*denied/i;
+
+// Classification and signal rules (port of tmp/sdlc-phase0/reference/classify.js and analyze.js).
+const IMPL_TYPE = 'sdlc:implementer';
+const GENERAL_TYPE = DEFAULT_AGENT_TYPE;
+const IMPL_LIKE_RE = /build|implement|\bS\d+|step|fix|add |wire|refactor|port|write/i;
+const REVIEWER_RE = /^sdlc:code-reviewer/;
+const ORCH_FIRST_RE = /HANDOFF-|\/sdlc:orchestrate|plan-spec|tracker\.md|\bRESUME\b|implementation-plan/i;
+const SENSITIVE_RE = /src\/hooks\/|\/hooks\/|gate|auth|secret|security|credential|permission/i;
+const PARTIAL_RE = /\bPARTIAL\b/;
+const PARTIAL_NEG_RE = /(nothing|not|no|never|none|without|neither)\b[^.\n]{0,30}PARTIAL/i;
+const TDD_FAIL_RE = /TDD_GATE:\s*FAIL/;
+const TDD_PASS_RE = /TDD_GATE:\s*PASS/;
+const SRC_RE = /\.(py|js|ts|tsx|jsx|cs|sql|sh|java|go|rs|html|css)$/i;
+const NOT_SRC_RE = /scratchpad|^\/tmp\/|\.claude\//;
+const DEV_DIR = path.join(os.homedir(), 'dev');
+
+const IMPL_PROMPT_MIN = 1500;
+const MIXED_SHARE = 0.1;
+const MIXED_EXCLUDED_FAMILY = 'haiku';
+const FAMILY_NONE = 'none';
+const ORCH_MIN_DISPATCHES = 2;
+const TIER_HIGH = 'high';
+const TIER_LOW = 'low';
+const TIER_MIN_SIGNALS = 2;
+const TIER_STEPS = 11;
+const TIER_FILES = 21;
+const TIER_REVIEWS = 6;
+const TIER_REPOS = 2;
+const TIER_PEAK_CTX = 250000;
+const BLOCK_LOOP_RUN = 3;
+const CYCLE_OPEN = 'open';
+const CYCLE_MAX_KEY = '4+';
+const CYCLE_MAX = 4;
+const DENY_RETRY_MS = 120000;
+const IDENTICAL_PROMPT_MS = 60000;
 
 const USER_TEXT_MAX = 400;
 const DESC_MAX = 120;
@@ -434,4 +470,215 @@ async function readSessions(root, opts) {
     return out;
 }
 
-module.exports = { readSessions, denialKind };
+/**
+ * True when the dispatch is an implementer: the plugin agent, or a long general-purpose
+ * prompt whose description reads like a build step.
+ *
+ * Args:
+ *   agent: an agent record ({type, desc, promptLen}).
+ * Returns:
+ *   boolean.
+ */
+function isImplementer(agent) {
+    return agent.type === IMPL_TYPE
+        || (agent.type === GENERAL_TYPE && IMPL_LIKE_RE.test(agent.desc) && agent.promptLen > IMPL_PROMPT_MIN);
+}
+
+/**
+ * True when the dispatch is a code reviewer (any `sdlc:code-reviewer*` type).
+ *
+ * Args:
+ *   agent: an agent record.
+ * Returns:
+ *   boolean.
+ */
+function isReviewer(agent) {
+    return REVIEWER_RE.test(agent.type);
+}
+
+/**
+ * True when the text reports PARTIAL and does not negate it ("nothing PARTIAL").
+ *
+ * Args:
+ *   text: a sub-agent final report.
+ * Returns:
+ *   boolean.
+ */
+function isPartial(text) {
+    const t = String(text || '');
+    return PARTIAL_RE.test(t) && !PARTIAL_NEG_RE.test(t);
+}
+
+/**
+ * The first directory under ~/dev of a path, or null.
+ *
+ * Args:
+ *   file: an absolute path.
+ * Returns:
+ *   The repo directory name or null.
+ */
+function repoOf(file) {
+    const rel = path.relative(DEV_DIR, file);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    return rel.split(path.sep)[0] || null;
+}
+
+/**
+ * Scores one session record: dominant model family, orchestration flag and complexity tier.
+ *
+ * Args:
+ *   rec: a session record from readSessions.
+ * Returns:
+ *   {main, mixed, orch, tier, sigN, nImpl, nRev}.
+ */
+function classify(rec) {
+    const fam = rec.famTurns || {};
+    const total = Object.values(fam).reduce((a, b) => a + b, 0) || 1;
+    const sorted = Object.entries(fam).sort((a, b) => b[1] - a[1]);
+    const main = sorted.length ? sorted[0][0] : FAMILY_NONE;
+    const mixed = sorted.length > 1 && sorted[1][1] / total >= MIXED_SHARE && sorted[1][0] !== MIXED_EXCLUDED_FAMILY;
+    const nImpl = rec.agents.filter(isImplementer).length;
+    const nRev = rec.agents.filter(isReviewer).length;
+    const orch = nImpl + nRev >= ORCH_MIN_DISPATCHES || (ORCH_FIRST_RE.test(rec.firstUserText || '') && nImpl + nRev >= 1);
+    const subFiles = new Set();
+    for (const s of rec.subs) for (const f of s.files) subFiles.add(f);
+    const all = [...subFiles, ...rec.mainEdits];
+    const repos = new Set(all.map(repoOf).filter(Boolean));
+    const fired = [
+        nImpl >= TIER_STEPS, subFiles.size >= TIER_FILES, nRev >= TIER_REVIEWS,
+        all.some((f) => SENSITIVE_RE.test(f)), repos.size >= TIER_REPOS, rec.peakCtx >= TIER_PEAK_CTX,
+    ];
+    const sigN = fired.filter(Boolean).length;
+    return { main, mixed, orch, tier: sigN >= TIER_MIN_SIGNALS ? TIER_HIGH : TIER_LOW, sigN, nImpl, nRev };
+}
+
+/**
+ * Counts block loops: a run of one non-COMMIT_OK denial kind reaching exactly 3,
+ * reset by COMMIT_OK.
+ *
+ * Args:
+ *   events: [{k}] in file order.
+ * Returns:
+ *   The loop count.
+ */
+function countBlockLoops(events) {
+    let loops = 0;
+    let run = 0;
+    let last = null;
+    for (const e of events) {
+        if (e.k === EVENT_COMMIT_OK) { run = 0; last = null; continue; }
+        if (e.k === last) run += 1; else { run = 1; last = e.k; }
+        if (run === BLOCK_LOOP_RUN) loops += 1;
+    }
+    return loops;
+}
+
+/**
+ * Walks non-denied reviewer dispatches and COMMIT_OK events in time order. A commit
+ * with reviews pending closes a cycle into its bucket; a commit with none closes none;
+ * pending reviews at the end are one open cycle. At equal time, dispatches come first.
+ *
+ * Args:
+ *   rec: a session record.
+ * Returns:
+ *   {'1', '2', '3', '4+', open} counts.
+ */
+function reviewCycles(rec) {
+    const out = { 1: 0, 2: 0, 3: 0, [CYCLE_MAX_KEY]: 0, [CYCLE_OPEN]: 0 };
+    const items = [
+        ...rec.agents.filter((a) => isReviewer(a) && !a.isError).map((a) => ({ t: Date.parse(a.ts), rev: true })),
+        ...rec.events.filter((e) => e.k === EVENT_COMMIT_OK).map((e) => ({ t: Date.parse(e.ts), rev: false })),
+    ].sort((a, b) => a.t - b.t);
+    let pending = 0;
+    for (const it of items) {
+        if (it.rev) { pending += 1; continue; }
+        if (pending > 0) out[pending >= CYCLE_MAX ? CYCLE_MAX_KEY : pending] += 1;
+        pending = 0;
+    }
+    if (pending > 0) out[CYCLE_OPEN] += 1;
+    return out;
+}
+
+/**
+ * Counts errored Agent calls whose next Agent call (file order, any outcome) has the
+ * same type and starts no more than 120 s later.
+ *
+ * Args:
+ *   agents: agent records in file order.
+ * Returns:
+ *   The pair count.
+ */
+function countDenyRetryPairs(agents) {
+    let n = 0;
+    for (let i = 0; i + 1 < agents.length; i += 1) {
+        const a = agents[i];
+        const b = agents[i + 1];
+        if (a.isError && a.type === b.type && Date.parse(b.ts) - Date.parse(a.ts) <= DENY_RETRY_MS) n += 1;
+    }
+    return n;
+}
+
+/**
+ * Counts non-error calls whose prompt hash equals an earlier non-error call's, at most
+ * 60 s before. Each later call counts once.
+ *
+ * Args:
+ *   agents: agent records in file order.
+ * Returns:
+ *   The pair count.
+ */
+function countIdenticalPromptPairs(agents) {
+    const live = agents.filter((a) => !a.isError);
+    let n = 0;
+    for (let i = 1; i < live.length; i += 1) {
+        const t = Date.parse(live[i].ts);
+        const hit = live.slice(0, i).some((e) => e.promptHash === live[i].promptHash && t - Date.parse(e.ts) <= IDENTICAL_PROMPT_MS);
+        if (hit) n += 1;
+    }
+    return n;
+}
+
+/**
+ * Failure and process signals for one session record.
+ *
+ * Args:
+ *   rec: a session record from readSessions.
+ * Returns:
+ *   {steps, partial, tddFail, tddPass, interrupts, mainSrcEdits, blockLoops, commits,
+ *    reviews, peakCtx, mainCost, subCost, reviewCycles, denyRetryPairs, identicalPromptPairs}.
+ */
+function signals(rec) {
+    const byId = {};
+    for (const s of rec.subs) byId[s.toolUseId] = s;
+    const impl = rec.agents.filter(isImplementer);
+    const rev = rec.agents.filter(isReviewer);
+    let partial = 0;
+    for (const a of impl) if (byId[a.id] && isPartial(byId[a.id].final)) partial += 1;
+    let tddFail = 0;
+    let tddPass = 0;
+    for (const a of rev) {
+        const s = byId[a.id];
+        if (!s) continue;
+        if (TDD_FAIL_RE.test(s.final)) tddFail += 1;
+        else if (TDD_PASS_RE.test(s.final)) tddPass += 1;
+    }
+    return {
+        steps: impl.length,
+        partial,
+        tddFail,
+        tddPass,
+        interrupts: rec.interrupts,
+        mainSrcEdits: rec.mainEdits.filter((f) => SRC_RE.test(f) && !NOT_SRC_RE.test(f)).length,
+        blockLoops: countBlockLoops(rec.events),
+        commits: rec.commits,
+        reviews: rev.length,
+        peakCtx: rec.peakCtx,
+        mainCost: rec.mainCost,
+        subCost: rec.subs.reduce((a, s) => a + s.cost, 0),
+        reviewCycles: reviewCycles(rec),
+        denyRetryPairs: countDenyRetryPairs(rec.agents),
+        identicalPromptPairs: countIdenticalPromptPairs(rec.agents),
+    };
+}
+
+module.exports = { readSessions, denialKind, classify, signals, isImplementer, isPartial };
