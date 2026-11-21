@@ -31,6 +31,7 @@ function near(a, b) {
 }
 
 const HOUR = 3600 * 1000;
+const DAY_MS = 24 * HOUR;
 const NOW = Date.now();
 const iso = (msAgo) => new Date(NOW - msAgo).toISOString();
 
@@ -40,6 +41,7 @@ const SONNET = 'claude-sonnet-5-5';
 // One assistant transcript line.
 function line(o) {
     return JSON.stringify({
+        parentUuid: null, // main-session lines carry the key; orch-signals reads only those
         type: 'assistant',
         timestamp: o.ts,
         requestId: o.req,
@@ -243,6 +245,81 @@ fs.mkdirSync(okRoot, { recursive: true });
 fs.writeFileSync(path.join(okRoot, 'gw1h.jsonl'), calls('g1', '', '1h', [60, 50]));
 const otext = spawnSync('node', [SCRIPT, '--projects', path.join(sb, 'ok-projects')], { encoding: 'utf-8' }).stdout;
 ok('gateway on 1h prints no fix line but has the section', !otext.includes(FIX) && /prompt cache/i.test(otext), otext.slice(-400));
+
+// ---- orchestration section: its own tree, so the totals above stay put ----
+// One session: an implementer and a reviewer dispatch, then a commit. Each message costs
+// 10k input + 1k output on Opus = $0.04 + $0.02 = $0.06.
+const orchRoot = path.join(sb, 'orch-projects');
+const orchProj = path.join(orchRoot, '-home-me-orch');
+fs.mkdirSync(orchProj, { recursive: true });
+const ORCH_USAGE = { input_tokens: 10000, output_tokens: 1000 };
+const ORCH_HEADING = '9. Orchestration signals per 10 implementer dispatches';
+fs.writeFileSync(path.join(orchProj, 'o1.jsonl'), [
+    line({
+        ts: iso(3 * HOUR), req: 'o1', id: 'om1', model: OPUS, usage: ORCH_USAGE,
+        content: [tool('Agent', { subagent_type: 'sdlc:implementer', prompt: 'build S1' }, 'tuI'), tool('Agent', { subagent_type: 'sdlc:code-reviewer', prompt: 'review' }, 'tuR')],
+    }),
+    line({ ts: iso(2 * HOUR), req: 'o2', id: 'om2', model: OPUS, usage: ORCH_USAGE, content: [tool('Bash', { command: 'git commit -m x' }, 'tuC')] }),
+    JSON.stringify({ parentUuid: null, type: 'user', timestamp: iso(2 * HOUR - 1000), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tuC', content: '[main abc1234] x' }] } }),
+    line({ ts: iso(1 * HOUR), req: 'o3', id: 'om3', model: OPUS, usage: ORCH_USAGE }),
+].join('\n') + '\n');
+function runOrch(args) {
+    return spawnSync('node', [SCRIPT, '--projects', orchRoot, ...args], { encoding: 'utf-8' });
+}
+console.log('\nOrchestration section:');
+const oj = JSON.parse(runOrch(['--json']).stdout);
+const og = (oj.orchestration && oj.orchestration.groups) || [];
+const orow = og[0] || {};
+ok('one session gives one group row with its counts', og.length === 1 && orow.group === 'opus low' && orow.sessions === 1 && orow.steps === 1 && orow.reviews === 1 && orow.commits === 1, og);
+const owin = (oj.orchestration || {}).window || {};
+ok('window is null for flags not given', owin.since === null && owin.until === null && owin.split === null, owin);
+const sj = JSON.parse(runOrch(['--json', '--since', iso(DAY_MS), '--split', iso(HOUR / 2)]).stdout).orchestration;
+ok('flags given come back as ISO strings; --split prefixes the group', typeof sj.window.since === 'string' && typeof sj.window.split === 'string' && sj.groups[0].group === 'before opus low', sj);
+const untilIso = iso(90 * 60 * 1000);
+const cut = JSON.parse(runOrch(['--json', '--until', untilIso]).stdout);
+ok('--until before the newest message lowers total.cost by that message', near(oj.total.cost - cut.total.cost, 0.06), [oj.total.cost, cut.total.cost]);
+ok('--since with --days exits 2', runOrch(['--since', iso(DAY_MS), '--days', '3']).status === 2);
+const badUntil = runOrch(['--until', 'notadate']);
+ok('--until notadate exits 2 with a usage line', badUntil.status === 2 && /usage/i.test(badUntil.stderr), badUntil.stderr);
+const otx = runOrch([]).stdout;
+ok('text report has the section 9 heading', otx.includes(ORCH_HEADING), otx.slice(-400));
+const ANATOMY_HEADING = '10. PARTIAL anatomy';
+const an = oj.orchestration.anatomy || {};
+ok('text report has the section 10 heading after section 9', otx.includes(ANATOMY_HEADING) && otx.indexOf(ANATOMY_HEADING) > otx.indexOf(ORCH_HEADING), otx.slice(-400));
+ok('--json carries orchestration.anatomy with dispatches and the four dimensions', an.dispatches === 0 && an.partial === 0 && ['promptBytes', 'toolCalls', 'filesEdited', 'testFilesNamed'].every((k) => Array.isArray((an.bands || {})[k])), an);
+
+// ---- review verdicts from the handback message ----
+console.log('\nReview verdict source:');
+const hbRoot = path.join(sb, 'hb-projects');
+const hbProj = path.join(hbRoot, '-home-me-hb');
+fs.mkdirSync(hbProj, { recursive: true });
+const HB_USAGE = { input_tokens: 1000 };
+// One reviewer sub-agent per case, each in its own session; content is the
+// ordered list of assistant records, each a list of blocks.
+function hbReviewer(session, records) {
+    const dir = path.join(hbProj, session, 'subagents');
+    fs.mkdirSync(dir, { recursive: true });
+    const base = path.join(dir, 'agent-' + session);
+    fs.writeFileSync(base + '.meta.json', JSON.stringify({ agentType: 'sdlc:code-reviewer', toolUseId: 'tu-' + session }));
+    const lines = records.map((content, i) => line({ ts: iso(HOUR - i * 1000), req: 'q-' + session + i, id: 'id-' + session + i, model: SONNET, usage: HB_USAGE, content }));
+    fs.writeFileSync(base + '.jsonl', lines.join('\n') + '\n');
+}
+const handback = (msg) => tool('SubagentHandback', { message: msg });
+const HB_CASES = [
+    { session: 'hb-only', records: [[text('Reading the diff.')], [handback('Report.\nTDD_GATE: FAIL')]], want: 'FAIL' },
+    { session: 'text-only', records: [[text('Fine.\nTDD_GATE: PASS')]], want: 'PASS' },
+    { session: 'hb-wins', records: [[text('Draft.\nTDD_GATE: PASS')], [handback('Final.\nTDD_GATE: FAIL')]], want: 'FAIL' },
+];
+for (const c of HB_CASES) hbReviewer(c.session, c.records);
+for (const c of HB_CASES) {
+    // Isolate each case: a projects root holding only that session.
+    const root = path.join(sb, 'hb-' + c.session);
+    fs.mkdirSync(path.join(root, '-home-me-hb'), { recursive: true });
+    fs.cpSync(path.join(hbProj, c.session), path.join(root, '-home-me-hb', c.session), { recursive: true });
+    const byAgent = (JSON.parse(spawnSync('node', [SCRIPT, '--json', '--projects', root], { encoding: 'utf-8' }).stdout).reviews || {}).byAgent || {};
+    const counts = byAgent['sdlc:code-reviewer'] || {};
+    ok('verdict ' + c.session + ' is ' + c.want, counts[c.want] === 1 && counts.unknown === 0, counts);
+}
 
 fs.rmSync(sb, { recursive: true, force: true });
 

@@ -3,13 +3,20 @@
 // (~/.claude/projects/**/*.jsonl). It answers one question: did steering work
 // toward Sonnet actually move the spend?
 //
-// Usage: node tools/model-spend.js [--days N] [--json] [--projects DIR]
+// Usage: node tools/model-spend.js [--days N | --since ISO] [--until ISO] [--split ISO] [--json] [--projects DIR]
 //   --days N       window by message timestamp (default 7; 0 means all time)
+//   --since ISO    window start; replaces --days (giving both is an error)
+//   --until ISO    drop every message after this time, in every section (default now)
+//   --split ISO    section 9 groups sessions that ended before / after this time
 //   --json         print the same data as JSON
 //   --projects DIR transcripts root (default ~/.claude/projects)
 //
 // Section 8 shows the main-session prompt cache by backend (claude.ai login vs
 // gateway/API key), split by cache-write TTL, with the cost of rebuilds after idle gaps.
+// Section 9 shows orchestration signals per 10 implementer dispatches, by session group
+// (tools/lib/orch-signals.js).
+// Section 10 shows the PARTIAL rate by dispatch size (prompt bytes, tool calls, files edited,
+// test files named).
 //
 // Files are streamed line by line: the real tree is about 2 GB.
 'use strict';
@@ -19,19 +26,31 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
-// List prices in USD per million tokens, as cached on 6 Oct 2026. An estimate: it
-// ignores discounts and anything the transcript does not record.
-// Cache writes: 5-minute = 1.25x input, 1-hour = 2x input.
-const PRICING_DATE = '6 Oct 2026';
-const PRICES = {
-    opus: { input: 4, output: 20, cacheRead: 0.20 },
-    sonnet: { input: 2, output: 10, cacheRead: 0.20 },
-    haiku: { input: 0.10, output: 0.50, cacheRead: 0.01 },
-    fable: { input: 10, output: 50, cacheRead: 0.25 },
-};
-const CACHE_WRITE_5M = 1.25;
-const CACHE_WRITE_1H = 2;
-const OTHER = 'other';
+const { PRICES, MODEL_PRICES, PRICING_DATE, PRICING_SOURCE, family, cost, cacheWriteCost } = require('./lib/prices.js');
+const { readSessions, summarise, partialAnatomy } = require('./lib/orch-signals.js');
+
+// Section 9 labels. Keys are the Row keys of summarise().
+const ORCH_HEADING = '9. Orchestration signals per 10 implementer dispatches';
+const ORCH_WINDOW_LINE = 'Sessions are those active since the window start';
+const ORCH_NONE = 'none';
+const ORCH_DASH = '-';
+const ORCH_COUNT_LABELS = [
+    ['partial', 'partial'], ['tddFail', 'tdd-fail'], ['interrupts', 'interrupts'], ['mainSrcEdits', 'main-src-edits'],
+    ['blockLoops', 'block-loops'], ['denyRetryPairs', 'deny-retry'], ['identicalPromptPairs', 'same-prompt'],
+];
+const ORCH_SHARE_LABELS = [
+    ['partial', 'partial'], ['tddFail', 'tdd-fail'], ['interrupts', 'interrupts'], ['mainSrcEdits', 'main-src-edits'],
+    ['blockLoops', 'block-loops'],
+];
+const ORCH_CYCLE_KEYS = ['1', '2', '3', '4+', 'open'];
+const ANATOMY_HEADING = '10. PARTIAL anatomy';
+const ANATOMY_DIM_LABELS = [
+    ['promptBytes', 'prompt bytes'], ['toolCalls', 'tool calls'], ['filesEdited', 'files edited'], ['testFilesNamed', 'test files named'],
+];
+const TOKENS_PER_K = 1000;
+const PERCENT = 100;
+const TIME_FLAGS = { '--since': 'since', '--until': 'until', '--split': 'splitAt' };
+const USAGE_LINE = 'Usage: model-spend.js [--days N | --since ISO] [--until ISO] [--split ISO] [--json] [--projects DIR]';
 
 // Main-session prompt cache. Claude Code picks the TTL by auth route: 1h on a
 // claude.ai login (inference_geo "global"), 5m through an API key or gateway.
@@ -58,6 +77,9 @@ const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const EXPENSIVE_MODEL = /opus|fable/i;
 // Same shape as the tier gate's line in src/hooks/agent-tier-gate.js.
 const TIER_LINE = /^\s*tier:\s*(?:opus|fable)\s*[:\-–—]\s*\S/im;
+// Tool a sub-agent calls to hand its report back. Reviewers put the verdict in
+// its input.message, not in a text block. Same name as orch-signals.js uses.
+const TOOL_HANDBACK = 'SubagentHandback';
 const VERDICT = /TDD_GATE:\s*(PASS|FAIL)/g;
 const REVIEWER_TYPE = 'code-reviewer';
 const UNKNOWN = 'unknown';
@@ -72,52 +94,6 @@ const ORCH_FILE = /HANDOFF|handoff|tracker|TRACKER|\/reports\/|features\/|memory
 const GIT_STAGE = /^(?:git (?:add|commit|worktree|apply)|printf)\b/;
 const RUN_TESTS = /pytest|make test|npm test|node .*test/;
 const READ_ONLY_CMD = /^(?:(?:cat|head|tail|sed -n|grep|rg|find|ls|wc|awk)\b|git (?:diff|show|log|status)\b)/;
-
-// Family of a model id, by substring.
-//
-// Args:
-//   model: model id string, possibly missing.
-// Returns:
-//   a key of PRICES, or OTHER.
-function family(model) {
-    const m = String(model || '');
-    for (const k of Object.keys(PRICES)) if (m.includes(k)) return k;
-    return OTHER;
-}
-
-// Estimated cost of one API message.
-//
-// Args:
-//   model: model id string.
-//   u: the message's usage object.
-// Returns:
-//   USD, 0 for a model with no price.
-function cost(model, u) {
-    const p = PRICES[family(model)];
-    if (!p) return 0;
-    const w1h = ((u.cache_creation || {}).ephemeral_1h_input_tokens) || 0;
-    const w5m = (u.cache_creation_input_tokens || 0) - w1h;
-    return ((u.input_tokens || 0) * p.input
-        + w5m * p.input * CACHE_WRITE_5M
-        + w1h * p.input * CACHE_WRITE_1H
-        + (u.cache_read_input_tokens || 0) * p.cacheRead
-        + (u.output_tokens || 0) * p.output) / 1e6;
-}
-
-// Cache-write cost of one API message, split by TTL.
-//
-// Args:
-//   model: model id string.
-//   u: the message's usage object.
-// Returns:
-//   {w5m, w1h} in USD, both 0 for a model with no price.
-function cacheWriteCost(model, u) {
-    const p = PRICES[family(model)];
-    if (!p) return { w5m: 0, w1h: 0 };
-    const t1h = ((u.cache_creation || {}).ephemeral_1h_input_tokens) || 0;
-    const t5m = (u.cache_creation_input_tokens || 0) - t1h;
-    return { w5m: t5m * p.input * CACHE_WRITE_5M / 1e6, w1h: t1h * p.input * CACHE_WRITE_1H / 1e6 };
-}
 
 // Sorts one tool call into a turn group and label.
 //
@@ -202,11 +178,16 @@ function readMeta(file) {
 //   file: transcript path.
 //   since: epoch ms; messages older than this are dropped.
 //   dispatches: Map filled with Agent tool_use id -> {tier}, from every line.
+//   until: epoch ms; messages newer than this are dropped (default: none dropped).
 // Returns:
-//   {messages: Map key -> {model, usage, ts, tools}, lastText}.
-async function readTranscript(file, since, dispatches) {
+//   {messages: Map key -> {model, usage, ts, tools}, lastText, handback}.
+//   handback is the last SubagentHandback message ('' if none); lastText is the
+//   last text block.
+async function readTranscript(file, since, dispatches, until) {
+    const untilMs = until === undefined ? Infinity : until;
     const messages = new Map();
     let lastText = '';
+    let handback = '';
     const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf-8' }), crlfDelay: Infinity });
     for await (const raw of rl) {
         if (!raw.includes('"assistant"')) continue;
@@ -223,17 +204,20 @@ async function readTranscript(file, since, dispatches) {
             }
         }
         const ts = Date.parse(d.timestamp);
-        if (!m.usage || !m.model || m.model.startsWith('<') || !(ts >= since)) continue;
+        if (!m.usage || !m.model || m.model.startsWith('<') || !(ts >= since) || ts > untilMs) continue;
         const key = m.id + '|' + d.requestId;
         let msg = messages.get(key);
         if (!msg) { msg = { model: m.model, usage: m.usage, ts, tools: [] }; messages.set(key, msg); }
         msg.usage = m.usage;
         for (const b of content) {
-            if (b && b.type === 'tool_use') msg.tools.push(b);
+            if (b && b.type === 'tool_use') {
+                msg.tools.push(b);
+                if (b.name === TOOL_HANDBACK && b.input && typeof b.input.message === 'string') handback = b.input.message;
+            }
             else if (b && b.type === 'text' && b.text) lastText = b.text;
         }
     }
-    return { messages, lastText };
+    return { messages, lastText, handback };
 }
 
 // Builds the report.
@@ -242,16 +226,20 @@ async function readTranscript(file, since, dispatches) {
 //   root: transcripts root directory.
 //   days: window in days; 0 means all time.
 //   now: epoch ms.
+//   opts: optional {since, until, splitAt}, epoch ms, each optional. since replaces the
+//     days window start; until drops every later message in every section; splitAt
+//     splits the section 9 groups.
 // Returns:
 //   the report object, or null when no transcript file exists.
-async function buildReport(root, days, now) {
-    const since = days > 0 ? now - days * MS_PER_DAY : 0;
+async function buildReport(root, days, now, opts) {
+    const o = opts || {};
+    const since = o.since !== undefined ? o.since : (days > 0 ? now - days * MS_PER_DAY : 0);
     const files = listTranscripts(root);
     if (!files.length) return null;
 
     const rep = {
         window: { days, since: since ? new Date(since).toISOString() : null },
-        pricing: { date: PRICING_DATE, perMTok: PRICES },
+        pricing: { date: PRICING_DATE, source: PRICING_SOURCE, perMTok: PRICES, perModel: MODEL_PRICES },
         total: { calls: 0, cost: 0 },
         byModel: {},
         mainVsSub: { main: {}, sub: {} },
@@ -279,12 +267,12 @@ async function buildReport(root, days, now) {
             try { if (fs.statSync(file).mtimeMs < since) continue; } catch (e) { continue; }
         }
         const isSub = file.includes(SUBAGENT_DIR);
-        const { messages, lastText } = await readTranscript(file, since, dispatches);
+        const { messages, lastText, handback } = await readTranscript(file, since, dispatches, o.until);
         const meta = isSub ? readMeta(file) : {};
         const agentType = meta.agentType || UNKNOWN;
         const backendsSeen = new Set();
         let prevTs = null;
-        const sub = { file, agentType, toolUseId: meta.toolUseId, cost: 0, firstTs: Infinity, expensive: false, lastText, calls: 0 };
+        const sub = { file, agentType, toolUseId: meta.toolUseId, cost: 0, firstTs: Infinity, expensive: false, lastText: handback || lastText, calls: 0 };
 
         for (const [key, msg] of messages) {
             if (seen.has(key)) continue;
@@ -370,6 +358,14 @@ async function buildReport(root, days, now) {
         }
         rep.reviews.highestRound[highest] = (rep.reviews.highestRound[highest] || 0) + 1;
     }
+
+    const sessions = await readSessions(root, { since, until: o.until });
+    const isoOrNull = (ms) => (ms === undefined ? null : new Date(ms).toISOString());
+    rep.orchestration = {
+        window: { since: isoOrNull(o.since), until: isoOrNull(o.until), split: isoOrNull(o.splitAt) },
+        groups: summarise(sessions, { splitAt: o.splitAt }).groups,
+        anatomy: partialAnatomy(sessions),
+    };
     return rep;
 }
 
@@ -395,9 +391,11 @@ function famRows(prefix, byFam) {
 // Renders the report as plain text.
 function render(rep) {
     const out = [];
-    const win = rep.window.days > 0 ? `last ${rep.window.days} day(s), since ${rep.window.since}` : 'all time';
+    let win = 'all time';
+    if (rep.window.days > 0) win = `last ${rep.window.days} day(s), since ${rep.window.since}`;
+    else if (rep.window.since) win = `since ${rep.window.since}`;
     out.push(`Model spend, ${win}`);
-    out.push(`Estimate at list prices (cached ${rep.pricing.date}); real bills differ.`);
+    out.push(`Estimate at list prices (page of ${rep.pricing.date}); real bills differ.`);
     out.push('');
     out.push(`Total: ${usd(rep.total.cost)} over ${rep.total.calls} API calls`);
     out.push('');
@@ -447,15 +445,89 @@ function render(rep) {
     }
     const gw = rep.promptCache[BACKEND_GATEWAY];
     if (gw.write5m > gw.write1h) out.push(`  Gateway/API sessions wrote mostly 5m cache. Fix: ${FIX_LINE}`);
+    out.push('');
+    out.push(...renderOrchestration(rep));
+    out.push('', ...renderAnatomy(rep));
     return out.join('\n');
+}
+
+// Formats a rate or cost with 2 decimals; a null (zero denominator) prints a dash.
+//
+// Args:
+//   n: a number or null.
+//   prefix: text put before a number (for example '$').
+// Returns:
+//   the formatted string.
+function fixed2(n, prefix) {
+    return n === null || n === undefined ? ORCH_DASH : (prefix || '') + n.toFixed(2);
+}
+
+// Formats a share as a whole percent; a null prints a dash.
+//
+// Args:
+//   n: a fraction or null.
+// Returns:
+//   the formatted string.
+function pct(n) {
+    return n === null || n === undefined ? ORCH_DASH : Math.round(PERCENT * n) + '%';
+}
+
+// Renders one section 9 row as a single line.
+//
+// Args:
+//   r: a Row from summarise().
+// Returns:
+//   the line.
+function orchRow(r) {
+    const parts = [`${r.group}: sessions ${r.sessions}  steps ${r.steps}  commits ${r.commits}`];
+    parts.push('per10 ' + ORCH_COUNT_LABELS.map(([k, label]) => `${label} ${fixed2(r.per10[k])}`).join(' '));
+    parts.push('share ' + ORCH_SHARE_LABELS.map(([k, label]) => `${label} ${pct(r.share[k])}`).join(' '));
+    parts.push(`cost/commit ${fixed2(r.cost.perCommit, '$')}  main/commit ${fixed2(r.cost.mainPerCommit, '$')}`);
+    parts.push(`reviews/commit ${fixed2(r.reviewsPerCommit)}`);
+    parts.push('review-cycles ' + ORCH_CYCLE_KEYS.map((k) => `${k}:${r.reviewCycles[k]}`).join(' '));
+    parts.push(`peak-ctx p50 ${Math.round(r.peakCtx.p50 / TOKENS_PER_K)}K max ${Math.round(r.peakCtx.max / TOKENS_PER_K)}K`);
+    return '  ' + parts.join('  ');
+}
+
+// Renders section 9: orchestration signals per group.
+//
+// Args:
+//   rep: the report from buildReport().
+// Returns:
+//   an array of lines.
+function renderOrchestration(rep) {
+    const groups = rep.orchestration.groups;
+    const since = rep.window.since ? ` (${rep.window.since})` : '';
+    const out = [ORCH_HEADING, `  ${ORCH_WINDOW_LINE}${since}.`];
+    if (!groups.length) out.push('  ' + ORCH_NONE);
+    for (const r of groups) out.push(orchRow(r));
+    return out;
+}
+
+// Renders section 10: PARTIAL rate by dispatch size, one block per dimension.
+//
+// Args:
+//   rep: the report from buildReport().
+// Returns:
+//   an array of lines.
+function renderAnatomy(rep) {
+    const a = rep.orchestration.anatomy;
+    const out = [ANATOMY_HEADING, `  Implementer dispatches with a sub-agent record: ${a.dispatches}, PARTIAL: ${a.partial}.`];
+    for (const [dim, label] of ANATOMY_DIM_LABELS) {
+        out.push(`  ${label}`);
+        for (const b of a.bands[dim]) out.push(`    ${b.band.padEnd(6)} dispatches ${String(b.dispatches).padStart(4)}  partial ${String(b.partial).padStart(4)}  rate ${pct(b.rate)}`);
+    }
+    return out;
 }
 
 // Parses argv.
 //
 // Returns:
-//   {days, json, projects} or {error}.
+//   {days, json, projects, since, until, splitAt} or {error}. since, until and splitAt are
+//   epoch ms or undefined.
 function parseArgs(argv) {
     const o = { days: DEFAULT_DAYS, json: false, projects: path.join(os.homedir(), '.claude', 'projects') };
+    let daysGiven = false;
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--json') o.json = true;
@@ -463,21 +535,29 @@ function parseArgs(argv) {
             const n = Number(argv[++i]);
             if (!Number.isFinite(n) || n < 0) return { error: '--days needs a number of 0 or more' };
             o.days = n;
+            daysGiven = true;
+        } else if (TIME_FLAGS[a]) {
+            const ms = Date.parse(argv[++i]);
+            if (!Number.isFinite(ms)) return { error: a + ' needs an ISO date-time' };
+            o[TIME_FLAGS[a]] = ms;
         } else if (a === '--projects') {
             if (!argv[i + 1]) return { error: '--projects needs a directory' };
             o.projects = argv[++i];
         } else return { error: 'unknown argument: ' + a };
     }
+    if (o.since !== undefined && daysGiven) return { error: '--since and --days cannot be used together' };
     return o;
 }
 
 async function main() {
     const opts = parseArgs(process.argv.slice(2));
     if (opts.error) {
-        process.stderr.write(opts.error + '\nUsage: model-spend.js [--days N] [--json] [--projects DIR]\n');
+        process.stderr.write(opts.error + '\n' + USAGE_LINE + '\n');
         process.exit(2);
     }
-    const rep = await buildReport(opts.projects, opts.days, Date.now());
+    // --since replaces the days window, so the report must not claim a days window too.
+    const days = opts.since !== undefined ? 0 : opts.days;
+    const rep = await buildReport(opts.projects, days, Date.now(), { since: opts.since, until: opts.until, splitAt: opts.splitAt });
     if (!rep) {
         process.stdout.write(`No transcripts found under ${opts.projects}\n`);
         return;

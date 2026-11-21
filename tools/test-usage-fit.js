@@ -128,7 +128,7 @@ fs.writeFileSync(path.join(leverProjects, '-secretproj', 'SECRETSESSION.jsonl'),
     aline({ at: 11, req: 'r3', id: 'a3', content: [tool('Edit', {})], usage: { input_tokens: 0, cache_read_input_tokens: 300000, cache_creation_input_tokens: 100000 } }),
     // a4: ctx 500000, Edit. 500000*0.2 + 1000*20 = 0.1 + 0.02 = 0.12
     aline({ at: 12, req: 'r4', id: 'a4', content: [tool('Edit', {})], usage: { input_tokens: 0, output_tokens: 1000, cache_read_input_tokens: 500000 } }),
-    // a5: Fable, ctx 150000, Read. 150000*10 = 1.5
+    // a5: Fable (claude-fable-1 takes the fable family default, 8/M, not the 5.1 override), ctx 150000, Read. 150000*8 = 1.2
     aline({ at: 13, req: 'r5', id: 'a5', model: FABLE, content: [tool('Read', {})], usage: { input_tokens: 150000 } }),
     // a6: no price, text only. costs 0 and is counted as unpriced.
     aline({ at: 14, req: 'r6', id: 'a6', model: MYSTERY, usage: { input_tokens: 0, cache_read_input_tokens: 150000 } }),
@@ -225,41 +225,41 @@ async function main_() {
     console.log('Levers');
     const lv = (await buildWeeks(leverProjects, { days: 56, now: NOW })).window;
     const byName = Object.fromEntries(lv.levers.levers.map((l) => [l.name, l]));
-    // main = 0.01 + 0.018 + 0.56 + 0.12 + 1.5 + 0 = 2.208; Opus and Fable work = 2.208.
-    ok('main cost 2.208', near(lv.mainCost, 2.208), lv.mainCost);
+    // main = 0.01 + 0.018 + 0.56 + 0.12 + 1.2 + 0 = 1.908; Opus and Fable work = 1.908.
+    ok('main cost 1.908', near(lv.mainCost, 1.908), lv.mainCost);
     // calls over 300K: 0.56 + 0.12 = 0.68; under 100K: (0.01 + 0.018) / 2 = 0.014 a call.
     // context-reset = 0.68 - 2 * 0.014 = 0.652
     ok('context-reset 0.652, arithmetic', near(byName['context-reset'].low, 0.652) && near(byName['context-reset'].high, 0.652)
         && byName['context-reset'].confidence === 'arithmetic', byName['context-reset']);
     // sub-agent cost: x 120 * 0.2 = 24.0; y 100 * 0.002 = 0.2; z unpriced = 0. So 24.2.
-    // total = 2.208 + 24.2 = 26.408; every percentage is of this total.
-    ok('sub-agent cost 24.2 and total cost 26.408', near(lv.subCost, 24.2) && near(lv.totalCost, 26.408), [lv.subCost, lv.totalCost]);
-    ok('context-reset share of total cost', near(byName['context-reset'].pctOfTotal, 0.652 / 26.408));
-    // sonnet-main: 30% and 45% of 2.208
-    ok('sonnet-main 0.6624 to 0.9936, estimate', near(byName['sonnet-main'].low, 0.6624) && near(byName['sonnet-main'].high, 0.9936)
+    // total = 1.908 + 24.2 = 26.108; every percentage is of this total.
+    ok('sub-agent cost 24.2 and total cost 26.108', near(lv.subCost, 24.2) && near(lv.totalCost, 26.108), [lv.subCost, lv.totalCost]);
+    ok('context-reset share of total cost', near(byName['context-reset'].pctOfTotal, 0.652 / 26.108));
+    // sonnet-main: 30% and 45% of 1.908 = 0.5724 and 0.8586
+    ok('sonnet-main 0.5724 to 0.8586, estimate', near(byName['sonnet-main'].low, 0.5724) && near(byName['sonnet-main'].high, 0.8586)
         && byName['sonnet-main'].confidence === 'estimate', byName['sonnet-main']);
     // cache-1h-main: 70% of the 0.45 gateway rebuild
     ok('cache-1h-main 0.315', near(byName['cache-1h-main'].low, 0.315) && byName['cache-1h-main'].applies);
     // cap: calls 41..120 of the 120-call run, 80 * 0.2 = 16.0; the 100-call run adds nothing
-    // it is an upper bound: a fresh agent redoes some of the work past call 40; share is 16 / 26.408
+    // it is an upper bound: a fresh agent redoes some of the work past call 40; share is 16 / 26.108
     ok('cap-runaway-subagents 16.0, upper-bound, share of total', near(byName['cap-runaway-subagents'].high, 16) && near(lv.subCostPast40, 16)
         && byName['cap-runaway-subagents'].confidence === 'upper-bound'
-        && near(byName['cap-runaway-subagents'].pctOfTotal, 16 / 26.408), byName['cap-runaway-subagents']);
-    // combined: sequence, scaling sonnet-main and cache-1h-main by 1 - 0.652 / 2.208
-    const keep = 1 - 0.652 / 2.208;
-    const cLow = 0.652 + (0.6624 + 0.315) * keep + 16;
-    const cHigh = 0.652 + (0.9936 + 0.315) * keep + 16;
+        && near(byName['cap-runaway-subagents'].pctOfTotal, 16 / 26.108), byName['cap-runaway-subagents']);
+    // combined: sequence, scaling sonnet-main and cache-1h-main by 1 - 0.652 / 1.908
+    const keep = 1 - 0.652 / 1.908;
+    const cLow = 0.652 + (0.5724 + 0.315) * keep + 16;
+    const cHigh = 0.652 + (0.8586 + 0.315) * keep + 16;
     const comb = lv.levers.combined;
-    // combined share = cHigh / 26.408, with cHigh = 0.652 + (0.9936 + 0.315) * keep + 16
+    // combined share = cHigh / 26.108, with cHigh = 0.652 + (0.8586 + 0.315) * keep + 16
     ok('combined low and high match the sequence rule', near(comb.low, cLow) && near(comb.high, cHigh)
-        && near(comb.pctOfTotal, cHigh / 26.408), comb);
+        && near(comb.pctOfTotal, cHigh / 26.108), comb);
     const sumLow = lv.levers.levers.reduce((a, l) => a + l.low, 0);
     const sumHigh = lv.levers.levers.reduce((a, l) => a + l.high, 0);
     const maxLow = Math.max(...lv.levers.levers.map((l) => l.low));
     ok('combined <= sum of levers and >= largest single low',
         comb.low <= sumLow && comb.high <= sumHigh && comb.low >= maxLow, [comb, sumLow, sumHigh, maxLow]);
-    ok('model mix by family: opus 0.708, fable 1.5, other 0',
-        near(lv.modelMix.opus.cost, 0.708) && near(lv.modelMix.fable.cost, 1.5) && near(lv.modelMix.fable.workCost, 1.5)
+    ok('model mix by family: opus 0.708, fable 1.2, other 0',
+        near(lv.modelMix.opus.cost, 0.708) && near(lv.modelMix.fable.cost, 1.2) && near(lv.modelMix.fable.workCost, 1.2)
         && near(lv.modelMix.other.cost, 0) && near(lv.modelMix.sonnet.cost, 0), lv.modelMix);
     ok('unpriced calls: one main and one sub-agent = 2', lv.unpricedModelCalls === 2, lv.unpricedModelCalls);
     const ai = (await buildWeeks(aiProjects, { days: 56, now: NOW })).window;
@@ -287,7 +287,7 @@ async function main_() {
         ok('no lever about a sub-agent cache (' + label + ')', !names.some((n) => /sub/i.test(n) && /cache|1h/i.test(n)), names);
     }
     const tl = run([leverProjects]).out;
-    ok('Levers heading and rows say total cost', tl.includes('total cost $26.41 (main $2.21, sub-agents $24.20)')
+    ok('Levers heading and rows say total cost', tl.includes('total cost $26.11 (main $1.91, sub-agents $24.20)')
         && tl.includes('of total cost') && !tl.includes('of main cost'), tl);
     ok('table line: unpriced-model calls: 2 (cost not included)', tl.includes('unpriced-model calls: 2 (cost not included)'));
     ok('json carries unpriced count', JSON.parse(run([leverProjects, '--json']).out).window.unpricedModelCalls === 2);

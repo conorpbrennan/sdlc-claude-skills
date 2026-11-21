@@ -70,7 +70,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | Orchestrator mode hook and `/sdlc:orchestrate` | `src/hooks/orchestrator-mode.js`, `commands/orchestrate.md` |
 | `/sdlc:steps` and the steps resolver (`steps` block of `sdlc-review.json`) | `commands/steps.md`, `src/hooks/steps-cli.js`, `src/hooks/lib/steps.js` |
 | `/sdlc:handoff` | `commands/handoff.md` |
-| `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js` |
+| `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js`, `tools/lib/prices.js`, `tools/lib/orch-signals.js` |
 | `/sdlc:fit` and its tool | `commands/fit.md`, `tools/usage-fit.js` |
 
 `/sdlc:branch-review on|off|status` lists or unlists the current repo in the branch-review repos config.
