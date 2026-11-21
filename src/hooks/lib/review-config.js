@@ -352,12 +352,12 @@ function resolveMaxRounds({ repoRoot } = {}) {
 // when missing. Writes through updateConfigFile, so it refuses what that refuses.
 //
 // Args:
-//   n: the new cap, an integer >= 1.
+//   n: the new cap, a safe integer >= 1.
 // Returns:
 //   { ok, path, error }: error is set only when ok is false.
 function setMaxRounds(n) {
     const target = userConfigPath();
-    if (!isPosInt(n)) return { ok: false, path: target, error: `maxRounds ${JSON.stringify(n)} is not an integer >= 1` };
+    if (!isPosInt(n) || !Number.isSafeInteger(n)) return { ok: false, path: target, error: `maxRounds ${JSON.stringify(n)} is not an integer >= 1` };
     return updateConfigFile(target, data => { data.maxRounds = n; });
 }
 

@@ -397,7 +397,7 @@ assert('outside a repo warns', j.warnings.length > 0, true);
         [0, { mainModel: 'sonnet', planReview: { cap: 2 }, maxRounds: 2 }]);
     r = JSON.parse(mr(['show']).stdout);
     assert('max-rounds show, user value: source user', [r.maxRounds, r.source], [2, 'user config']);
-    for (const bad of ['0', '-1', '2.5', 'two']) {
+    for (const bad of ['0', '-1', '2.5', 'two', '99999999999999999999']) {
         r = mr(['set', bad]);
         assert(`max-rounds set ${bad}: exit 2, file unchanged`, [r.status, read().maxRounds], [2, 2]);
     }

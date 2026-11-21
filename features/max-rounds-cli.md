@@ -13,11 +13,18 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- CLAUDE.md
 - README.md
+- commands/max-rounds.md
 - src/hooks/lib/review-config.js
 - src/hooks/review-config-cli.js
 - src/hooks/test-review-config.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-11-21 `9f3a0a9` — review-config CLI: max-rounds show | set <n> for the review round cap
+  - .claude-plugin/plugin.json
+  - README.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/review-config-cli.js
+  - src/hooks/test-review-config.js

@@ -66,11 +66,11 @@ function maxRoundsCmd(argv, repoRoot) {
         console.log(JSON.stringify(resolveMaxRounds({ repoRoot })));
         return 0;
     }
-    if (action !== 'set' || !/^\d+$/.test(value || '') || parseInt(value, 10) < 1) {
+    const n = /^\d+$/.test(value || '') ? Number(value) : NaN;
+    if (action !== 'set' || !Number.isSafeInteger(n) || n < 1) {
         console.error('usage: review-config-cli.js max-rounds show | set <n>, n an integer >= 1');
         return 2;
     }
-    const n = parseInt(value, 10);
     const res = setMaxRounds(n);
     if (!res.ok) {
         console.error(`${res.path}: ${res.error}`);
