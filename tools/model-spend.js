@@ -3,13 +3,18 @@
 // (~/.claude/projects/**/*.jsonl). It answers one question: did steering work
 // toward Sonnet actually move the spend?
 //
-// Usage: node tools/model-spend.js [--days N] [--json] [--projects DIR]
+// Usage: node tools/model-spend.js [--days N | --since ISO] [--until ISO] [--split ISO] [--json] [--projects DIR]
 //   --days N       window by message timestamp (default 7; 0 means all time)
+//   --since ISO    window start; replaces --days (giving both is an error)
+//   --until ISO    drop every message after this time, in every section (default now)
+//   --split ISO    section 9 groups sessions that ended before / after this time
 //   --json         print the same data as JSON
 //   --projects DIR transcripts root (default ~/.claude/projects)
 //
 // Section 8 shows the main-session prompt cache by backend (claude.ai login vs
 // gateway/API key), split by cache-write TTL, with the cost of rebuilds after idle gaps.
+// Section 9 shows orchestration signals per 10 implementer dispatches, by session group
+// (tools/lib/orch-signals.js).
 //
 // Files are streamed line by line: the real tree is about 2 GB.
 'use strict';
@@ -20,6 +25,26 @@ const path = require('path');
 const readline = require('readline');
 
 const { PRICES, MODEL_PRICES, PRICING_DATE, PRICING_SOURCE, family, cost, cacheWriteCost } = require('./lib/prices.js');
+const { readSessions, summarise } = require('./lib/orch-signals.js');
+
+// Section 9 labels. Keys are the Row keys of summarise().
+const ORCH_HEADING = '9. Orchestration signals per 10 implementer dispatches';
+const ORCH_WINDOW_LINE = 'Sessions are those active since the window start';
+const ORCH_NONE = 'none';
+const ORCH_DASH = '-';
+const ORCH_COUNT_LABELS = [
+    ['partial', 'partial'], ['tddFail', 'tdd-fail'], ['interrupts', 'interrupts'], ['mainSrcEdits', 'main-src-edits'],
+    ['blockLoops', 'block-loops'], ['denyRetryPairs', 'deny-retry'], ['identicalPromptPairs', 'same-prompt'],
+];
+const ORCH_SHARE_LABELS = [
+    ['partial', 'partial'], ['tddFail', 'tdd-fail'], ['interrupts', 'interrupts'], ['mainSrcEdits', 'main-src-edits'],
+    ['blockLoops', 'block-loops'],
+];
+const ORCH_CYCLE_KEYS = ['1', '2', '3', '4+', 'open'];
+const TOKENS_PER_K = 1000;
+const PERCENT = 100;
+const TIME_FLAGS = { '--since': 'since', '--until': 'until', '--split': 'splitAt' };
+const USAGE_LINE ='Usage: model-spend.js [--days N | --since ISO] [--until ISO] [--split ISO] [--json] [--projects DIR]';
 
 // Main-session prompt cache. Claude Code picks the TTL by auth route: 1h on a
 // claude.ai login (inference_geo "global"), 5m through an API key or gateway.
@@ -144,9 +169,11 @@ function readMeta(file) {
 //   file: transcript path.
 //   since: epoch ms; messages older than this are dropped.
 //   dispatches: Map filled with Agent tool_use id -> {tier}, from every line.
+//   until: epoch ms; messages newer than this are dropped (default: none dropped).
 // Returns:
 //   {messages: Map key -> {model, usage, ts, tools}, lastText}.
-async function readTranscript(file, since, dispatches) {
+async function readTranscript(file, since, dispatches, until) {
+    const untilMs = until === undefined ? Infinity : until;
     const messages = new Map();
     let lastText = '';
     const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf-8' }), crlfDelay: Infinity });
@@ -165,7 +192,7 @@ async function readTranscript(file, since, dispatches) {
             }
         }
         const ts = Date.parse(d.timestamp);
-        if (!m.usage || !m.model || m.model.startsWith('<') || !(ts >= since)) continue;
+        if (!m.usage || !m.model || m.model.startsWith('<') || !(ts >= since) || ts > untilMs) continue;
         const key = m.id + '|' + d.requestId;
         let msg = messages.get(key);
         if (!msg) { msg = { model: m.model, usage: m.usage, ts, tools: [] }; messages.set(key, msg); }
@@ -184,10 +211,14 @@ async function readTranscript(file, since, dispatches) {
 //   root: transcripts root directory.
 //   days: window in days; 0 means all time.
 //   now: epoch ms.
+//   opts: optional {since, until, splitAt}, epoch ms, each optional. since replaces the
+//     days window start; until drops every later message in every section; splitAt
+//     splits the section 9 groups.
 // Returns:
 //   the report object, or null when no transcript file exists.
-async function buildReport(root, days, now) {
-    const since = days > 0 ? now - days * MS_PER_DAY : 0;
+async function buildReport(root, days, now, opts) {
+    const o = opts || {};
+    const since = o.since !== undefined ? o.since : (days > 0 ? now - days * MS_PER_DAY : 0);
     const files = listTranscripts(root);
     if (!files.length) return null;
 
@@ -221,7 +252,7 @@ async function buildReport(root, days, now) {
             try { if (fs.statSync(file).mtimeMs < since) continue; } catch (e) { continue; }
         }
         const isSub = file.includes(SUBAGENT_DIR);
-        const { messages, lastText } = await readTranscript(file, since, dispatches);
+        const { messages, lastText } = await readTranscript(file, since, dispatches, o.until);
         const meta = isSub ? readMeta(file) : {};
         const agentType = meta.agentType || UNKNOWN;
         const backendsSeen = new Set();
@@ -312,6 +343,13 @@ async function buildReport(root, days, now) {
         }
         rep.reviews.highestRound[highest] = (rep.reviews.highestRound[highest] || 0) + 1;
     }
+
+    const sessions = await readSessions(root, { since, until: o.until });
+    const isoOrNull = (ms) => (ms === undefined ? null : new Date(ms).toISOString());
+    rep.orchestration = {
+        window: { since: isoOrNull(o.since), until: isoOrNull(o.until), split: isoOrNull(o.splitAt) },
+        groups: summarise(sessions, { splitAt: o.splitAt }).groups,
+    };
     return rep;
 }
 
@@ -337,7 +375,9 @@ function famRows(prefix, byFam) {
 // Renders the report as plain text.
 function render(rep) {
     const out = [];
-    const win = rep.window.days > 0 ? `last ${rep.window.days} day(s), since ${rep.window.since}` : 'all time';
+    let win = 'all time';
+    if (rep.window.days > 0) win = `last ${rep.window.days} day(s), since ${rep.window.since}`;
+    else if (rep.window.since) win = `since ${rep.window.since}`;
     out.push(`Model spend, ${win}`);
     out.push(`Estimate at list prices (page of ${rep.pricing.date}); real bills differ.`);
     out.push('');
@@ -389,15 +429,72 @@ function render(rep) {
     }
     const gw = rep.promptCache[BACKEND_GATEWAY];
     if (gw.write5m > gw.write1h) out.push(`  Gateway/API sessions wrote mostly 5m cache. Fix: ${FIX_LINE}`);
+    out.push('');
+    out.push(...renderOrchestration(rep));
     return out.join('\n');
+}
+
+// Formats a rate or cost with 2 decimals; a null (zero denominator) prints a dash.
+//
+// Args:
+//   n: a number or null.
+//   prefix: text put before a number (for example '$').
+// Returns:
+//   the formatted string.
+function fixed2(n, prefix) {
+    return n === null || n === undefined ? ORCH_DASH : (prefix || '') + n.toFixed(2);
+}
+
+// Formats a share as a whole percent; a null prints a dash.
+//
+// Args:
+//   n: a fraction or null.
+// Returns:
+//   the formatted string.
+function pct(n) {
+    return n === null || n === undefined ? ORCH_DASH : Math.round(PERCENT * n) + '%';
+}
+
+// Renders one section 9 row as a single line.
+//
+// Args:
+//   r: a Row from summarise().
+// Returns:
+//   the line.
+function orchRow(r) {
+    const parts = [`${r.group}: sessions ${r.sessions}  steps ${r.steps}  commits ${r.commits}`];
+    parts.push('per10 ' + ORCH_COUNT_LABELS.map(([k, label]) => `${label} ${fixed2(r.per10[k])}`).join(' '));
+    parts.push('share ' + ORCH_SHARE_LABELS.map(([k, label]) => `${label} ${pct(r.share[k])}`).join(' '));
+    parts.push(`cost/commit ${fixed2(r.cost.perCommit, '$')}  main/commit ${fixed2(r.cost.mainPerCommit, '$')}`);
+    parts.push(`reviews/commit ${fixed2(r.reviewsPerCommit)}`);
+    parts.push('review-cycles ' + ORCH_CYCLE_KEYS.map((k) => `${k}:${r.reviewCycles[k]}`).join(' '));
+    parts.push(`peak-ctx p50 ${Math.round(r.peakCtx.p50 / TOKENS_PER_K)}K max ${Math.round(r.peakCtx.max / TOKENS_PER_K)}K`);
+    return '  ' + parts.join('  ');
+}
+
+// Renders section 9: orchestration signals per group.
+//
+// Args:
+//   rep: the report from buildReport().
+// Returns:
+//   an array of lines.
+function renderOrchestration(rep) {
+    const groups = rep.orchestration.groups;
+    const since = rep.window.since ? ` (${rep.window.since})` : '';
+    const out = [ORCH_HEADING, `  ${ORCH_WINDOW_LINE}${since}.`];
+    if (!groups.length) out.push('  ' + ORCH_NONE);
+    for (const r of groups) out.push(orchRow(r));
+    return out;
 }
 
 // Parses argv.
 //
 // Returns:
-//   {days, json, projects} or {error}.
+//   {days, json, projects, since, until, splitAt} or {error}. since, until and splitAt are
+//   epoch ms or undefined.
 function parseArgs(argv) {
     const o = { days: DEFAULT_DAYS, json: false, projects: path.join(os.homedir(), '.claude', 'projects') };
+    let daysGiven = false;
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--json') o.json = true;
@@ -405,21 +502,29 @@ function parseArgs(argv) {
             const n = Number(argv[++i]);
             if (!Number.isFinite(n) || n < 0) return { error: '--days needs a number of 0 or more' };
             o.days = n;
+            daysGiven = true;
+        } else if (TIME_FLAGS[a]) {
+            const ms = Date.parse(argv[++i]);
+            if (!Number.isFinite(ms)) return { error: a + ' needs an ISO date-time' };
+            o[TIME_FLAGS[a]] = ms;
         } else if (a === '--projects') {
             if (!argv[i + 1]) return { error: '--projects needs a directory' };
             o.projects = argv[++i];
         } else return { error: 'unknown argument: ' + a };
     }
+    if (o.since !== undefined && daysGiven) return { error: '--since and --days cannot be used together' };
     return o;
 }
 
 async function main() {
     const opts = parseArgs(process.argv.slice(2));
     if (opts.error) {
-        process.stderr.write(opts.error + '\nUsage: model-spend.js [--days N] [--json] [--projects DIR]\n');
+        process.stderr.write(opts.error + '\n' + USAGE_LINE + '\n');
         process.exit(2);
     }
-    const rep = await buildReport(opts.projects, opts.days, Date.now());
+    // --since replaces the days window, so the report must not claim a days window too.
+    const days = opts.since !== undefined ? 0 : opts.days;
+    const rep = await buildReport(opts.projects, days, Date.now(),{ since: opts.since, until: opts.until, splitAt: opts.splitAt });
     if (!rep) {
         process.stdout.write(`No transcripts found under ${opts.projects}\n`);
         return;

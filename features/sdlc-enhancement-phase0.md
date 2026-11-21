@@ -16,16 +16,26 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- CLAUDE.md
+- README.md
+- commands/model-spend.md
 - docs/plans/sdlc-phase0.md
 - docs/plans/sdlc-phase0/tracker.md
 - tools/lib/orch-signals.js
 - tools/lib/prices.js
 - tools/model-spend.js
+- tools/test-model-spend.js
 - tools/test-orch-signals.js
 - tools/test-prices.js
 - tools/test-usage-fit.js
 
 ## History
+
+- 2026-11-21 `35ebb68` — tools/lib/orch-signals.js: summarise groups scored sessions into report rows (Phase 0, S4)
+  - .claude-plugin/plugin.json
+  - docs/plans/sdlc-phase0/tracker.md
+  - tools/lib/orch-signals.js
+  - tools/test-orch-signals.js
 
 - 2026-11-21 `587c363` — tools/lib/orch-signals.js: classify and signals score one session record (Phase 0, S3)
   - .claude-plugin/plugin.json

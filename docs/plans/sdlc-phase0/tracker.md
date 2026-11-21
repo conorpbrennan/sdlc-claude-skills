@@ -6,7 +6,7 @@ RUN: tmp/sdlc-phase0-plan.md, revision 2. Branch: sdlc-enhancement-phase0. Start
 BUDGET: six steps, about 165 implementer tool calls, 6-9 review rounds. Spent: plan writing only.
 OWNER DECISIONS (21 Nov 2026): all four answered yes: standing authorisation (stage, commit, fix agents
   unattended S1-S6; no push, no PR), reproduction rule max(5%, 1 event), plan copied to docs/plans/, scope.
-IN FLIGHT: S4 implementer (round 1)
+IN FLIGHT: S5 implementer (round 1)
 TREE: staged nothing; unstaged clean (tmp/ is gitignored). Worktrees open: none
 DISPOSITIONS:
   source round 1 (Opus, whole document vs HEAD + reference scripts), verdict NOT YET, 4 findings:
@@ -69,3 +69,16 @@ STEP S3: committed
   notes:   red first was real ("classify is not a function"). At equal timestamps reviewCycles counts reviewer
            dispatches before commits (step does not pin ties; implementer's choice, recorded in its docblock).
            Advisories (O(n^2) identical-prompt scan; DEV_DIR fixed at load) noted not actioned.
+
+STEP S4: committed
+  commit:  35ebb68
+  gate:    test-orch-signals 59 assertions passed; layout, isolation, model-spend, usage-fit tests and
+           `claude plugin validate .` exit 0
+  reviews: sdlc:code-reviewer round 1, PASS, 0/0/2
+  reports: docs/plans/sdlc-phase0/reports/S4-implementer-1.md, S4-review-1.md (gitignored)
+  stage:   the step's two files, plugin.json (1.0.109), the S3 tracker block, the feature record
+  files:   as declared
+  notes:   a missing or unparseable `last` counts as `after` under splitAt (implementer's choice). Per-commit values
+           are null at 0 commits; S5's render must handle null. repro-check.js reads rows through
+           rep.orchestration.groups. Advisories (double division in per10; three ok calls in one test) noted not
+           actioned.
