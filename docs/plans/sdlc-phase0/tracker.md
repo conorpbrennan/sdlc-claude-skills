@@ -6,7 +6,7 @@ RUN: tmp/sdlc-phase0-plan.md, revision 2. Branch: sdlc-enhancement-phase0. Start
 BUDGET: six steps, about 165 implementer tool calls, 6-9 review rounds. Spent: plan writing only.
 OWNER DECISIONS (21 Nov 2026): all four answered yes: standing authorisation (stage, commit, fix agents
   unattended S1-S6; no push, no PR), reproduction rule max(5%, 1 event), plan copied to docs/plans/, scope.
-IN FLIGHT: S6 implementer (round 1)
+IN FLIGHT: nothing (S1-S6 committed; definition of done run at HEAD 6c95555)
 TREE: staged nothing; unstaged clean (tmp/ is gitignored). Worktrees open: none
 DISPOSITIONS:
   source round 1 (Opus, whole document vs HEAD + reference scripts), verdict NOT YET, 4 findings:
@@ -36,7 +36,28 @@ DECISIONS-OPEN:
      undocumented in README.md and CLAUDE.md. Left for the as-built close-out, not a step.
   3. Orchestrator ran no review worktree (owner's global rule: no worktree unless asked); reviewers read the staged
      diff in place and built any scratch trees outside the repo.
-AS BUILT: not started
+AS BUILT (from the STEP blocks below):
+  S1 tools/lib/prices.js: prices per model id (family defaults, fable-5-1 override, Haiku long-prompt tier above
+     100,000 prompt tokens). model-spend.js re-exports family and cost; usage-fit.js untouched.
+  S2 tools/lib/orch-signals.js readSessions: one record per main session, shared per-call dedupe, until/since rules.
+  S3 classify, signals, isImplementer, isPartial, plus reviewCycles, denyRetryPairs, identicalPromptPairs.
+  S4 summarise: rows by main model and tier ("before"/"after" with --split).
+  S5 /sdlc:model-spend section 9 and --since, --until, --split; reproduction of report 2 prints REPRO OK.
+  S6 partialAnatomy and section 10; two S5 advisories folded in (spacing slips, one doc sentence).
+  No hook, gate or config file changed. src/hooks/** untouched.
+DEFINITION OF DONE at HEAD 6c95555, 21 Nov 2026:
+  1. bash tools/run-tests.sh: Files: 60  failed: 0
+  2. claude plugin validate . exit 0
+  3. reproduction re-run at HEAD: REPRO OK, exit 0
+  4. node tools/model-spend.js --days 7: exit 0, prints sections 1 to 10
+  5. git log origin/main..HEAD: six step commits, plugin.json version 1.0.106 to 1.0.111, one raise each
+  Not run: `node tools/plugin-version.js check` (the plan dropped it: it exits 1 at HEAD with nothing staged).
+PROCESS NOTES:
+  - Reviews ran on the staged diff in place; no review worktree (owner's global rule).
+  - S2's implementer wrote the lib before the test and faked the red run; S3-S6 had a real red run (briefs made it
+    binding). S3 and S6 implementers each used a heredoc once against the harness rule; the gates did not block it.
+  - All six steps passed round 1 of review; no fix round, no round 2.
+  - Cost of the run was not measured here.
 
 STEP S1: committed
   commit:  57e4cf9
@@ -103,3 +124,15 @@ STEP S5: committed
   notes:   sections 1-8 proven unchanged by the reviewer (HEAD vs working copy, synthetic tree, byte-identical JSON
            minus `orchestration`). Advisories 1 and 2 (two missing-space slips; one doc sentence on the double tree
            read) folded into S6 as a DECISION below; 3 and 4 noted not actioned.
+
+STEP S6: committed
+  commit:  6c95555
+  gate:    bash tools/run-tests.sh Files: 60  failed: 0 (the one full-suite run); test-orch-signals 68, test-model-spend
+           56, test-usage-fit 74 passed; plugin validate exit 0; --days 7 exit 0; REPRO OK at the working tree
+  reviews: sdlc:code-reviewer round 1, PASS, 0/0/3
+  reports: docs/plans/sdlc-phase0/reports/S6-implementer-1.md, S6-review-1.md (gitignored)
+  stage:   the four code files, commands/model-spend.md, plugin.json (1.0.111), the S5 tracker block, the feature record
+  files:   as declared
+  notes:   band edges probed by the reviewer on both sides of every pin. The implementer appended the partialAnatomy
+           block with a shell heredoc (harness rule); result correct, temp file removed. Advisories (double blank
+           line; `sub.files.length` throws on a missing field, as classify already does; padEnd(6)) noted not actioned.

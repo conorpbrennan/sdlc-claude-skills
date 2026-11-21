@@ -31,6 +31,15 @@
 
 ## History
 
+- 2026-11-21 `6c95555` — tools/model-spend.js: section 10 shows the PARTIAL rate by dispatch size (Phase 0, S6)
+  - .claude-plugin/plugin.json
+  - commands/model-spend.md
+  - docs/plans/sdlc-phase0/tracker.md
+  - tools/lib/orch-signals.js
+  - tools/model-spend.js
+  - tools/test-model-spend.js
+  - tools/test-orch-signals.js
+
 - 2026-11-21 `7b07c0b` — tools/model-spend.js: section 9 orchestration signals; --since, --until, --split (Phase 0, S5)
   - .claude-plugin/plugin.json
   - CLAUDE.md
