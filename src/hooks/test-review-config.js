@@ -379,6 +379,50 @@ assert('outside a repo warns', j.warnings.length > 0, true);
     assert('show: repo mainModel ignored with a warning', [r.mainModel, r.warnings.some(w => w.includes('mainModel'))], ['haiku', true]);
 }
 
+// max-rounds: show and set the review round cap in the user file.
+{
+    const mrDir = fs.mkdtempSync(path.join(sb, 'mr-'));
+    const mrFile = path.join(mrDir, 'sub', 'sdlc-review.json');
+    const mrEnv = { ...process.env, SDLC_REVIEW_CONFIG_USER: mrFile };
+    const mr = (args, repo = mrDir) => spawnSync('node', [cli, 'max-rounds', ...args, '--repo', repo], { cwd: mrDir, encoding: 'utf-8', env: mrEnv });
+    const read = () => JSON.parse(fs.readFileSync(mrFile, 'utf-8'));
+    let r = mr(['show']);
+    assert('max-rounds show, no file: exit 0, the default', [r.status, JSON.parse(r.stdout).maxRounds, JSON.parse(r.stdout).source], [0, 2, 'default']);
+    r = mr(['set', '3']);
+    assert('max-rounds set creates the file', [r.status, read()], [0, { maxRounds: 3 }]);
+    assert('max-rounds set prints the value and path', JSON.parse(r.stdout), { maxRounds: 3, path: mrFile, warnings: [] });
+    fs.writeFileSync(mrFile, JSON.stringify({ mainModel: 'sonnet', planReview: { cap: 2 }, maxRounds: 3 }));
+    r = mr(['set', '2']);
+    assert('max-rounds set merges and keeps other keys', [r.status, read()],
+        [0, { mainModel: 'sonnet', planReview: { cap: 2 }, maxRounds: 2 }]);
+    r = JSON.parse(mr(['show']).stdout);
+    assert('max-rounds show, user value: source user', [r.maxRounds, r.source], [2, 'user config']);
+    for (const bad of ['0', '-1', '2.5', 'two', '99999999999999999999']) {
+        r = mr(['set', bad]);
+        assert(`max-rounds set ${bad}: exit 2, file unchanged`, [r.status, read().maxRounds], [2, 2]);
+    }
+    r = mr(['set']);
+    assert('max-rounds set with no value exits 2', r.status, 2);
+    r = mr(['bogus']);
+    assert('max-rounds with an unknown action exits 2', r.status, 2);
+    fs.writeFileSync(mrFile, '{nope');
+    r = mr(['set', '3']);
+    assert('max-rounds: malformed file refused, untouched', [r.status, fs.readFileSync(mrFile, 'utf-8')], [1, '{nope']);
+    fs.writeFileSync(mrFile, JSON.stringify({ maxRounds: 0 }));
+    r = JSON.parse(mr(['show']).stdout);
+    assert('max-rounds show: invalid stored value falls back to the default with a warning',
+        [r.maxRounds, r.source, r.warnings.some(w => w.includes('maxRounds'))], [2, 'default', true]);
+    // A repo file that sets maxRounds wins over the user file; both show and set say so.
+    fs.mkdirSync(path.join(mrDir, '.claude'));
+    fs.writeFileSync(path.join(mrDir, '.claude', 'sdlc-review.json'), JSON.stringify({ maxRounds: 4 }));
+    r = mr(['set', '3']);
+    const setOut = JSON.parse(r.stdout);
+    assert('max-rounds set under a repo override: written, with a warning naming the repo file',
+        [r.status, read().maxRounds, setOut.warnings.some(w => w.includes('.claude') && w.includes('4'))], [0, 3, true]);
+    r = JSON.parse(mr(['show']).stdout);
+    assert('max-rounds show under a repo override: repo value, source repo', [r.maxRounds, r.source], [4, 'repo config']);
+}
+
 console.log('\nbranch-review CLI:');
 writeUserCfg({ branchReview: { maxChangedLines: 40000 } });
 const brRes = runCliRaw(['branch-review', '--repo', gitRepo], sb);
