@@ -23,6 +23,10 @@ const PRICES = {
 
 // Exact-id overrides, checked before the family default.
 const MODEL_PRICES = {
+    // Fable 5.2: $8/$40, cache read $0.20 (5m write $10, 1h write $16 via the multipliers
+    // below). Source: bundled claude-api reference, shared/models.md, cached 3 Nov 2026.
+    // Explicit so a change to the family default cannot move it silently.
+    'claude-fable-5-2': { input: 8, output: 40, cacheRead: 0.20 },
     'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.25 },
 };
 

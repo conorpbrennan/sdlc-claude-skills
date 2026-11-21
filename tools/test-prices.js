@@ -5,7 +5,7 @@
 // Drop git's repository-locating variables (src/test-suite-isolation.js).
 require('../src/hooks/lib/isolate-git-env.js').isolateGitEnv();
 
-const { family, priceFor, cost, cacheWriteCost } = require('./lib/prices.js');
+const { family, priceFor, cost, cacheWriteCost, MODEL_PRICES } = require('./lib/prices.js');
 
 const M = 1e6;
 let passed = 0;
@@ -59,6 +59,18 @@ ok('priceFor unknown model is null', priceFor('claude-mystery-1', 0) === null);
 ok('cacheWriteCost unknown model is zero', cacheWriteCost('claude-mystery-1', { cache_creation_input_tokens: M }).w5m === 0);
 const hw = cacheWriteCost('claude-haiku-5-5', { input_tokens: 100000, cache_creation_input_tokens: 1 });
 ok('cacheWriteCost uses the long-tier input rate', near(hw.w5m, 0.5 * 1.25 / M), hw);
+
+// Fable 5.2 carries its own exact entry (not the family default): $8 in, $40 out,
+// $0.20 cache read, 5m write $10 (1.25x), 1h write $16 (2x). Fable 5.1 stays $10/$50.
+ok('fable-5-2 has an exact MODEL_PRICES entry', Object.prototype.hasOwnProperty.call(MODEL_PRICES, 'claude-fable-5-2'));
+const f52 = priceFor('claude-fable-5-2', 0) || {};
+ok('fable-5-2 input, output and cache read rates',
+    f52.input === 8 && f52.output === 40 && f52.cacheRead === 0.20, f52);
+const f52w = cacheWriteCost('claude-fable-5-2',
+    { cache_creation_input_tokens: 2 * M, cache_creation: { ephemeral_1h_input_tokens: M } });
+ok('fable-5-2 cache writes are $10 (5m) and $16 (1h) per MTok', near(f52w.w5m, 10) && near(f52w.w1h, 16), f52w);
+const f51 = priceFor('claude-fable-5-1', 0) || {};
+ok('fable-5-1 still $10/$50', f51.input === 10 && f51.output === 50, f51);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
