@@ -31,6 +31,11 @@
 
 ## History
 
+- 2026-11-21 `c771a8c` — tools/lib/prices.js: explicit claude-fable-5-2 price entry, $8/$40 (Phase 0 follow-up)
+  - .claude-plugin/plugin.json
+  - tools/lib/prices.js
+  - tools/test-prices.js
+
 - 2026-11-21 `6c95555` — tools/model-spend.js: section 10 shows the PARTIAL rate by dispatch size (Phase 0, S6)
   - .claude-plugin/plugin.json
   - commands/model-spend.md

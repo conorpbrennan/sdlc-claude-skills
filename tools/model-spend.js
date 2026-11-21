@@ -77,6 +77,9 @@ const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const EXPENSIVE_MODEL = /opus|fable/i;
 // Same shape as the tier gate's line in src/hooks/agent-tier-gate.js.
 const TIER_LINE = /^\s*tier:\s*(?:opus|fable)\s*[:\-–—]\s*\S/im;
+// Tool a sub-agent calls to hand its report back. Reviewers put the verdict in
+// its input.message, not in a text block. Same name as orch-signals.js uses.
+const TOOL_HANDBACK = 'SubagentHandback';
 const VERDICT = /TDD_GATE:\s*(PASS|FAIL)/g;
 const REVIEWER_TYPE = 'code-reviewer';
 const UNKNOWN = 'unknown';
@@ -177,11 +180,14 @@ function readMeta(file) {
 //   dispatches: Map filled with Agent tool_use id -> {tier}, from every line.
 //   until: epoch ms; messages newer than this are dropped (default: none dropped).
 // Returns:
-//   {messages: Map key -> {model, usage, ts, tools}, lastText}.
+//   {messages: Map key -> {model, usage, ts, tools}, lastText, handback}.
+//   handback is the last SubagentHandback message ('' if none); lastText is the
+//   last text block.
 async function readTranscript(file, since, dispatches, until) {
     const untilMs = until === undefined ? Infinity : until;
     const messages = new Map();
     let lastText = '';
+    let handback = '';
     const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf-8' }), crlfDelay: Infinity });
     for await (const raw of rl) {
         if (!raw.includes('"assistant"')) continue;
@@ -204,11 +210,14 @@ async function readTranscript(file, since, dispatches, until) {
         if (!msg) { msg = { model: m.model, usage: m.usage, ts, tools: [] }; messages.set(key, msg); }
         msg.usage = m.usage;
         for (const b of content) {
-            if (b && b.type === 'tool_use') msg.tools.push(b);
+            if (b && b.type === 'tool_use') {
+                msg.tools.push(b);
+                if (b.name === TOOL_HANDBACK && b.input && typeof b.input.message === 'string') handback = b.input.message;
+            }
             else if (b && b.type === 'text' && b.text) lastText = b.text;
         }
     }
-    return { messages, lastText };
+    return { messages, lastText, handback };
 }
 
 // Builds the report.
@@ -258,12 +267,12 @@ async function buildReport(root, days, now, opts) {
             try { if (fs.statSync(file).mtimeMs < since) continue; } catch (e) { continue; }
         }
         const isSub = file.includes(SUBAGENT_DIR);
-        const { messages, lastText } = await readTranscript(file, since, dispatches, o.until);
+        const { messages, lastText, handback } = await readTranscript(file, since, dispatches, o.until);
         const meta = isSub ? readMeta(file) : {};
         const agentType = meta.agentType || UNKNOWN;
         const backendsSeen = new Set();
         let prevTs = null;
-        const sub = { file, agentType, toolUseId: meta.toolUseId, cost: 0, firstTs: Infinity, expensive: false, lastText, calls: 0 };
+        const sub = { file, agentType, toolUseId: meta.toolUseId, cost: 0, firstTs: Infinity, expensive: false, lastText: handback || lastText, calls: 0 };
 
         for (const [key, msg] of messages) {
             if (seen.has(key)) continue;

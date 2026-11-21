@@ -288,6 +288,39 @@ const an = oj.orchestration.anatomy || {};
 ok('text report has the section 10 heading after section 9', otx.includes(ANATOMY_HEADING) && otx.indexOf(ANATOMY_HEADING) > otx.indexOf(ORCH_HEADING), otx.slice(-400));
 ok('--json carries orchestration.anatomy with dispatches and the four dimensions', an.dispatches === 0 && an.partial === 0 && ['promptBytes', 'toolCalls', 'filesEdited', 'testFilesNamed'].every((k) => Array.isArray((an.bands || {})[k])), an);
 
+// ---- review verdicts from the handback message ----
+console.log('\nReview verdict source:');
+const hbRoot = path.join(sb, 'hb-projects');
+const hbProj = path.join(hbRoot, '-home-me-hb');
+fs.mkdirSync(hbProj, { recursive: true });
+const HB_USAGE = { input_tokens: 1000 };
+// One reviewer sub-agent per case, each in its own session; content is the
+// ordered list of assistant records, each a list of blocks.
+function hbReviewer(session, records) {
+    const dir = path.join(hbProj, session, 'subagents');
+    fs.mkdirSync(dir, { recursive: true });
+    const base = path.join(dir, 'agent-' + session);
+    fs.writeFileSync(base + '.meta.json', JSON.stringify({ agentType: 'sdlc:code-reviewer', toolUseId: 'tu-' + session }));
+    const lines = records.map((content, i) => line({ ts: iso(HOUR - i * 1000), req: 'q-' + session + i, id: 'id-' + session + i, model: SONNET, usage: HB_USAGE, content }));
+    fs.writeFileSync(base + '.jsonl', lines.join('\n') + '\n');
+}
+const handback = (msg) => tool('SubagentHandback', { message: msg });
+const HB_CASES = [
+    { session: 'hb-only', records: [[text('Reading the diff.')], [handback('Report.\nTDD_GATE: FAIL')]], want: 'FAIL' },
+    { session: 'text-only', records: [[text('Fine.\nTDD_GATE: PASS')]], want: 'PASS' },
+    { session: 'hb-wins', records: [[text('Draft.\nTDD_GATE: PASS')], [handback('Final.\nTDD_GATE: FAIL')]], want: 'FAIL' },
+];
+for (const c of HB_CASES) hbReviewer(c.session, c.records);
+for (const c of HB_CASES) {
+    // Isolate each case: a projects root holding only that session.
+    const root = path.join(sb, 'hb-' + c.session);
+    fs.mkdirSync(path.join(root, '-home-me-hb'), { recursive: true });
+    fs.cpSync(path.join(hbProj, c.session), path.join(root, '-home-me-hb', c.session), { recursive: true });
+    const byAgent = (JSON.parse(spawnSync('node', [SCRIPT, '--json', '--projects', root], { encoding: 'utf-8' }).stdout).reviews || {}).byAgent || {};
+    const counts = byAgent['sdlc:code-reviewer'] || {};
+    ok('verdict ' + c.session + ' is ' + c.want, counts[c.want] === 1 && counts.unknown === 0, counts);
+}
+
 fs.rmSync(sb, { recursive: true, force: true });
 
 console.log('\n====================');
