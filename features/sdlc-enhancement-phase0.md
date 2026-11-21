@@ -18,11 +18,20 @@
 - .claude-plugin/plugin.json
 - docs/plans/sdlc-phase0.md
 - docs/plans/sdlc-phase0/tracker.md
+- tools/lib/orch-signals.js
 - tools/lib/prices.js
 - tools/model-spend.js
+- tools/test-orch-signals.js
 - tools/test-prices.js
 - tools/test-usage-fit.js
 
 ## History
 
-<!-- populated on commit -->
+- 2026-11-21 `57e4cf9` — tools/lib/prices.js: price per model id from the live price page (Phase 0, S1)
+  - .claude-plugin/plugin.json
+  - docs/plans/sdlc-phase0.md
+  - docs/plans/sdlc-phase0/tracker.md
+  - tools/lib/prices.js
+  - tools/model-spend.js
+  - tools/test-prices.js
+  - tools/test-usage-fit.js

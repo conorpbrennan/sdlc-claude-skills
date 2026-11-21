@@ -6,7 +6,7 @@ RUN: tmp/sdlc-phase0-plan.md, revision 2. Branch: sdlc-enhancement-phase0. Start
 BUDGET: six steps, about 165 implementer tool calls, 6-9 review rounds. Spent: plan writing only.
 OWNER DECISIONS (21 Nov 2026): all four answered yes: standing authorisation (stage, commit, fix agents
   unattended S1-S6; no push, no PR), reproduction rule max(5%, 1 event), plan copied to docs/plans/, scope.
-IN FLIGHT: S1 implementer (round 1)
+IN FLIGHT: S2 implementer (round 1)
 TREE: staged nothing; unstaged clean (tmp/ is gitignored). Worktrees open: none
 DISPOSITIONS:
   source round 1 (Opus, whole document vs HEAD + reference scripts), verdict NOT YET, 4 findings:
@@ -30,3 +30,16 @@ DISPOSITIONS:
   round 2: not run. The fold-in changed no seam table row and no ASSUMES LANDED line (§2a).
 DECISIONS-OPEN: none
 AS BUILT: not started
+
+STEP S1: committed
+  commit:  57e4cf9
+  gate:    test-prices 19 passed; test-model-spend 47 passed; test-usage-fit 74 passed; src/test-plugin-layout.js,
+           src/test-suite-isolation.js and `claude plugin validate .` exit 0; grep "PRICES = " tools/model-spend.js empty
+  reviews: sdlc:code-reviewer round 1, PASS, 0/0/2 (critical/important/advisory)
+  reports: docs/plans/sdlc-phase0/reports/S1-implementer-1.md, S1-review-1.md (gitignored)
+  stage:   the step's four files, plugin.json (1.0.106), the plan copy, tracker, feature record
+  files:   as declared; test-model-spend.js needed no edit
+  notes:   advisories above noted not actioned: usage-fit.js:330-340 prices cache-write parts with a partial usage
+           object, so a Haiku message over 100000 prompt tokens can price its write split at the low tier (estimate
+           only; usage-fit.js is MUST NOT TOUCH). Review ran on the staged diff in place, no review worktree
+           (owner's global rule: no worktree unless asked).
