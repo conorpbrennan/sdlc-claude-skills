@@ -5,6 +5,7 @@
 //   node review-config-cli.js plan-review [--repo <path>]
 //   node review-config-cli.js branch-review [--repo <path>]
 //   node review-config-cli.js main-model show [--repo <path>] | set <haiku|sonnet|opus> | off
+//   node review-config-cli.js max-rounds show | set <n> [--repo <path>]
 //
 // Prints one JSON line. The repo defaults to the git toplevel of the cwd and
 // the staged paths come from `git diff --cached`. A git failure does not stop
@@ -14,7 +15,7 @@
 const path = require('path');
 const { gitRead, locateRepo, splitNul } = require('./lib/git-read.js');
 const { stepState } = require('./lib/steps.js');
-const { resolveReview, resolvePlanReview, resolveBranchReview, resolveMainModel, setMainModel, MAIN_MODEL_OFF } = require('./lib/review-config.js');
+const { resolveReview, resolvePlanReview, resolveBranchReview, resolveMainModel, setMainModel, resolveMaxRounds, setMaxRounds, repoConfigPath, MAIN_MODEL_OFF } = require('./lib/review-config.js');
 
 // A flag with no value (last on the line, or followed by another flag) is a
 // usage error, reported through `error`.
@@ -55,6 +56,34 @@ function mainModelCmd(argv, repoRoot) {
     return /is not one of/.test(res.error) ? 2 : 1;
 }
 
+// max-rounds show | set <n> against the user sdlc-review.json. Exit 2 for a
+// usage error or an invalid number, 1 when the file cannot be safely written.
+// A repo file that sets maxRounds wins over the user file, so set warns when
+// one does.
+function maxRoundsCmd(argv, repoRoot) {
+    const [, action, value] = argv;
+    if (action === 'show') {
+        console.log(JSON.stringify(resolveMaxRounds({ repoRoot })));
+        return 0;
+    }
+    if (action !== 'set' || !/^\d+$/.test(value || '') || parseInt(value, 10) < 1) {
+        console.error('usage: review-config-cli.js max-rounds show | set <n>, n an integer >= 1');
+        return 2;
+    }
+    const n = parseInt(value, 10);
+    const res = setMaxRounds(n);
+    if (!res.ok) {
+        console.error(`${res.path}: ${res.error}`);
+        return 1;
+    }
+    const now = resolveMaxRounds({ repoRoot });
+    const warnings = now.source === 'repo config'
+        ? [`${repoConfigPath(repoRoot)} sets maxRounds ${now.maxRounds}, which wins in this repo`]
+        : [];
+    console.log(JSON.stringify({ maxRounds: n, path: res.path, warnings }));
+    return 0;
+}
+
 function main(argv) {
     const { cmd, flags, error } = parseArgs(argv);
     if (error) {
@@ -73,6 +102,7 @@ function main(argv) {
     }
 
     if (cmd === 'main-model') return mainModelCmd(argv, repoRoot);
+    if (cmd === 'max-rounds') return maxRoundsCmd(argv, repoRoot);
     if (cmd === 'plan-review') {
         const res = resolvePlanReview({ repoRoot });
         const step = stepState('plan-review', { repoRoot });
@@ -108,7 +138,7 @@ function main(argv) {
         console.log(JSON.stringify(res));
         return 0;
     }
-    console.error('usage: review-config-cli.js review --round <n> [--model <m>] [--repo <path>] | plan-review [--repo <path>] | branch-review [--repo <path>]');
+    console.error('usage: review-config-cli.js review --round <n> [--model <m>] [--repo <path>] | plan-review [--repo <path>] | branch-review [--repo <path>] | main-model show | set <m> | off | max-rounds show | set <n>');
     return 2;
 }
 

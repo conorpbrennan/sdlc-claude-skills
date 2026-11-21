@@ -332,4 +332,33 @@ function setMainModel(model) {
     return updateConfigFile(target, data => { data[MAIN_MODEL_KEY] = model; });
 }
 
-module.exports = { resolveReview, resolvePlanReview, resolveBranchReview, resolveOrchestrator, resolveMainModel, setMainModel, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };
+// The review round cap that applies in a repo, and which file set it. The repo
+// file wins over the user file, as in resolveReview.
+//
+// Args:
+//   repoRoot: absolute path of the repo whose .claude/sdlc-review.json is read.
+// Returns:
+//   { maxRounds, source, warnings }: source is 'repo config', 'user config'
+//   or 'default'.
+function resolveMaxRounds({ repoRoot } = {}) {
+    const layers = loadLayers(repoRoot);
+    const warnings = layerWarnings(layers);
+    const { value, source } = pickFromLayers(
+        layers, d => d.maxRounds, isPosInt, 'maxRounds', DEFAULTS.maxRounds, warnings);
+    return { maxRounds: value, source, warnings };
+}
+
+// Sets maxRounds in the user file, keeping every other key. Creates the file
+// when missing. Writes through updateConfigFile, so it refuses what that refuses.
+//
+// Args:
+//   n: the new cap, an integer >= 1.
+// Returns:
+//   { ok, path, error }: error is set only when ok is false.
+function setMaxRounds(n) {
+    const target = userConfigPath();
+    if (!isPosInt(n)) return { ok: false, path: target, error: `maxRounds ${JSON.stringify(n)} is not an integer >= 1` };
+    return updateConfigFile(target, data => { data.maxRounds = n; });
+}
+
+module.exports = { resolveReview, resolvePlanReview, resolveBranchReview, resolveOrchestrator, resolveMainModel, setMainModel, resolveMaxRounds, setMaxRounds, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };
