@@ -681,4 +681,93 @@ function signals(rec) {
     };
 }
 
-module.exports = { readSessions, denialKind, classify, signals, isImplementer, isPartial };
+const COUNT_KEYS = ['partial', 'tddFail', 'interrupts', 'mainSrcEdits', 'blockLoops', 'denyRetryPairs', 'identicalPromptPairs'];
+const SESSION_KEYS = ['partial', 'tddFail', 'interrupts', 'mainSrcEdits', 'blockLoops'];
+const CYCLE_KEYS = ['1', '2', '3', CYCLE_MAX_KEY, CYCLE_OPEN];
+const GROUP_MIXED = 'mixed';
+const GROUP_BEFORE = 'before ';
+const GROUP_AFTER = 'after ';
+const PER10_SCALE = 10;
+const P50_FRACTION = 0.5;
+
+/**
+ * Divides, giving null on a zero denominator.
+ *
+ * Args:
+ *   num: the numerator.
+ *   den: the denominator.
+ * Returns:
+ *   num / den, or null when den is 0.
+ */
+function ratio(num, den) {
+    return den === 0 ? null : num / den;
+}
+
+/**
+ * Builds one report row from the scored sessions of one group.
+ *
+ * Args:
+ *   group: the group name.
+ *   scored: [signals()] of the group's sessions.
+ * Returns:
+ *   A Row (see summarise).
+ */
+function buildRow(group, scored) {
+    const sum = (f) => scored.reduce((a, s) => a + f(s), 0);
+    const sessions = scored.length;
+    const steps = sum((s) => s.steps);
+    const commits = sum((s) => s.commits);
+    const reviews = sum((s) => s.reviews);
+    const counts = {};
+    for (const k of COUNT_KEYS) counts[k] = sum((s) => s[k]);
+    const sessionsWith = {};
+    for (const k of SESSION_KEYS) sessionsWith[k] = scored.filter((s) => s[k] > 0).length;
+    const per10 = {};
+    for (const k of COUNT_KEYS) {
+        const r = ratio(counts[k], steps);
+        per10[k] = r === null ? null : PER10_SCALE * counts[k] / steps;
+    }
+    const share = {};
+    for (const k of SESSION_KEYS) share[k] = ratio(sessionsWith[k], sessions);
+    const main = sum((s) => s.mainCost);
+    const sub = sum((s) => s.subCost);
+    const reviewCycles = {};
+    for (const k of CYCLE_KEYS) reviewCycles[k] = sum((s) => s.reviewCycles[k]);
+    const ctx = scored.map((s) => s.peakCtx).sort((a, b) => a - b);
+    return {
+        group, sessions, steps, commits, reviews, counts, sessionsWith, per10, share,
+        cost: { main, sub, perCommit: ratio(main + sub, commits), mainPerCommit: ratio(main, commits) },
+        reviewsPerCommit: ratio(reviews, commits),
+        reviewCycles,
+        peakCtx: { p50: ctx[Math.floor(P50_FRACTION * (ctx.length - 1))], max: ctx[ctx.length - 1] },
+    };
+}
+
+/**
+ * Groups the orchestrated sessions into report rows. Values are unrounded.
+ *
+ * Args:
+ *   records: session records from readSessions.
+ *   opts: {splitAt}, epoch ms; when set, each group name is prefixed 'before ' (session
+ *     ended before splitAt) or 'after '.
+ * Returns:
+ *   {groups: Row[]} sorted by group. Row = {group, sessions, steps, commits, reviews,
+ *   counts, sessionsWith, per10, share, cost{main, sub, perCommit, mainPerCommit},
+ *   reviewsPerCommit, reviewCycles, peakCtx{p50, max}}.
+ */
+function summarise(records, opts) {
+    const splitAt = (opts || {}).splitAt;
+    const by = new Map();
+    for (const rec of records) {
+        const c = classify(rec);
+        if (!c.orch) continue;
+        let name = c.mixed ? GROUP_MIXED : c.main + ' ' + c.tier;
+        if (splitAt !== undefined && splitAt !== null) name = (Date.parse(rec.last) < splitAt ? GROUP_BEFORE : GROUP_AFTER) + name;
+        if (!by.has(name)) by.set(name, []);
+        by.get(name).push(signals(rec));
+    }
+    const groups = [...by.keys()].sort().map((name) => buildRow(name, by.get(name)));
+    return { groups };
+}
+
+module.exports = { readSessions, denialKind, classify, signals, isImplementer, isPartial, summarise };

@@ -13,7 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { readSessions, classify, signals, isPartial } = require('./lib/orch-signals.js');
+const { readSessions, classify, signals, isPartial, summarise } = require('./lib/orch-signals.js');
 
 const OPUS = 'claude-opus-4-8';
 const DAY = 24 * 3600 * 1000;
@@ -305,7 +305,68 @@ function testNewSignals() {
     ok('identicalPromptPairs: 59 s and 11 s count, 61 s does not', s.identicalPromptPairs === 2, s.identicalPromptPairs);
 }
 
+// A session record for summarise: `n` implementer dispatches (ids `<tag>1`..), plus overrides.
+function sess(tag, n, over) {
+    const agents = many(n, (i) => ag(IMPL_TYPE, { id: tag + (i + 1), ms: i }));
+    return rec(Object.assign({ famTurns: { opus: 10 }, agents, last: new Date(T0).toISOString() }, over));
+}
+
+function testSummariseGroups() {
+    const high = sess('h', 11, { last: new Date(T0 + 5000).toISOString() });
+    high.peakCtx = 250000;
+    const records = [
+        sess('a', 2, { last: new Date(T0 - 1).toISOString() }),
+        high,
+        sess('m', 2, { famTurns: { opus: 6, sonnet: 4 }, last: new Date(T0 + 9000).toISOString() }),
+        rec({ famTurns: { opus: 10 }, last: new Date(T0).toISOString() }),
+    ];
+    const names = (r) => r.groups.map((g) => g.group);
+    ok('groups without splitAt, non-orch skipped, sorted',
+        JSON.stringify(names(summarise(records, {}))) === JSON.stringify(['mixed', 'opus high', 'opus low']),
+        names(summarise(records, {})));
+    const split = summarise(records, { splitAt: T0 + 5000 });
+    ok('groups with splitAt: a session ending at splitAt is after',
+        JSON.stringify(names(split)) === JSON.stringify(['after mixed', 'after opus high', 'before opus low']), names(split));
+}
+
+function testSummariseRow() {
+    const s1 = sess('a', 2, {
+        commits: 2, interrupts: 1, mainCost: 1, peakCtx: 100, mainEdits: ['/x/a.js'],
+        subs: [{ toolUseId: 'a1', final: 'PARTIAL: x', cost: 0.5, files: [] }, { toolUseId: 'a2', final: 'done', cost: 0.25, files: [] }],
+    });
+    s1.agents.push(ag(REV_TYPE, { id: 'r1', ms: 10 }));
+    s1.events = [{ k: 'COMMIT_OK', ts: new Date(T0 + 1000).toISOString() }];
+    const s2 = sess('b', 2, { mainCost: 2, peakCtx: 300, subs: [{ toolUseId: 'b1', final: 'ok', cost: 0.25, files: [] }] });
+    const s3 = sess('c', 2, { commits: 1, mainCost: 0.5, peakCtx: 200 });
+    const row = summarise([s1, s2, s3], {}).groups[0];
+    const zero = { partial: 0, tddFail: 0, interrupts: 0, mainSrcEdits: 0, blockLoops: 0, denyRetryPairs: 0, identicalPromptPairs: 0 };
+    const counts = Object.assign({}, zero, { partial: 1, interrupts: 1, mainSrcEdits: 1 });
+    const want = {
+        group: 'opus low', sessions: 3, steps: 6, commits: 3, reviews: 1, counts,
+        sessionsWith: { partial: 1, tddFail: 0, interrupts: 1, mainSrcEdits: 1, blockLoops: 0 },
+        per10: Object.assign({}, zero, { partial: 10 / 6, interrupts: 10 / 6, mainSrcEdits: 10 / 6 }),
+        share: { partial: 1 / 3, tddFail: 0, interrupts: 1 / 3, mainSrcEdits: 1 / 3, blockLoops: 0 },
+        cost: { main: 3.5, sub: 1, perCommit: 1.5, mainPerCommit: 3.5 / 3 },
+        reviewsPerCommit: 1 / 3,
+        reviewCycles: { 1: 1, 2: 0, 3: 0, '4+': 0, open: 0 },
+        peakCtx: { p50: 200, max: 300 },
+    };
+    ok('one row, every field', JSON.stringify(row) === JSON.stringify(want), row);
+}
+
+function testSummariseNulls() {
+    const s = sess('x', 0, { agents: [ag(REV_TYPE), ag(REV_TYPE)] });
+    const row = summarise([s], {}).groups[0];
+    ok('zero steps: every per10 is null', Object.values(row.per10).every((v) => v === null), row.per10);
+    ok('zero commits: per-commit values are null',
+        row.cost.perCommit === null && row.cost.mainPerCommit === null && row.reviewsPerCommit === null, row);
+    ok('share stays a number with one session', row.share.partial === 0, row.share);
+}
+
 (async () => {
+    testSummariseGroups();
+    testSummariseRow();
+    testSummariseNulls();
     testClassify();
     testIsPartial();
     testBlockLoops();

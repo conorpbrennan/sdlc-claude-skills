@@ -6,7 +6,7 @@ RUN: tmp/sdlc-phase0-plan.md, revision 2. Branch: sdlc-enhancement-phase0. Start
 BUDGET: six steps, about 165 implementer tool calls, 6-9 review rounds. Spent: plan writing only.
 OWNER DECISIONS (21 Nov 2026): all four answered yes: standing authorisation (stage, commit, fix agents
   unattended S1-S6; no push, no PR), reproduction rule max(5%, 1 event), plan copied to docs/plans/, scope.
-IN FLIGHT: S3 implementer (round 1)
+IN FLIGHT: S4 implementer (round 1)
 TREE: staged nothing; unstaged clean (tmp/ is gitignored). Worktrees open: none
 DISPOSITIONS:
   source round 1 (Opus, whole document vs HEAD + reference scripts), verdict NOT YET, 4 findings:
@@ -57,3 +57,15 @@ STEP S2: committed
            functions written, the repeated-Agent check sits in the resume test. Advisories (NaN since/until at a
            direct caller; 18 assertions vs ceiling 8) noted not actioned. Sorted sub-file read order is a
            deliberate change from the reference's readdir order.
+
+STEP S3: committed
+  commit:  587c363
+  gate:    test-orch-signals 53 assertions passed; layout, isolation, model-spend, usage-fit tests and
+           `claude plugin validate .` exit 0
+  reviews: sdlc:code-reviewer round 1, PASS, 0/0/2
+  reports: docs/plans/sdlc-phase0/reports/S3-implementer-1.md, S3-review-1.md (gitignored)
+  stage:   the step's two files, plugin.json (1.0.108), the S2 tracker block, the feature record
+  files:   as declared
+  notes:   red first was real ("classify is not a function"). At equal timestamps reviewCycles counts reviewer
+           dispatches before commits (step does not pin ties; implementer's choice, recorded in its docblock).
+           Advisories (O(n^2) identical-prompt scan; DEV_DIR fixed at load) noted not actioned.
