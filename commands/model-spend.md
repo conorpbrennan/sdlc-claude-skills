@@ -57,6 +57,10 @@ Section 9, "Orchestration signals per 10 implementer dispatches", has one line p
 - `review-cycles`: commits by how many reviews preceded them (1, 2, 3, 4 or more); `open` is reviews not yet followed by a commit.
 - `peak-ctx`: median and maximum peak main context per session.
 
+Section 10, "PARTIAL anatomy", shows the PARTIAL rate of implementer dispatches by prompt bytes, tool calls, files edited and test files named. Phase 4 acts only if the rate rises with size.
+
+A wide window (for example `--days 0` or a long `--since`) reads the transcript tree twice, once for sections 1 to 8 and once for sections 9 and 10, and takes about 30 seconds or more on a large tree.
+
 Rates under about 2x apart are noise at these sample sizes. Say which differences are bigger than that and which are not.
 
 State that the figures are list-price estimates. Do not pad. If the tool prints "No transcripts found", say so and stop.

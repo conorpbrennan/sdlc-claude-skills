@@ -31,6 +31,15 @@
 
 ## History
 
+- 2026-11-21 `7b07c0b` — tools/model-spend.js: section 9 orchestration signals; --since, --until, --split (Phase 0, S5)
+  - .claude-plugin/plugin.json
+  - CLAUDE.md
+  - README.md
+  - commands/model-spend.md
+  - docs/plans/sdlc-phase0/tracker.md
+  - tools/model-spend.js
+  - tools/test-model-spend.js
+
 - 2026-11-21 `35ebb68` — tools/lib/orch-signals.js: summarise groups scored sessions into report rows (Phase 0, S4)
   - .claude-plugin/plugin.json
   - docs/plans/sdlc-phase0/tracker.md

@@ -15,6 +15,8 @@
 // gateway/API key), split by cache-write TTL, with the cost of rebuilds after idle gaps.
 // Section 9 shows orchestration signals per 10 implementer dispatches, by session group
 // (tools/lib/orch-signals.js).
+// Section 10 shows the PARTIAL rate by dispatch size (prompt bytes, tool calls, files edited,
+// test files named).
 //
 // Files are streamed line by line: the real tree is about 2 GB.
 'use strict';
@@ -25,7 +27,7 @@ const path = require('path');
 const readline = require('readline');
 
 const { PRICES, MODEL_PRICES, PRICING_DATE, PRICING_SOURCE, family, cost, cacheWriteCost } = require('./lib/prices.js');
-const { readSessions, summarise } = require('./lib/orch-signals.js');
+const { readSessions, summarise, partialAnatomy } = require('./lib/orch-signals.js');
 
 // Section 9 labels. Keys are the Row keys of summarise().
 const ORCH_HEADING = '9. Orchestration signals per 10 implementer dispatches';
@@ -41,10 +43,14 @@ const ORCH_SHARE_LABELS = [
     ['blockLoops', 'block-loops'],
 ];
 const ORCH_CYCLE_KEYS = ['1', '2', '3', '4+', 'open'];
+const ANATOMY_HEADING = '10. PARTIAL anatomy';
+const ANATOMY_DIM_LABELS = [
+    ['promptBytes', 'prompt bytes'], ['toolCalls', 'tool calls'], ['filesEdited', 'files edited'], ['testFilesNamed', 'test files named'],
+];
 const TOKENS_PER_K = 1000;
 const PERCENT = 100;
 const TIME_FLAGS = { '--since': 'since', '--until': 'until', '--split': 'splitAt' };
-const USAGE_LINE ='Usage: model-spend.js [--days N | --since ISO] [--until ISO] [--split ISO] [--json] [--projects DIR]';
+const USAGE_LINE = 'Usage: model-spend.js [--days N | --since ISO] [--until ISO] [--split ISO] [--json] [--projects DIR]';
 
 // Main-session prompt cache. Claude Code picks the TTL by auth route: 1h on a
 // claude.ai login (inference_geo "global"), 5m through an API key or gateway.
@@ -349,6 +355,7 @@ async function buildReport(root, days, now, opts) {
     rep.orchestration = {
         window: { since: isoOrNull(o.since), until: isoOrNull(o.until), split: isoOrNull(o.splitAt) },
         groups: summarise(sessions, { splitAt: o.splitAt }).groups,
+        anatomy: partialAnatomy(sessions),
     };
     return rep;
 }
@@ -431,6 +438,7 @@ function render(rep) {
     if (gw.write5m > gw.write1h) out.push(`  Gateway/API sessions wrote mostly 5m cache. Fix: ${FIX_LINE}`);
     out.push('');
     out.push(...renderOrchestration(rep));
+    out.push('', ...renderAnatomy(rep));
     return out.join('\n');
 }
 
@@ -487,6 +495,22 @@ function renderOrchestration(rep) {
     return out;
 }
 
+// Renders section 10: PARTIAL rate by dispatch size, one block per dimension.
+//
+// Args:
+//   rep: the report from buildReport().
+// Returns:
+//   an array of lines.
+function renderAnatomy(rep) {
+    const a = rep.orchestration.anatomy;
+    const out = [ANATOMY_HEADING, `  Implementer dispatches with a sub-agent record: ${a.dispatches}, PARTIAL: ${a.partial}.`];
+    for (const [dim, label] of ANATOMY_DIM_LABELS) {
+        out.push(`  ${label}`);
+        for (const b of a.bands[dim]) out.push(`    ${b.band.padEnd(6)} dispatches ${String(b.dispatches).padStart(4)}  partial ${String(b.partial).padStart(4)}  rate ${pct(b.rate)}`);
+    }
+    return out;
+}
+
 // Parses argv.
 //
 // Returns:
@@ -524,7 +548,7 @@ async function main() {
     }
     // --since replaces the days window, so the report must not claim a days window too.
     const days = opts.since !== undefined ? 0 : opts.days;
-    const rep = await buildReport(opts.projects, days, Date.now(),{ since: opts.since, until: opts.until, splitAt: opts.splitAt });
+    const rep = await buildReport(opts.projects, days, Date.now(), { since: opts.since, until: opts.until, splitAt: opts.splitAt });
     if (!rep) {
         process.stdout.write(`No transcripts found under ${opts.projects}\n`);
         return;

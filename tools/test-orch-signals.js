@@ -13,7 +13,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { readSessions, classify, signals, isPartial, summarise } = require('./lib/orch-signals.js');
+const { readSessions, classify, signals, isPartial, summarise, partialAnatomy } = require('./lib/orch-signals.js');
 
 const OPUS = 'claude-opus-4-8';
 const DAY = 24 * 3600 * 1000;
@@ -354,6 +354,63 @@ function testSummariseRow() {
     ok('one row, every field', JSON.stringify(row) === JSON.stringify(want), row);
 }
 
+const PARTIAL_FINAL = 'Result: PARTIAL, two files left.';
+const DONE_FINAL = 'Result: done.';
+
+// A session of implementer dispatches, one per row of `rows`: {pb, tc, files, tf, partial}.
+function anatomySession(rows) {
+    const agents = rows.map((r, i) => Object.assign(ag(IMPL_TYPE, { id: 'd' + i, ms: i }), { promptBytes: r.pb || 0, testFilesNamed: r.tf || 0 }));
+    const subs = rows.map((r, i) => ({
+        toolUseId: 'd' + i, toolCalls: r.tc || 0, files: many(r.files || 0, (k) => '/x/f' + k + '.js'),
+        final: r.partial ? PARTIAL_FINAL : DONE_FINAL, cost: 0,
+    }));
+    return sess('z', 0, { agents, subs });
+}
+
+const bandOf = (a, dim, label) => a.bands[dim].find((b) => b.band === label);
+
+function testAnatomyEdges() {
+    const rows = [
+        { pb: 3999 }, { pb: 4000, partial: true }, { pb: 7999 }, { pb: 8000 }, { pb: 15999 }, { pb: 16000 },
+        { tc: 40 }, { tc: 41, partial: true }, { tc: 80 }, { tc: 81 },
+        { files: 2 }, { files: 3 }, { files: 5 }, { files: 6 }, { files: 10 }, { files: 11 },
+        { tf: 1 }, { tf: 2 }, { tf: 3 }, { tf: 4 },
+    ];
+    const a = partialAnatomy([anatomySession(rows)]);
+    const labels = (dim) => a.bands[dim].map((b) => b.band).join('|');
+    ok('anatomy: labels and order per dimension',
+        labels('promptBytes') === '<4K|4-8K|8-16K|16K+' && labels('toolCalls') === '<=40|41-80|81+'
+        && labels('filesEdited') === '0-2|3-5|6-10|11+' && labels('testFilesNamed') === '0|1|2-3|4+', a.bands);
+    ok('anatomy: 3,999 is <4K and 4,000 is 4-8K (lower bound inclusive)',
+        bandOf(a, 'promptBytes', '<4K').dispatches === 1 + 14 && bandOf(a, 'promptBytes', '4-8K').dispatches === 2
+        && bandOf(a, 'promptBytes', '4-8K').partial === 1 && bandOf(a, 'promptBytes', '4-8K').rate === 0.5, a.bands.promptBytes);
+    ok('anatomy: 8,000 and 16,000 open the next band',
+        bandOf(a, 'promptBytes', '8-16K').dispatches === 2 && bandOf(a, 'promptBytes', '16K+').dispatches === 1, a.bands.promptBytes);
+    ok('anatomy: 40 is <=40 and 41 is 41-80; 80 stays, 81 opens 81+',
+        bandOf(a, 'toolCalls', '41-80').dispatches === 2 && bandOf(a, 'toolCalls', '81+').dispatches === 1
+        && bandOf(a, 'toolCalls', '41-80').partial === 1, a.bands.toolCalls);
+    ok('anatomy: files 2 and 3, 5 and 6, 10 and 11 split as pinned',
+        bandOf(a, 'filesEdited', '3-5').dispatches === 2 && bandOf(a, 'filesEdited', '6-10').dispatches === 2
+        && bandOf(a, 'filesEdited', '11+').dispatches === 1, a.bands.filesEdited);
+    ok('anatomy: test files 1, 2-3 and 4+',
+        bandOf(a, 'testFilesNamed', '1').dispatches === 1 && bandOf(a, 'testFilesNamed', '2-3').dispatches === 2
+        && bandOf(a, 'testFilesNamed', '4+').dispatches === 1, a.bands.testFilesNamed);
+    ok('anatomy: totals', a.dispatches === rows.length && a.partial === 2, [a.dispatches, a.partial]);
+}
+
+function testAnatomySkips() {
+    const noSub = anatomySession([{ pb: 5000, partial: true }, { pb: 5000 }]);
+    noSub.subs = noSub.subs.slice(0, 1);
+    const plain = sess('p', 1, {});
+    plain.subs = [{ toolUseId: 'p1', toolCalls: 1, files: [], final: PARTIAL_FINAL, cost: 0 }];
+    const a = partialAnatomy([noSub, plain]);
+    ok('anatomy: a dispatch with no sub is skipped, not counted as not PARTIAL',
+        a.dispatches === 1 && a.partial === 1 && bandOf(a, 'promptBytes', '4-8K').rate === 1, a);
+    const none = partialAnatomy([]);
+    ok('anatomy: zero dispatches gives zeros and null rates',
+        none.dispatches === 0 && none.partial === 0 && none.bands.toolCalls.every((b) => b.dispatches === 0 && b.rate === null), none);
+}
+
 function testSummariseNulls() {
     const s = sess('x', 0, { agents: [ag(REV_TYPE), ag(REV_TYPE)] });
     const row = summarise([s], {}).groups[0];
@@ -367,6 +424,8 @@ function testSummariseNulls() {
     testSummariseGroups();
     testSummariseRow();
     testSummariseNulls();
+    testAnatomyEdges();
+    testAnatomySkips();
     testClassify();
     testIsPartial();
     testBlockLoops();

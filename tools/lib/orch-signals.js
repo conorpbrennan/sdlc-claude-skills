@@ -770,4 +770,64 @@ function summarise(records, opts) {
     return { groups };
 }
 
-module.exports = { readSessions, denialKind, classify, signals, isImplementer, isPartial, summarise };
+
+// PARTIAL anatomy: dimension name -> [label, lower bound inclusive] in band order.
+const ANATOMY_DIMS = {
+    promptBytes: [['<4K', 0], ['4-8K', 4000], ['8-16K', 8000], ['16K+', 16000]],
+    toolCalls: [['<=40', 0], ['41-80', 41], ['81+', 81]],
+    filesEdited: [['0-2', 0], ['3-5', 3], ['6-10', 6], ['11+', 11]],
+    testFilesNamed: [['0', 0], ['1', 1], ['2-3', 2], ['4+', 4]],
+};
+
+/**
+ * Index of the band holding `value`: the last band whose lower bound is at most value.
+ *
+ * Args:
+ *   bands: [[label, lowerBound]] in ascending order.
+ *   value: the number to place.
+ * Returns:
+ *   The index into bands.
+ */
+function bandIndex(bands, value) {
+    let idx = 0;
+    for (let i = 0; i < bands.length; i += 1) if (value >= bands[i][1]) idx = i;
+    return idx;
+}
+
+/**
+ * PARTIAL rate by dispatch size, over implementer dispatches in orchestrated sessions
+ * that have a matching sub-agent record (by toolUseId). A dispatch with no sub is skipped.
+ *
+ * Args:
+ *   records: session records from readSessions.
+ * Returns:
+ *   {dispatches, partial, bands: {promptBytes, toolCalls, filesEdited, testFilesNamed}}, each
+ *   dimension an array of {band, dispatches, partial, rate} in fixed order; rate is
+ *   unrounded and null at 0 dispatches.
+ */
+function partialAnatomy(records) {
+    const out = { dispatches: 0, partial: 0, bands: {} };
+    for (const dim of Object.keys(ANATOMY_DIMS)) out.bands[dim] = ANATOMY_DIMS[dim].map(([band]) => ({ band, dispatches: 0, partial: 0, rate: null }));
+    for (const rec of records) {
+        if (!classify(rec).orch) continue;
+        const byId = {};
+        for (const s of rec.subs) byId[s.toolUseId] = s;
+        for (const a of rec.agents.filter(isImplementer)) {
+            const sub = byId[a.id];
+            if (!sub) continue;
+            const hit = isPartial(sub.final) ? 1 : 0;
+            const values = { promptBytes: a.promptBytes, toolCalls: sub.toolCalls, filesEdited: sub.files.length, testFilesNamed: a.testFilesNamed };
+            out.dispatches += 1;
+            out.partial += hit;
+            for (const dim of Object.keys(ANATOMY_DIMS)) {
+                const b = out.bands[dim][bandIndex(ANATOMY_DIMS[dim], values[dim])];
+                b.dispatches += 1;
+                b.partial += hit;
+            }
+        }
+    }
+    for (const dim of Object.keys(out.bands)) for (const b of out.bands[dim]) b.rate = ratio(b.partial, b.dispatches);
+    return out;
+}
+
+module.exports = { readSessions, denialKind, classify, signals, isImplementer, isPartial, summarise, partialAnatomy };

@@ -6,7 +6,7 @@ RUN: tmp/sdlc-phase0-plan.md, revision 2. Branch: sdlc-enhancement-phase0. Start
 BUDGET: six steps, about 165 implementer tool calls, 6-9 review rounds. Spent: plan writing only.
 OWNER DECISIONS (21 Nov 2026): all four answered yes: standing authorisation (stage, commit, fix agents
   unattended S1-S6; no push, no PR), reproduction rule max(5%, 1 event), plan copied to docs/plans/, scope.
-IN FLIGHT: S5 implementer (round 1)
+IN FLIGHT: S6 implementer (round 1)
 TREE: staged nothing; unstaged clean (tmp/ is gitignored). Worktrees open: none
 DISPOSITIONS:
   source round 1 (Opus, whole document vs HEAD + reference scripts), verdict NOT YET, 4 findings:
@@ -28,7 +28,14 @@ DISPOSITIONS:
   fields shortened to "none". Rejected: removing ROLLBACK and IMPORTS fields (§16 template fields);
   switching the main-line filter to startsWith (round 1 measured the key rule as equivalent).
   round 2: not run. The fold-in changed no seam table row and no ASSUMES LANDED line (§2a).
-DECISIONS-OPEN: none
+DECISIONS-OPEN:
+  1. S6 carries two S5 review advisories (the two missing-space slips in tools/model-spend.js and one sentence in
+     commands/model-spend.md that wide windows read the tree twice, about 30 s). Both files are in S6's declared set,
+     so the S5 commit was not reopened. Conservative: no behaviour change.
+  2. S6's MUST NOT TOUCH lists README.md and CLAUDE.md, but S5's doc lines name section 9 only. Section 10 is then
+     undocumented in README.md and CLAUDE.md. Left for the as-built close-out, not a step.
+  3. Orchestrator ran no review worktree (owner's global rule: no worktree unless asked); reviewers read the staged
+     diff in place and built any scratch trees outside the repo.
 AS BUILT: not started
 
 STEP S1: committed
@@ -82,3 +89,17 @@ STEP S4: committed
            are null at 0 commits; S5's render must handle null. repro-check.js reads rows through
            rep.orchestration.groups. Advisories (double division in per10; three ok calls in one test) noted not
            actioned.
+
+STEP S5: committed
+  commit:  7b07c0b
+  gate:    test-model-spend 54 passed; test-usage-fit 74; test-orch-signals 59; layout, isolation, plugin validate
+           exit 0. `REPRO OK`, rc 0: quoted from the implementer's run, from the orchestrator's own re-run at the
+           working tree, and from the reviewer's re-run at the staged tree (34 s)
+  reviews: sdlc:code-reviewer round 1, PASS, 0/0/4
+  reports: docs/plans/sdlc-phase0/reports/S5-implementer-1.md, S5-review-1.md (gitignored)
+  stage:   model-spend.js, test-model-spend.js, commands/model-spend.md, README.md, CLAUDE.md, plugin.json (1.0.110),
+           the S4 tracker block, the feature record
+  files:   as declared; no orch-signals.js change (no porting bug found)
+  notes:   sections 1-8 proven unchanged by the reviewer (HEAD vs working copy, synthetic tree, byte-identical JSON
+           minus `orchestration`). Advisories 1 and 2 (two missing-space slips; one doc sentence on the double tree
+           read) folded into S6 as a DECISION below; 3 and 4 noted not actioned.

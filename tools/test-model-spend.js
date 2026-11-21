@@ -283,6 +283,10 @@ const badUntil = runOrch(['--until', 'notadate']);
 ok('--until notadate exits 2 with a usage line', badUntil.status === 2 && /usage/i.test(badUntil.stderr), badUntil.stderr);
 const otx = runOrch([]).stdout;
 ok('text report has the section 9 heading', otx.includes(ORCH_HEADING), otx.slice(-400));
+const ANATOMY_HEADING = '10. PARTIAL anatomy';
+const an = oj.orchestration.anatomy || {};
+ok('text report has the section 10 heading after section 9', otx.includes(ANATOMY_HEADING) && otx.indexOf(ANATOMY_HEADING) > otx.indexOf(ORCH_HEADING), otx.slice(-400));
+ok('--json carries orchestration.anatomy with dispatches and the four dimensions', an.dispatches === 0 && an.partial === 0 && ['promptBytes', 'toolCalls', 'filesEdited', 'testFilesNamed'].every((k) => Array.isArray((an.bands || {})[k])), an);
 
 fs.rmSync(sb, { recursive: true, force: true });
 
