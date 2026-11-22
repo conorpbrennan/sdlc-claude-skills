@@ -28,6 +28,12 @@
 
 ## History
 
+- 2026-11-22 `f1c0c94` — src/hooks/agent-tier-gate.js: deny a Fable dispatch when Fable is off or unreachable, naming Opus (S5)
+  - .claude-plugin/plugin.json
+  - docs/plans/fable-access-check/tracker.md
+  - src/hooks/agent-tier-gate.js
+  - src/hooks/test-agent-tier-gate.js
+
 - 2026-11-22 `0390ddb` — src/hooks/lib/review-config.js: fableAccess key (auto, on, off) in the user config, and pins that config never names Fable (S4)
   - .claude-plugin/plugin.json
   - .claude/sdlc-review.json.example

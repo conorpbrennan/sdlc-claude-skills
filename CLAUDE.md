@@ -66,6 +66,7 @@ edit made there is lost on the next update, and it never reaches the repo.
 | Timing analyser | `tools/analyze-review-timing.py` |
 | Review config resolver and CLI (`sdlc-review.json`) | `src/hooks/lib/review-config.js`, `src/hooks/review-config-cli.js`, `.claude/sdlc-review.json.example` |
 | `agent-tier-gate` hook (Opus dispatch needs a TIER reason; appends the context-budget block) | `src/hooks/agent-tier-gate.js`, `src/hooks/lib/context-budget.js` |
+| Fable access check (denies a Fable dispatch when Fable is off or unreachable; `fableAccess` key) | `src/hooks/lib/fable-access.js`, `src/hooks/lib/review-config.js` |
 | `read-trim` hook (trims whole-file Reads over 12K chars inside sub-agents) | `src/hooks/read-trim.js`, `src/hooks/lib/read-trim.js` |
 | Orchestrator mode hook and `/sdlc:orchestrate` | `src/hooks/orchestrator-mode.js`, `commands/orchestrate.md` |
 | `/sdlc:steps` and the steps resolver (`steps` block of `sdlc-review.json`) | `commands/steps.md`, `src/hooks/steps-cli.js`, `src/hooks/lib/steps.js` |

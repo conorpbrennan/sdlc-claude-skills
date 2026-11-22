@@ -2,7 +2,10 @@
 
 RUN: docs/plans/fable-access-check.md, revision 3. Branch: fable-access-check (cut from origin/main c566c28). Started: 2026-11-22.
 BUDGET: steps S1-S6, per the step BUDGET fields in the plan. Spent: plan source review rounds 1 and 2 (both NOT YET, folded into revision 3; cap reached, no third review).
-IN FLIGHT: S5 (tier gate Fable check). S2 54506b0, S3 6328488 and S4 0390ddb committed, each PASS at review round 1 (code-reviewer, 0 critical, 0 important).
+IN FLIGHT: none. S1-S6 built. S2 54506b0, S3 6328488, S4 0390ddb and S5 f1c0c94 each PASS at review round 1 (code-reviewer, 0 critical, 0 important). S6 is docs only.
+AS BUILT: signal = transcript inference_geo, with a failed Agent task-notification 403 and a Fable reply as overrides. Paid probe needed: no. AC1-AC5 met by tests; AC5: bash tools/run-tests.sh printed Files: 61  failed: 0.
+OPEN GAPS: geo "" = gateway is INFERRED (no gateway run). Agent tool_result 403 shape is GUESSED (0 seen). The first Fable dispatch of a session reads unknown and is denied. S5 advisories left: AC1 test picks its prompt by row name; redundant assignment in the decideFable catch.
+NOT DONE: push, PR, infra allow-list message.
 TREE: staged feature record; plan untracked. Worktrees open: none.
 
 Owner decisions, 2026-11-22:
