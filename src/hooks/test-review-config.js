@@ -244,6 +244,63 @@ BR_ROWS.forEach((row, i) => {
 });
 clearUserCfg();
 
+console.log('\nresolveFableAccess table:');
+const FM = cfg.FABLE_MODES;
+const FK = cfg.FABLE_ACCESS_KEY;
+const SOURCE_DEFAULT = 'default';
+const SOURCE_USER = 'user config';
+const WARN_USER_ONLY = 'fableAccess is read from the user file only; ignored';
+const WARN_INVALID = 'is not valid; ignored';
+const FABLE_ROWS = [
+    { name: 'neither file', user: null, repo: null, mode: FM.AUTO, source: SOURCE_DEFAULT, warn: null },
+    { name: 'user on', user: { [FK]: FM.ON }, repo: null, mode: FM.ON, source: SOURCE_USER, warn: null },
+    { name: 'user off', user: { [FK]: FM.OFF }, repo: null, mode: FM.OFF, source: SOURCE_USER, warn: null },
+    { name: 'user auto', user: { [FK]: FM.AUTO }, repo: null, mode: FM.AUTO, source: SOURCE_USER, warn: null },
+    { name: 'user "maybe"', user: { [FK]: 'maybe' }, repo: null, mode: FM.AUTO, source: SOURCE_DEFAULT, warn: WARN_INVALID },
+    { name: 'user true', user: { [FK]: true }, repo: null, mode: FM.AUTO, source: SOURCE_DEFAULT, warn: WARN_INVALID },
+    { name: 'repo on, no user value', user: null, repo: { [FK]: FM.ON }, mode: FM.AUTO, source: SOURCE_DEFAULT, warn: WARN_USER_ONLY },
+    { name: 'repo on, user off: user wins', user: { [FK]: FM.OFF }, repo: { [FK]: FM.ON }, mode: FM.OFF, source: SOURCE_USER, warn: WARN_USER_ONLY },
+];
+FABLE_ROWS.forEach((row, i) => {
+    const repo = newRepo('repoFA' + i);
+    if (row.user) writeUserCfg(row.user); else clearUserCfg();
+    if (row.repo) writeRepoCfg(repo, row.repo);
+    const f = cfg.resolveFableAccess({ repoRoot: repo });
+    const warned = row.warn === null ? f.warnings.length === 0 : f.warnings.some(w => w.includes(row.warn));
+    assert('fableAccess: ' + row.name, [f.mode, f.source, warned], [row.mode, row.source, true]);
+});
+clearUserCfg();
+
+console.log('\nConfig can never name Fable:');
+const FABLE = 'fable';
+const FABLE_REJECT_TEXT = 'is not valid; ignored';
+assert('MODELS excludes fable', cfg.MODELS.includes(FABLE), false);
+writeUserCfg({ round2: FABLE });
+r = resolve(bare, { round: 2 });
+assert('user round2 fable gives the default model and a warning',
+    [r.model, r.source, r.warnings.some(w => w.includes(FABLE_REJECT_TEXT))], ['opus', SOURCE_DEFAULT, true]);
+clearUserCfg();
+const repoFR = newRepo('repoFR');
+writeRepoCfg(repoFR, { rules: [{ paths: ['src/**'], round1: FABLE }] });
+r = resolve(repoFR, { stagedPaths: ['src/a.js'] });
+assert('rule round1 fable is ignored with a warning',
+    [r.model, r.source, r.warnings.some(w => w.includes(FABLE_REJECT_TEXT))], ['sonnet', SOURCE_DEFAULT, true]);
+{
+    const saved = process.env.SDLC_REVIEW_CONFIG_USER;
+    process.env.SDLC_REVIEW_CONFIG_USER = path.join(sb, 'fable-main-model.json');
+    const res = cfg.setMainModel(FABLE);
+    const wrote = fs.existsSync(process.env.SDLC_REVIEW_CONFIG_USER);
+    process.env.SDLC_REVIEW_CONFIG_USER = saved;
+    assert('setMainModel fable is refused and writes nothing', [res.ok, wrote], [false, false]);
+}
+writeUserCfg({ planReview: { source: FABLE, consistency: FABLE }, branchReview: { model: FABLE } });
+const fp = cfg.resolvePlanReview({ repoRoot: bare });
+const fb = cfg.resolveBranchReview({ repoRoot: bare });
+assert('planReview rejects fable for both model keys',
+    [fp.source, fp.consistency, fp.warnings.length], ['opus', 'sonnet', 2]);
+assert('branchReview rejects fable for its model key', [fb.model, fb.warnings.length], ['opus', 1]);
+clearUserCfg();
+
 console.log('\nCLI:');
 const cli = path.join(__dirname, 'review-config-cli.js');
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf-8' });
