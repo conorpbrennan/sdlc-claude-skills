@@ -17,11 +17,20 @@
 ## Files involved
 
 - .claude-plugin/plugin.json
+- .claude/sdlc-review.json.example
 - docs/plans/fable-access-check/tracker.md
 - src/hooks/lib/fable-access.js
+- src/hooks/lib/review-config.js
 - src/hooks/test-fable-access.js
+- src/hooks/test-review-config.js
 
 ## History
+
+- 2026-11-22 `6328488` — src/hooks/lib/fable-access.js: checkAccess caches the Fable verdict per session for 10 minutes (S3)
+  - .claude-plugin/plugin.json
+  - docs/plans/fable-access-check/tracker.md
+  - src/hooks/lib/fable-access.js
+  - src/hooks/test-fable-access.js
 
 - 2026-11-22 `54506b0` — src/hooks/lib/fable-access.js: readAccessSignal reads the transcript tail for the Fable access verdict (S2)
   - .claude-plugin/plugin.json

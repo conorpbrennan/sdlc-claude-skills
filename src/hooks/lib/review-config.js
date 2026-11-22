@@ -26,7 +26,12 @@ const MODELS = ['haiku', 'sonnet', 'opus'];   // weakest to strongest
 const AGENT_ROUND_1 = 'code-reviewer';
 const AGENT_LATER_ROUNDS = 'code-reviewer-deep';
 
+const FABLE_ACCESS_KEY = 'fableAccess';
+// auto: check Fable reachability per session; on and off force the verdict.
+const FABLE_MODES = Object.freeze({ AUTO: 'auto', ON: 'on', OFF: 'off' });
+
 const DEFAULTS = {
+    fableAccess: FABLE_MODES.AUTO,
     round1: 'sonnet',
     round2: 'opus',
     maxRounds: 2,
@@ -269,6 +274,36 @@ function resolveMainModel({ repoRoot } = {}) {
     return { mainModel, effective, source, path: user.path, warnings };
 }
 
+// Args:
+//   v: a candidate fableAccess value.
+// Returns: true when v is one of FABLE_MODES.
+function isFableMode(v) { return typeof v === 'string' && Object.values(FABLE_MODES).includes(v); }
+
+// Whether Fable dispatches are checked, forced on or forced off. Read from the
+// user file only: reachability belongs to the account and machine, and a
+// committed repo value would force Fable for every gateway clone. Never throws.
+//
+// Args:
+//   repoRoot: Repository root; its file is read only to warn that its
+//     fableAccess is ignored.
+// Returns:
+//   { mode, source, warnings }: mode is one of FABLE_MODES; source is
+//   'user config' or 'default' (unset or invalid gives auto from default).
+function resolveFableAccess({ repoRoot } = {}) {
+    const layers = loadLayers(repoRoot);
+    const [repo, user] = layers;
+    const warnings = layerWarnings(layers);
+    if (repo.data && repo.data[FABLE_ACCESS_KEY] !== undefined) {
+        warnings.push(`${repo.path}: ${FABLE_ACCESS_KEY} is read from the user file only; ignored`);
+    }
+    const v = user.data ? user.data[FABLE_ACCESS_KEY] : undefined;
+    if (v !== undefined) {
+        if (isFableMode(v)) return { mode: v, source: user.name, warnings };
+        warnings.push(`${user.path}: ${FABLE_ACCESS_KEY} ${JSON.stringify(v)} is not valid; ignored`);
+    }
+    return { mode: DEFAULTS.fableAccess, source: 'default', warnings };
+}
+
 // Returns: the mainModel in the plugin's defaults/sdlc-review.json, or null when
 // the file is missing, malformed or holds no valid model.
 function shippedMainModel() {
@@ -361,4 +396,4 @@ function setMaxRounds(n) {
     return updateConfigFile(target, data => { data.maxRounds = n; });
 }
 
-module.exports = { resolveReview, resolvePlanReview, resolveBranchReview, resolveOrchestrator, resolveMainModel, setMainModel, resolveMaxRounds, setMaxRounds, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };
+module.exports = { resolveReview, resolvePlanReview, resolveBranchReview, resolveOrchestrator, resolveMainModel, resolveFableAccess, FABLE_ACCESS_KEY, FABLE_MODES, setMainModel, resolveMaxRounds, setMaxRounds, updateConfigFile, MAIN_MODEL_OFF, MODELS, DEFAULTS, CONFIG_NAME, USER_CONFIG_ENV, loadFile, userConfigPath, repoConfigPath };
