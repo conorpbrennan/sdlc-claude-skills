@@ -31,6 +31,11 @@
 
 ## History
 
+- 2026-11-21 `6e5b272` — tools/model-spend.js: section 7 reads review verdicts from the handback message (Phase 0 follow-up)
+  - .claude-plugin/plugin.json
+  - tools/model-spend.js
+  - tools/test-model-spend.js
+
 - 2026-11-21 `c771a8c` — tools/lib/prices.js: explicit claude-fable-5-2 price entry, $8/$40 (Phase 0 follow-up)
   - .claude-plugin/plugin.json
   - tools/lib/prices.js
