@@ -73,6 +73,8 @@ edit made there is lost on the next update, and it never reaches the repo.
 | `/sdlc:model-spend` and its tool | `commands/model-spend.md`, `tools/model-spend.js`, `tools/lib/prices.js`, `tools/lib/orch-signals.js` |
 | `/sdlc:fit` and its tool | `commands/fit.md`, `tools/usage-fit.js` |
 
+`node tools/model-spend.js` section 9 reports orchestration signals per 10 implementer dispatches; section 10 reports the PARTIAL rate by dispatch size (prompt bytes, tool calls, files edited, test files named).
+
 `/sdlc:branch-review on|off|status` lists or unlists the current repo in the branch-review repos config.
 
 See `README.md` for how the pieces fit together at run time.
