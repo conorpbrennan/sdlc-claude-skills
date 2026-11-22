@@ -16,7 +16,10 @@
 
 ## Files involved
 
-<!-- populated on commit -->
+- .claude-plugin/plugin.json
+- docs/plans/fable-access-check/tracker.md
+- src/hooks/lib/fable-access.js
+- src/hooks/test-fable-access.js
 
 ## History
 
