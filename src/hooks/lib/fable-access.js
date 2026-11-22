@@ -4,6 +4,8 @@
 // The newest decisive record wins, because a session can change backend part
 // way. Never throws.
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const VERDICT = Object.freeze({REACHABLE: 'reachable', UNREACHABLE: 'unreachable', UNKNOWN: 'unknown'});
 const EVIDENCE = Object.freeze({
@@ -30,6 +32,16 @@ const TASK_NOTIFICATION_MARKER = '<task-notification>';
 const STATUS_FAILED_MARKER = '<status>failed</status>';
 const AGENT_SUMMARY_MARKER = '<summary>Agent "';
 const AGENT_TOOL_NAME = 'Agent';
+
+// Per-session verdict cache. It lives in os.tmpdir() like the orchestrator-mode
+// state: the verdict belongs to one session, and a reboot costs one recompute.
+const CACHE_DIR_ENV = 'SDLC_FABLE_ACCESS_DIR';
+const CACHE_DIR_NAME = 'sdlc-fable-access';
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const CACHE_FILE_SUFFIX = '.json';
+const CACHE_TMP_SUFFIX = '.tmp';
+const UNSAFE_NAME_CHARS = /[^\w.-]/g;
+const SAFE_NAME_CHAR = '_';
 
 const FILE_READ_FLAG = 'r';
 const TEXT_ENCODING = 'utf8';
@@ -221,4 +233,101 @@ function readAccessSignal(transcriptPath) {
     }
 }
 
-module.exports = {VERDICT, EVIDENCE, TAIL_BYTES, readAccessSignal};
+/**
+ * Returns the cache directory: the env override or a directory under os.tmpdir().
+ * Args: none.
+ * Returns: directory path.
+ */
+function cacheDir() {
+    return process.env[CACHE_DIR_ENV] || path.join(os.tmpdir(), CACHE_DIR_NAME);
+}
+
+/**
+ * Builds the cache file path for a session, sanitising the id so it stays one
+ * file name inside the cache directory.
+ * Args:
+ *   sessionId: non-empty session id string.
+ * Returns: file path.
+ */
+function cachePath(sessionId) {
+    return path.join(cacheDir(), sessionId.replace(UNSAFE_NAME_CHARS, SAFE_NAME_CHAR) + CACHE_FILE_SUFFIX);
+}
+
+/**
+ * Tells whether a verdict is one worth caching (decided, not unknown).
+ * Args:
+ *   verdict: a verdict string.
+ * Returns: boolean.
+ */
+function isDecided(verdict) {
+    return verdict === VERDICT.REACHABLE || verdict === VERDICT.UNREACHABLE;
+}
+
+/**
+ * Reads a fresh cache entry. The cache file is tiny, so it is read whole (the
+ * "never the whole file" rule is about the transcript). Any problem gives null.
+ * Args:
+ *   sessionId: non-empty session id string.
+ *   now: epoch ms.
+ * Returns: {verdict, evidence} or null when missing, corrupt, undecided, or
+ *   outside 0 <= now - at < CACHE_TTL_MS.
+ */
+function readCache(sessionId, now) {
+    try {
+        const entry = JSON.parse(fs.readFileSync(cachePath(sessionId), TEXT_ENCODING));
+        if (!entry || typeof entry !== 'object' || !isDecided(entry.verdict)) return null;
+        if (typeof entry.at !== 'number' || !Number.isFinite(entry.at)) return null;
+        const age = now - entry.at;
+        if (!(age >= 0 && age < CACHE_TTL_MS)) return null;
+        return {verdict: entry.verdict, evidence: entry.evidence};
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Writes a cache entry atomically (temp file in the same directory, then
+ * rename, as writeState in orchestrator-mode.js). Errors are swallowed: the
+ * cache never changes a verdict.
+ * Args:
+ *   sessionId: non-empty session id string.
+ *   verdict: reachable or unreachable.
+ *   evidence: one of EVIDENCE.
+ *   now: epoch ms stored as `at`.
+ * Returns: true when written, false otherwise.
+ */
+function writeCache(sessionId, verdict, evidence, now) {
+    try {
+        const file = cachePath(sessionId);
+        fs.mkdirSync(path.dirname(file), {recursive: true});
+        const tmp = `${file}.${process.pid}${CACHE_TMP_SUFFIX}`;
+        fs.writeFileSync(tmp, JSON.stringify({verdict, evidence, at: now}));
+        fs.renameSync(tmp, file);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Decides whether Fable is reachable. A fresh cache entry skips the transcript.
+ * Only a reachable verdict gives reachable: true; unknown, errors and bad cache
+ * all fail closed.
+ * Args:
+ *   options: {sessionId, transcriptPath, now} (now defaults to Date.now()).
+ * Returns: {reachable, verdict, evidence, cached}. Never throws.
+ */
+function checkAccess({sessionId, transcriptPath, now = Date.now()} = {}) {
+    try {
+        const hasSession = typeof sessionId === 'string' && sessionId !== '';
+        const hit = hasSession ? readCache(sessionId, now) : null;
+        if (hit) return {reachable: hit.verdict === VERDICT.REACHABLE, verdict: hit.verdict, evidence: hit.evidence, cached: true};
+        const {verdict, evidence} = readAccessSignal(transcriptPath);
+        if (hasSession && isDecided(verdict)) writeCache(sessionId, verdict, evidence, now);
+        return {reachable: verdict === VERDICT.REACHABLE, verdict, evidence, cached: false};
+    } catch (e) {
+        return {reachable: false, verdict: VERDICT.UNKNOWN, evidence: EVIDENCE.CHECK_ERROR, cached: false};
+    }
+}
+
+module.exports = {VERDICT, EVIDENCE, TAIL_BYTES, CACHE_TTL_MS, CACHE_DIR_ENV, readAccessSignal, checkAccess};

@@ -6,7 +6,7 @@ require('./lib/isolate-git-env.js').isolateGitEnv();
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { VERDICT, EVIDENCE, TAIL_BYTES, readAccessSignal } = require('./lib/fable-access.js');
+const { VERDICT, EVIDENCE, TAIL_BYTES, CACHE_TTL_MS, CACHE_DIR_ENV, readAccessSignal, checkAccess } = require('./lib/fable-access.js');
 
 const sb = fs.mkdtempSync(path.join(os.tmpdir(), 'fable-access-'));
 const REFUSAL = 'API Error: 403 {"error":{"message":"Your team not allowed to access model claude-fable-5-2"}}';
@@ -105,6 +105,69 @@ const filler = { type: 'filler', pad: 'x'.repeat(1000) };
 const fillerCount = Math.ceil(TAIL_BYTES / 1000) + 5;
 const beyond = writeTranscript('beyond-tail', [GLOBAL].concat(Array.from({ length: fillerCount }, () => filler)));
 assert('decisive record before the tail', readAccessSignal(beyond), { verdict: VERDICT.UNKNOWN, evidence: EVIDENCE.NO_SIGNAL });
+
+console.log('checkAccess cache and fail-closed paths');
+const cacheDir = path.join(sb, 'cache');
+process.env[CACHE_DIR_ENV] = cacheDir;
+const NOW = 1000000000000;
+const cacheFile = (id) => path.join(cacheDir, `${id}.json`);
+const cacheFiles = () => (fs.existsSync(cacheDir) ? fs.readdirSync(cacheDir) : []);
+
+// AC3: a fresh entry wins over a rewritten transcript; the TTL edge is closed.
+const ac3Path = writeTranscript('ac3', [GLOBAL]);
+const first = checkAccess({ sessionId: 'ac3', transcriptPath: ac3Path, now: NOW });
+assert('AC3 first call reads the transcript', first, { reachable: true, verdict: VERDICT.REACHABLE, evidence: EVIDENCE.GEO_GLOBAL, cached: false });
+writeTranscript('ac3', [GLOBAL, notification('failed', 'Agent "x" failed: ', REFUSAL)]);
+assert('AC3 inside the TTL the cache wins', checkAccess({ sessionId: 'ac3', transcriptPath: ac3Path, now: NOW + 1000 }),
+    { reachable: true, verdict: VERDICT.REACHABLE, evidence: EVIDENCE.GEO_GLOBAL, cached: true });
+assert('AC3 at the TTL the transcript is read again', checkAccess({ sessionId: 'ac3', transcriptPath: ac3Path, now: NOW + CACHE_TTL_MS }),
+    { reachable: false, verdict: VERDICT.UNREACHABLE, evidence: EVIDENCE.REFUSED_403, cached: false });
+
+// AC4: unknown is not cached and is not reachable.
+fs.rmSync(cacheDir, { recursive: true, force: true });
+const unknownPath = writeTranscript('ac4', [asst('claude-sonnet-5-5', undefined)]);
+assert('AC4 unknown is not reachable', checkAccess({ sessionId: 'ac4', transcriptPath: unknownPath, now: NOW }),
+    { reachable: false, verdict: VERDICT.UNKNOWN, evidence: EVIDENCE.NO_SIGNAL, cached: false });
+assert('AC4 unknown writes no cache file', cacheFiles(), []);
+assert('missing transcript is not reachable', checkAccess({ sessionId: 'ac4', transcriptPath: path.join(sb, 'nope.jsonl'), now: NOW }),
+    { reachable: false, verdict: VERDICT.UNKNOWN, evidence: EVIDENCE.UNREADABLE, cached: false });
+assert('no argument object does not throw', checkAccess().reachable, false);
+
+// name, cache file text, expected cached. The transcript says reachable.
+const stale = (extra) => JSON.stringify({ verdict: VERDICT.UNREACHABLE, evidence: EVIDENCE.GEO_EMPTY, at: NOW, ...extra });
+const CACHE_ROWS = [
+    ['fresh unreachable entry is used', stale({}), true],
+    ['corrupt cache file is ignored', '{not json', false],
+    ['future at is ignored', stale({ at: NOW + 5000 }), false],
+    ['non-number at is ignored', stale({ at: String(NOW) }), false],
+    ['cached unknown verdict is ignored', stale({ verdict: VERDICT.UNKNOWN }), false],
+    ['cached unrecognised verdict is ignored', stale({ verdict: 'maybe' }), false],
+    ['JSON null is ignored', 'null', false],
+];
+const rowPath = writeTranscript('rows', [GLOBAL]);
+for (const [name, text, cached] of CACHE_ROWS) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(cacheFile('rows'), text);
+    assert(name, checkAccess({ sessionId: 'rows', transcriptPath: rowPath, now: NOW + 1 }).cached, cached);
+}
+
+// No sessionId: the verdict comes back and nothing is written.
+fs.rmSync(cacheDir, { recursive: true, force: true });
+for (const id of [undefined, '', 42]) {
+    assert(`sessionId ${JSON.stringify(id)} returns the verdict`, checkAccess({ sessionId: id, transcriptPath: rowPath, now: NOW }).reachable, true);
+}
+assert('no sessionId writes no cache file', cacheFiles(), []);
+
+// An unsafe id is sanitised into one file inside the cache directory.
+checkAccess({ sessionId: '../evil/id', transcriptPath: rowPath, now: NOW });
+assert('unsafe sessionId stays inside the directory', cacheFiles(), ['.._evil_id.json']);
+
+// An unwritable cache directory (a regular file in the way) still gives the verdict.
+const blocker = path.join(sb, 'blocker');
+fs.writeFileSync(blocker, 'x');
+process.env[CACHE_DIR_ENV] = path.join(blocker, 'sub');
+assert('unwritable cache dir still returns the verdict', checkAccess({ sessionId: 'w', transcriptPath: rowPath, now: NOW }),
+    { reachable: true, verdict: VERDICT.REACHABLE, evidence: EVIDENCE.GEO_GLOBAL, cached: false });
 
 fs.rmSync(sb, { recursive: true, force: true });
 console.log(`\n${passed} passed, ${failed} failed`);
