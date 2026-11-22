@@ -19,12 +19,21 @@
 - .claude-plugin/plugin.json
 - .claude/sdlc-review.json.example
 - docs/plans/fable-access-check/tracker.md
+- src/hooks/agent-tier-gate.js
 - src/hooks/lib/fable-access.js
 - src/hooks/lib/review-config.js
+- src/hooks/test-agent-tier-gate.js
 - src/hooks/test-fable-access.js
 - src/hooks/test-review-config.js
 
 ## History
+
+- 2026-11-22 `0390ddb` — src/hooks/lib/review-config.js: fableAccess key (auto, on, off) in the user config, and pins that config never names Fable (S4)
+  - .claude-plugin/plugin.json
+  - .claude/sdlc-review.json.example
+  - docs/plans/fable-access-check/tracker.md
+  - src/hooks/lib/review-config.js
+  - src/hooks/test-review-config.js
 
 - 2026-11-22 `6328488` — src/hooks/lib/fable-access.js: checkAccess caches the Fable verdict per session for 10 minutes (S3)
   - .claude-plugin/plugin.json

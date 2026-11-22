@@ -12,12 +12,17 @@
 // It also appends the shared context-budget block to those prompts (lib/context-budget.js).
 // Threat model: honest habit, not adversarial input. This is a cost gate, so any
 // parse error or odd input prints nothing and exits 0 (fail open).
+// One exception: a Fable dispatch is checked first (lib/fable-access.js, config key
+// fableAccess) and that branch fails closed. An undecided or erroring check is a deny. A
+// Fable dispatch that 403s wastes a turn; a denied one costs a re-dispatch on Opus.
 'use strict';
 
 const { deny } = require('./lib/hook-output');
 const { withBudget } = require('./lib/context-budget');
 const { agent } = require('./lib/plugin-names');
 const { stepStates } = require('./lib/steps');
+const { checkAccess, EVIDENCE } = require('./lib/fable-access');
+const { resolveFableAccess, FABLE_MODES } = require('./lib/review-config');
 
 const STEP_TIER = 'agent-tier-gate';
 const STEP_MODEL = 'agent-default-model';
@@ -29,6 +34,7 @@ const ALL_ON = Object.freeze({ tier: true, model: true, budget: true });
 // An empty or missing type means general-purpose.
 const GATED_TYPES = new Set(['', 'general-purpose', 'explore', 'plan', 'implementer', agent('implementer')]);
 
+const FABLE_MODEL = /fable/i;
 const EXPENSIVE_MODEL = /opus|fable/i;
 const TIER_LINE = /^\s*tier:\s*(?:opus|fable)\s*[:\-–—]\s*(\S.*)$/im;
 
@@ -55,6 +61,10 @@ const PLAN_WRITING_OPENER = /^\s*plan[\s_-]+writing[\s.:;,\-–—]*/i;
 const DENY_REASON = 'Opus and Fable dispatches run only for: plan writing (new plans only), plan source review, fail triage, or user asked. Add a line "TIER: opus: <category>" to the prompt with one of those four categories, or dispatch with model: "sonnet".';
 
 const PLAN_EDIT_DENY_REASON = 'Plan writing is for new plans. Folding findings into, revising or adding to an existing plan runs on Sonnet: re-dispatch with model: "sonnet", or use "TIER: opus: user asked" if the owner wants Opus.';
+
+const FABLE_REDISPATCH = 're-dispatch with model: "opus" and add a "TIER: opus: <category>" line to the prompt if it has none (a "TIER: fable:" line already counts).';
+const FABLE_UNREACHABLE_REASON = `Fable is not reachable from this session; ${FABLE_REDISPATCH} Evidence: `;
+const FABLE_OFF_REASON = `Fable is switched off by fableAccess in the user sdlc-review.json; ${FABLE_REDISPATCH}`;
 
 // Normalises a TIER reason for category matching.
 //
@@ -234,6 +244,30 @@ function stepsOn(cwd) {
     }
 }
 
+// Decides a Fable dispatch before the tier logic. Fails closed: any throw is a deny.
+//
+// Args:
+//   input: the parsed hook stdin (cwd, session_id, transcript_path).
+// Returns:
+//   a deny output, or null when the dispatch may fall through to the tier logic.
+function decideFable(input) {
+    let evidence = EVIDENCE.CHECK_ERROR;
+    try {
+        const r = resolveFableAccess({ repoRoot: input.cwd });
+        for (const w of r.warnings) process.stderr.write(`agent-tier-gate: ${w}\n`);
+        if (r.mode === FABLE_MODES.ON) return null;
+        if (r.mode === FABLE_MODES.OFF) {
+            return deny(FABLE_OFF_REASON, '');
+        }
+        const access = checkAccess({ sessionId: input.session_id, transcriptPath: input.transcript_path });
+        if (access.reachable) return null;
+        evidence = access.evidence;
+    } catch (e) {
+        evidence = EVIDENCE.CHECK_ERROR;
+    }
+    return deny(FABLE_UNREACHABLE_REASON + evidence, '');
+}
+
 let raw = '';
 process.stdin.setEncoding('utf-8');
 process.stdin.on('data', (chunk) => { raw += chunk; });
@@ -242,10 +276,21 @@ process.stdin.on('end', () => {
         const input = JSON.parse(raw);
         const toolInput = input && input.tool_input;
         if (!toolInput || typeof toolInput !== 'object') return;
-        // Not my call: a type this gate does not steer never reads config.
         const type = typeof toolInput.subagent_type === 'string' ? toolInput.subagent_type.trim() : '';
+        const isFable = typeof toolInput.model === 'string' && FABLE_MODEL.test(toolInput.model);
+        // Not my call: a non-Fable type this gate does not steer never reads config.
+        if (!isFable && !GATED_TYPES.has(type.toLowerCase())) return;
+        const steps = stepsOn(input.cwd);
+        // Fable first, for any subagent_type; a null falls through to today's code.
+        if (isFable && steps.tier) {
+            const blocked = decideFable(input);
+            if (blocked) {
+                process.stdout.write(JSON.stringify(blocked));
+                return;
+            }
+        }
         if (!GATED_TYPES.has(type.toLowerCase())) return;
-        const out = decide(toolInput, stepsOn(input.cwd));
+        const out = decide(toolInput, steps);
         if (out) process.stdout.write(JSON.stringify(out));
     } catch (e) {
         // Fail open: a cost gate must never break a dispatch.

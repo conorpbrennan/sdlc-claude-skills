@@ -14,6 +14,7 @@ const userCfg = path.join(sb, 'user-sdlc-review.json');
 process.env.SDLC_REVIEW_CONFIG_USER = userCfg;
 process.env.CLAUDE_CONFIG_DIR = path.join(sb, 'claude');
 process.env.TDD_MANDATE_CONFIG = path.join(sb, 'tdd.json');
+process.env.SDLC_FABLE_ACCESS_DIR = path.join(sb, 'fable-access');
 
 const HOOK = path.join(__dirname, 'agent-tier-gate.js');
 const { BUDGET_BLOCK, BUDGET_MARKER } = require('./lib/context-budget.js');
@@ -46,8 +47,12 @@ function run(stdin) {
     return { status: r.status, out: text ? JSON.parse(text) : '' };
 }
 
-const call = (toolInput) => run(JSON.stringify({ tool_name: 'Agent', tool_input: toolInput }));
+const call = (toolInput, session_id, transcript_path) =>
+    run(JSON.stringify({ tool_name: 'Agent', tool_input: toolInput, session_id, transcript_path }));
 const decision = (r) => r.out && r.out.hookSpecificOutput && r.out.hookSpecificOutput.permissionDecision;
+
+// The existing Fable rows below test the tier logic, so Fable access is switched on for them.
+fs.writeFileSync(userCfg, JSON.stringify({ fableAccess: 'on' }));
 
 console.log('gated types, opus without a reason');
 for (const type of [undefined, '', 'general-purpose', 'Explore', 'Plan', 'implementer', agent('implementer')]) {
@@ -195,6 +200,91 @@ for (const p of [undefined, '', '   ', 42, ['x'], null]) {
     assert(`bad prompt untouched: ${JSON.stringify(p)}`, call({ subagent_type: 'Plan', model: 'sonnet', prompt: p }).out, '');
 }
 assert('deny carries no updatedInput', updated(call({ subagent_type: 'Plan', model: 'opus', prompt: 'x' })), undefined);
+
+console.log('fable access');
+fs.rmSync(userCfg, { force: true });
+{
+    // Synthetic transcripts: one assistant record whose inference_geo says reachable or not.
+    const record = (geo) => JSON.stringify({ type: 'assistant', message: { role: 'assistant', model: 'claude-opus-4-1', usage: { inference_geo: geo }, content: [{ type: 'text', text: 'ok' }] } }) + '\n';
+    const transcripts = path.join(sb, 'transcripts');
+    fs.mkdirSync(transcripts, { recursive: true });
+    const makeTranscript = (name, geo) => {
+        const file = path.join(transcripts, `${name}.jsonl`);
+        fs.writeFileSync(file, record(geo));
+        return file;
+    };
+    const TRANSCRIPTS = {
+        reachable: (n) => makeTranscript(n, 'global'),
+        unreachable: (n) => makeTranscript(n, ''),
+        none: () => undefined,
+        missing: (n) => path.join(transcripts, `${n}-absent.jsonl`),
+    };
+    const PLAN_TIER = 'TIER: fable: plan writing';
+    const ASK_TIER = 'TIER: fable: user asked: owner wants fable';
+    const setMode = (mode) => (mode ? fs.writeFileSync(userCfg, JSON.stringify({ fableAccess: mode })) : fs.rmSync(userCfg, { force: true }));
+    const fableCall = (type, prompt, mode, kind, id) => {
+        setMode(mode);
+        return call({ subagent_type: type, model: 'fable', prompt }, id, TRANSCRIPTS[kind](id));
+    };
+    const reasonOf = (r) => (r.out && r.out.hookSpecificOutput.permissionDecisionReason) || '';
+    // name, subagent_type, fableAccess (null = unset), transcript, expected decision (undefined = allowed), reason contains.
+    for (const [name, type, mode, kind, want, contains] of [
+        ['AC1 unreachable, Plan, fable TIER line', 'Plan', null, 'unreachable', 'deny', ['model: "opus"', 'geo-empty']],
+        ['AC1 unreachable, reviewer, no TIER line', agent('code-reviewer'), null, 'unreachable', 'deny', ['model: "opus"', 'TIER: opus:']],
+        ['AC4 no transcript_path', 'Plan', null, 'none', 'deny', ['model: "opus"', 'unreadable']],
+        ['AC4 unreadable path', 'Plan', null, 'missing', 'deny', ['model: "opus"', 'unreadable']],
+        ['off with a reachable transcript', 'Plan', 'off', 'reachable', 'deny', ['model: "opus"', 'fableAccess']],
+        ['on with no transcript, tier logic decides: allow', 'Plan', 'on', 'none', undefined, []],
+        ['on with no transcript, tier logic decides: deny names categories', 'Plan', 'on', 'none', 'deny', ['plan writing', 'user asked']],
+    ]) {
+        const id = `row-${name.replace(/\W+/g, '-')}`;
+        let prompt = 'x';
+        if (name.includes('fable TIER') || name.includes('allow')) prompt = PLAN_TIER;
+        const r = fableCall(type, prompt, mode, kind, id);
+        assert(`${name}: decision`, decision(r) || undefined, want);
+        assert(`${name}: reason`, contains.every((c) => reasonOf(r).includes(c)), true);
+    }
+    // AC2: a reachable Fable dispatch prints exactly what fableAccess "on" prints.
+    for (const [name, prompt, want] of [
+        ['AC2 reachable, fable TIER line', PLAN_TIER, undefined],
+        ['AC2 reachable, user asked', ASK_TIER, 'ask'],
+    ]) {
+        const id = `ac2-${want}`;
+        const reachable = fableCall('Plan', prompt, null, 'reachable', id);
+        const on = fableCall('Plan', prompt, 'on', 'none', id + '-on');
+        assert(`${name}: stdout equals the "on" stdout`, reachable.out, on.out);
+        assert(`${name}: decision`, decision(reachable) || undefined, want);
+        if (!want) {
+            const input = reachable.out.hookSpecificOutput.updatedInput;
+            assert(`${name}: model kept, budget appended`, [input.model, input.prompt.includes(BUDGET_MARKER)], ['fable', true]);
+        }
+    }
+    // AC3 at the hook: the verdict is cached per session, so a later unreachable transcript is not read.
+    {
+        const id = 'ac3-session';
+        setMode(null);
+        const file = makeTranscript(id, 'global');
+        const first = call({ subagent_type: 'Plan', model: 'fable', prompt: PLAN_TIER }, id, file);
+        makeTranscript(id, '');
+        const second = call({ subagent_type: 'Plan', model: 'fable', prompt: PLAN_TIER }, id, file);
+        assert('AC3 two calls, one session: both allowed from the cache', [decision(first) || undefined, decision(second) || undefined], [undefined, undefined]);
+    }
+    // The agent-tier-gate step off leaves a Fable dispatch untouched by the access check.
+    {
+        fs.writeFileSync(userCfg, JSON.stringify({ steps: { orchestration: { 'agent-tier-gate': false } } }));
+        const r = call({ subagent_type: 'Plan', model: 'fable', prompt: 'x' }, 'step-off', TRANSCRIPTS.unreachable('step-off'));
+        assert('agent-tier-gate off: unreachable Fable is not denied', decision(r) || undefined, undefined);
+    }
+    // An Opus dispatch never reads the transcript: a directory path changes nothing.
+    {
+        setMode(null);
+        const opus = { subagent_type: 'Plan', model: 'opus', prompt: 'TIER: opus: fail triage' };
+        const plain = call(opus);
+        const withDir = call(opus, 'opus-dir', transcripts);
+        assert('opus dispatch ignores transcript_path', withDir.out, plain.out);
+    }
+    setMode(null);
+}
 
 console.log('fail open');
 assert('bad JSON', run('not json'), { status: 0, out: '' });
