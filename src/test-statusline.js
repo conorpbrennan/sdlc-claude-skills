@@ -45,7 +45,7 @@ function makeInput({ remaining = 73, used = 54000, size = 200000, dir = os.tmpdi
     };
 }
 
-const NO_DAY = { dayCost: null };
+const NO_DAY = { dayCost: null, pendingModel: null };
 
 test('context percentage and token segment', () => {
     const cases = [
@@ -107,6 +107,38 @@ test('model and session cost segments, with fallbacks', () => {
     assert.ok(strip(render(makeInput(), NO_DAY)).includes(' | Sonnet | $1.20 | '));
     const bare = strip(render({}, NO_DAY));
     assert.strictEqual(bare, 'ctx 0% used | ? | $0.00 | no git');
+});
+
+test('pending model: shown only when the configured model differs from the running one', () => {
+    const cases = [
+        // [running model object, pending model, expected segment or null]
+        [{ display_name: 'Sonnet 5.5', id: 'claude-sonnet-5-5' }, 'opus', 'Sonnet 5.5 \u2192 opus next session'],
+        [{ display_name: 'Opus 5.5', id: 'claude-opus-5-5' }, 'opus', null],
+        [{ id: 'claude-opus-5-5' }, 'sonnet', '\u2192 sonnet next session'],
+        [{ display_name: 'Sonnet 5.5' }, null, null],
+    ];
+    for (const [model, pending, expected] of cases) {
+        const input = { ...makeInput(), model };
+        const out = strip(render(input, { ...NO_DAY, pendingModel: pending }));
+        if (expected === null) assert.ok(!out.includes('next session'), out);
+        else assert.ok(out.includes(expected), out);
+    }
+});
+
+test('as a script: reads the pending model from the user config', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sl-pending-'));
+    try {
+        const cfg = path.join(dir, 'sdlc-review.json');
+        const input = JSON.stringify(makeInput());
+        const run = (body) => {
+            if (body !== null) fs.writeFileSync(cfg, body);
+            const env = { ...process.env, SDLC_REVIEW_CONFIG_USER: cfg };
+            return strip(spawnSync('node', [SCRIPT], { input, encoding: 'utf8', env }).stdout);
+        };
+        assert.ok(run('{"mainModel":"opus"}').includes('Sonnet \u2192 opus next session'));
+        assert.ok(!run('{"mainModel":"off"}').includes('next session'));
+        assert.ok(!run('{not json').includes('next session'));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('day segment appears only for a numeric day cost', () => {

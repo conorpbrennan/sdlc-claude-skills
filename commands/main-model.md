@@ -32,7 +32,10 @@ be reset on container start; `sdlc-review.json` is not, so this sticks.
    is. Removing the key by hand brings the default back.
 4. Any other argument: say the four valid values and stop.
 5. After a set or off, tell the owner in two lines: the change applies from
-   the next session, and `/model` changes only the current session.
+   the next session, and to switch this session now they must type
+   `/model <model>` themselves (a command cannot). Until then the status line
+   shows the pending model beside the running one, e.g.
+   `Sonnet 5.5 → opus next session`.
    If the command exits non-zero, relay its one-line error (an invalid model,
    a malformed or symlinked file) and say nothing was written.
 
