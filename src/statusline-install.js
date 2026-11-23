@@ -22,7 +22,7 @@ const DEFAULT_DATA_SUBPATH = path.join('plugins', 'data', 'sdlc-sdlc-claude-skil
 const SCRIPT_DIR = 'statusline';
 const SCRIPT_NAME = 'statusline.js';
 // Every file src/statusline.js requires, relative to src/. The lib/ layout is kept.
-const COPY_FILES = [SCRIPT_NAME, path.join('lib', 'day-cost.js')];
+const COPY_FILES = [SCRIPT_NAME, path.join('lib', 'day-cost.js'), path.join('lib', 'pending-model.js')];
 const BACKUP_INFIX = '.backup.';
 const BACKUP_SUFFIX = '-pre-sdlc-statusline';
 const JSON_INDENT = 2;
