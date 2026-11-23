@@ -25,4 +25,11 @@
 
 ## History
 
-<!-- populated on commit -->
+- 2026-11-23 `b3608c9` — statusline: show the pending main model beside the running one after /sdlc:main-model
+  - .claude-plugin/plugin.json
+  - commands/main-model.md
+  - src/lib/pending-model.js
+  - src/statusline-install.js
+  - src/statusline.js
+  - src/test-statusline-install.js
+  - src/test-statusline.js
